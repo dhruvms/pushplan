@@ -88,22 +88,25 @@ private:
 	int getHashEntry(
 		const int& x,
 		const int& y,
+		const int& yaw,
 		const int& t);
 	int reserveHashEntry();
 	int createHashEntry(
 		const int& x,
 		const int& y,
+		const int& yaw,
 		const int& t);
 	int getOrCreateState(
 		const int& x,
 		const int& y,
+		const int& yaw,
 		const int& t);
 	int getOrCreateState(const State& s);
 	int getOrCreateState(const Point& p);
 
 	int generateSuccessor(
 		const State* parent,
-		int dx, int dy,
+		int dx, int dy, int dyaw,
 		std::vector<int>* succs,
 		std::vector<unsigned int>* costs);
 	unsigned int cost(

@@ -55,7 +55,7 @@ bool CollisionChecker::ImmovableCollision(const State& s, const Object& o, const
 			continue;
 		}
 
-		Pointf obs_loc(obstacle.o_x, obstacle.o_y);
+		Pointf obs_loc(obstacle.o_x, obstacle.o_y, obstacle.o_yaw);
 		if (obstacleCollision(s, o, obs_loc, obstacle)) {
 			// SMPL_WARN("collision! objects ids %d and %d (immovable) collide", o.id, obstacle.id);
 			return true;
@@ -91,10 +91,15 @@ bool CollisionChecker::OOICollision(
 {
 	auto ooi = m_planner->GetOOIObject();
 	auto ooi_s = m_planner->GetOOIState();
-	Pointf ooi_loc;
-	DiscToCont(ooi_s->p, ooi_loc);
 
-	return obstacleCollision(s, o, ooi_loc, *ooi);
+	Pointf ooi_loc, o_loc;
+	DiscToCont(ooi_s->p, ooi_loc);
+	bool contact = obstacleCollision(s, o, ooi_loc, *ooi);
+
+	DiscToCont(s.p, o_loc);
+	bool align = shortest_angle_dist(ooi_loc.yaw, o_loc.yaw) < 2 * YAWRES;
+
+	return contact && align;
 }
 
 float CollisionChecker::BoundaryDistance(const Pointf& p)
@@ -125,6 +130,7 @@ Pointf CollisionChecker::GetGoalState(const Object* o)
 			{
 				g.x = (m_distD(m_rng) * (gmax.x - gmin.x)) + gmin.x;
 				g.y = (m_distD(m_rng) * (gmax.y - gmin.y)) + gmin.y;
+				g.yaw = o->o_yaw;
 				GetRectObjAtPt(g, *o, o_goal);
 			} while (RectanglesIntersect(o_goal, m_base));
 			break;
@@ -134,6 +140,7 @@ Pointf CollisionChecker::GetGoalState(const Object* o)
 			{
 				g.x = (m_distD(m_rng) * (gmax.x - gmin.x)) + gmin.x;
 				g.y = (m_distD(m_rng) * (gmax.y - gmin.y)) + gmin.y;
+				g.yaw = o->o_yaw;
 			} while (LineSegCircleIntersect(g, o->x_size, m_base.at(0), m_base.back()));
 			break;
 		}

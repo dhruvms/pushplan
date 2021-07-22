@@ -9,18 +9,18 @@ namespace clutter
 
 struct Point
 {
-	int x, y;
-	Point() : x(0), y(0) {};
-	Point(int _x, int _y) : x(_x), y(_y) {};
-	Point(const Point& _p) : x(_p.x), y(_p.y) {};
+	int x, y, yaw;
+	Point() : x(0), y(0), yaw(0) {};
+	Point(int _x, int _y, int _yaw) : x(_x), y(_y), yaw(_yaw) {};
+	Point(const Point& _p) : x(_p.x), y(_p.y), yaw(_p.yaw) {};
 };
 
 struct Pointf
 {
-	float x, y;
-	Pointf() : x(0.0), y(0.0) {};
-	Pointf(float _x, float _y) : x(_x), y(_y) {};
-	Pointf(const Pointf& _p) : x(_p.x), y(_p.y) {};
+	float x, y, yaw;
+	Pointf() : x(0.0), y(0.0), yaw(0.0) {};
+	Pointf(float _x, float _y, float _yaw) : x(_x), y(_y), yaw(_yaw) {};
+	Pointf(const Pointf& _p) : x(_p.x), y(_p.y), yaw(_p.yaw) {};
 };
 
 struct Object
@@ -39,10 +39,11 @@ struct State
 	int t;
 
 	State() {};
-	State(int _x, int _y, int _t)
+	State(int _x, int _y, int _yaw, int _t)
 	{
 		p.x = _x;
 		p.y = _y;
+		p.yaw = _yaw;
 		t = _t;
 	};
 	State(const Point& _p, int _t) : p(_p), t(_t) {};
@@ -54,6 +55,7 @@ bool operator==(const State& a, const State& b)
 	return (
 		a.p.x == b.p.x &&
 		a.p.y == b.p.y &&
+		a.p.yaw == b.p.yaw &&
 		a.t == b.t
 	);
 }
@@ -61,7 +63,7 @@ bool operator==(const State& a, const State& b)
 inline
 std::ostream& operator<<(std::ostream& out, const State s)
 {
-	return out << '(' << s.p.x << ", " << s.p.y << ", " << s.t << ")";
+	return out << '(' << s.p.x << ", " << s.p.y << ", " << s.p.yaw << ", " << s.t << ")";
 }
 
 struct Statef
@@ -70,10 +72,11 @@ struct Statef
 	int t;
 
 	Statef() {};
-	Statef(float _x, float _y, int _t)
+	Statef(float _x, float _y, float _yaw, int _t)
 	{
 		p.x = _x;
 		p.y = _y;
+		p.yaw = _yaw;
 		t = _t;
 	};
 	Statef(const Pointf& _p, int _t) : p(_p), t(_t) {};
@@ -82,7 +85,7 @@ struct Statef
 inline
 std::ostream& operator<<(std::ostream& out, const Statef s)
 {
-	return out << '(' << s.p.x << ", " << s.p.y << ", " << s.t << ")";
+	return out << '(' << s.p.x << ", " << s.p.y << ", " << s.p.yaw << ", " << s.t << ")";
 }
 
 typedef std::vector<Statef> Trajectory;

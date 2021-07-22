@@ -6,6 +6,7 @@
 
 #include <iostream>
 #include <algorithm>
+#include <stdio.h>
 
 auto std::hash<clutter::State>::operator()(
 	const argument_type& s) const -> result_type
@@ -13,6 +14,7 @@ auto std::hash<clutter::State>::operator()(
 	size_t seed = 0;
 	boost::hash_combine(seed, s.p.x);
 	boost::hash_combine(seed, s.p.y);
+	boost::hash_combine(seed, s.p.yaw);
 	boost::hash_combine(seed, s.t);
 	return seed;
 }
@@ -25,7 +27,7 @@ void Agent::Init()
 	m_t = 0;
 
 	m_current.t = m_t;
-	Pointf obj(m_obj.o_x, m_obj.o_y);
+	Pointf obj(m_obj.o_x, m_obj.o_y, m_obj.o_yaw);
 	ContToDisc(obj, m_current.p);
 	m_init = m_current;
 
@@ -97,7 +99,7 @@ bool Agent::AtGoal(const State& s, bool verbose)
 		SMPL_INFO("At: (%f, %f), Goal: (%f, %f), dist = %f (thresh = %f)", sf.x, sf.y, m_goalf.x, m_goalf.y, dist, GOAL_THRESH);
 	}
 
-	return dist < GOAL_THRESH;
+	return dist < GOAL_THRESH && m_obj.o_yaw == m_goalf.p.yaw;
 }
 
 void Agent::Step(int k)
@@ -111,6 +113,7 @@ void Agent::Step(int k)
 			m_current.t = s.t;
 			ContToDisc(s.p, m_current.p);
 			m_move.emplace_back(s.p, m_t);
+			m_obj.o_yaw = s.p.yaw;
 		}
 	}
 }
@@ -170,9 +173,11 @@ void Agent::GetSuccs(
 				continue;
 			}
 
-			generateSuccessor(parent, dx, dy, succ_ids, costs);
+			generateSuccessor(parent, dx, dy, 0, succ_ids, costs);
 		}
 	}
+	generateSuccessor(parent, 0, 0, 1, succ_ids, costs);
+	generateSuccessor(parent, 0, 0, -1, succ_ids, costs);
 }
 
 bool Agent::IsGoal(int state_id)
@@ -223,11 +228,13 @@ State* Agent::getHashEntry(int state_id) const
 int Agent::getHashEntry(
 	const int& x,
 	const int& y,
+	const int& yaw,
 	const int& t)
 {
 	State s;
 	s.p.x = x;
 	s.p.y = y;
+	s.p.yaw = yaw;
 	s.t = t;
 
 	auto sit = m_state_to_id.find(&s);
@@ -256,6 +263,7 @@ int Agent::reserveHashEntry()
 int Agent::createHashEntry(
 	const int& x,
 	const int& y,
+	const int& yaw,
 	const int& t)
 {
 	int state_id = reserveHashEntry();
@@ -263,6 +271,7 @@ int Agent::createHashEntry(
 
 	entry->p.x = x;
 	entry->p.y = y;
+	entry->p.yaw = yaw;
 	entry->t = t;
 
 	// map state -> state id
@@ -274,35 +283,45 @@ int Agent::createHashEntry(
 int Agent::getOrCreateState(
 	const int& x,
 	const int& y,
+	const int& yaw,
 	const int& t)
 {
-	int state_id = getHashEntry(x, y, t);
+	int state_id = getHashEntry(x, y, yaw, t);
 	if (state_id < 0) {
-		state_id = createHashEntry(x, y, t);
+		state_id = createHashEntry(x, y, yaw, t);
 	}
 	return state_id;
 }
 
 int Agent::getOrCreateState(const State& s)
 {
-	return getOrCreateState(s.p.x, s.p.y, s.t);
+	return getOrCreateState(s.p.x, s.p.y, s.p.yaw, s.t);
 }
 
 int Agent::getOrCreateState(const Point& p)
 {
-	return getOrCreateState(p.x, p.y, -1);
+	return getOrCreateState(p.x, p.y, p.yaw, -1);
 }
 
 int Agent::generateSuccessor(
 	const State* parent,
-	int dx, int dy,
+	int dx, int dy, int dyaw,
 	std::vector<int>* succs,
 	std::vector<unsigned int>* costs)
 {
+	int num_yaw_bins = 2.0 * M_PI / YAWRES;
+
 	State child;
 	child.t = parent->t + 1;
 	child.p.x = parent->p.x + dx;
 	child.p.y = parent->p.y + dy;
+	child.p.yaw = parent->p.yaw + dyaw;
+	if (child.p.yaw < 0) {
+		child.p.yaw = num_yaw_bins - 1;
+	}
+	if (child.p.yaw == num_yaw_bins) {
+		child.p.yaw = 0;
+	}
 
 	if (m_cc->ImmovableCollision(child, m_obj, m_priority)) {
 		return -1;
@@ -335,7 +354,7 @@ unsigned int Agent::cost(
 		Pointf s1f, s2f;
 		DiscToCont(s1->p, s1f);
 		DiscToCont(s2->p, s2f);
-		float dist = 1.0f + EuclideanDist(s1f, s2f);
+		float dist = 1.0f + EuclideanDist(s1f, s2f) + std::abs(s1->p.yaw - s2->p.yaw);
 		return (dist * COST_MULT);
 
 		// // Works okay for WINDOW = 20, but not for WINDOW <= 10

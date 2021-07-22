@@ -145,10 +145,10 @@ void MakeObjectRectangle(
 	const Object& o, std::vector<Pointf>& rect)
 {
 	rect.clear();
-	rect.emplace_back(o.o_x - o.x_size, o.o_y - o.y_size);
-	rect.emplace_back(o.o_x + o.x_size, o.o_y - o.y_size);
-	rect.emplace_back(o.o_x + o.x_size, o.o_y + o.y_size);
-	rect.emplace_back(o.o_x - o.x_size, o.o_y + o.y_size);
+	rect.emplace_back(o.o_x - o.x_size, o.o_y - o.y_size, o.o_yaw);
+	rect.emplace_back(o.o_x + o.x_size, o.o_y - o.y_size, o.o_yaw);
+	rect.emplace_back(o.o_x + o.x_size, o.o_y + o.y_size, o.o_yaw);
+	rect.emplace_back(o.o_x - o.x_size, o.o_y + o.y_size, o.o_yaw);
 }
 
 inline
@@ -157,11 +157,16 @@ void GetRectObjAtPt(
 	const Object& o,
 	std::vector<Pointf>& rect)
 {
-	Eigen::Matrix2d rot; // 2D rotation matrix for (o_yaw)
-	rot(0, 0) = std::cos(o.o_yaw);
-	rot(0, 1) = -std::sin(o.o_yaw);
-	rot(1, 0) = std::sin(o.o_yaw);
-	rot(1, 1) = std::cos(o.o_yaw);
+	Eigen::Matrix2d rot_o, rot_s; // 2D rotation matrix for (o_yaw)
+	// rot_o(0, 0) = std::cos(o.o_yaw);
+	// rot_o(0, 1) = -std::sin(o.o_yaw);
+	// rot_o(1, 0) = std::sin(o.o_yaw);
+	// rot_o(1, 1) = std::cos(o.o_yaw);
+
+	rot_s(0, 0) = std::cos(p.yaw);
+	rot_s(0, 1) = -std::sin(p.yaw);
+	rot_s(1, 0) = std::sin(p.yaw);
+	rot_s(1, 1) = std::cos(p.yaw);
 
 	MakeObjectRectangle(o, rect); // axis-aligned at (o_x, o_y)
 	Eigen::MatrixXd R(2, 4); // axis-aligned at (origin)
@@ -170,8 +175,8 @@ void GetRectObjAtPt(
 		R(0, i) = rect.at(i).x - o.o_x;
 		R(1, i) = rect.at(i).y - o.o_y;
 	}
-	R = rot * R; // rotate at (origin) by rot(o_yaw)
-	// R = rot2 * R; // can rotate again by some rot2(theta) matrix
+	// R = rot_o * R; // rotate at (origin) by rot_o(o_yaw)
+	R = rot_s * R; // rotate again by rot_s(p.yaw)
 
 	// translate rotated rectangle at (origin) to (p)
 	for (int i = 0; i < (int)rect.size(); ++i)
