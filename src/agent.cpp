@@ -22,7 +22,12 @@ namespace clutter
 
 void Agent::Init()
 {
+	m_solve.clear();
+	m_retrieve.clear();
+	m_move.clear();
+
 	m_t = 0;
+	m_retrieved = 0;
 
 	m_current.t = m_t;
 	Pointf obj(m_obj.o_x, m_obj.o_y);
@@ -31,7 +36,9 @@ void Agent::Init()
 
 	m_move.emplace_back(obj, m_t);
 
-	m_wastar = std::make_unique<WAStar>(this, 1.0); // make A* search object
+	if (!m_wastar) {
+		m_wastar = std::make_unique<WAStar>(this, 1.0); // make A* search object
+	}
 }
 
 void Agent::SetStartState(const State& s)
@@ -51,20 +58,19 @@ void Agent::SetGoalState(const Point& p)
 	m_wastar->set_goal(m_goal_id);
 }
 
-void Agent::Search(int robin)
+bool Agent::Search(int robin)
 {
 	m_priority = robin;
 
 	if (m_phase == 1 && m_priority == 1)
 	{
-		m_solve.clear();
-		for (auto itr = m_retrieve.begin(); itr != m_retrieve.end(); ++itr)
+		if (!m_retrieve.empty())
 		{
-			if (itr->t == m_t + 1)
-			{
-				m_solve.insert(m_solve.begin(), itr, m_retrieve.end());
-				break;
-			}
+			m_solve.clear();
+			m_solve.insert(m_solve.begin(), m_retrieve.begin(), m_retrieve.end());
+			m_cc->UpdateTraj(m_priority, m_solve);
+
+			return true;
 		}
 	}
 
@@ -78,8 +84,11 @@ void Agent::Search(int robin)
 		{
 			convertPath(solution);
 			m_cc->UpdateTraj(m_priority, m_solve);
+			return true;
 		}
 	}
+
+	return false;
 }
 
 bool Agent::AtGoal(const State& s, bool verbose)
@@ -113,6 +122,13 @@ void Agent::Step(int k)
 			m_move.emplace_back(s.p, m_t);
 		}
 	}
+
+	if (m_phase == 1 && m_priority == 1 && !m_retrieve.empty())	{
+		m_retrieve.erase(m_retrieve.begin());
+		if (m_retrieve.size() == 1) {
+			m_retrieved = 1;
+		}
+	}
 }
 
 void Agent::reset(int phase)
@@ -129,12 +145,12 @@ void Agent::reset(int phase)
 
 	m_wastar->reset();
 
-	m_phase = phase;
-	if (m_phase == 1 && m_priority <= 1 && m_retrieve.empty())
+	m_phase = phase + m_retrieved;
+	if (m_phase == 1 && m_priority == 1 && m_retrieve.empty())
 	{
 		m_retrieve = m_move;
 		std::reverse(m_retrieve.begin(), m_retrieve.end());
-		int t = 1;
+		int t = 0;
 		for (auto& s: m_retrieve)
 		{
 			s.t += t;
@@ -309,7 +325,7 @@ int Agent::generateSuccessor(
 	}
 
 	int succ_state_id;
-	if (m_priority > 0 && !m_cc->IsStateValid(child, m_obj, m_priority)) {
+	if (m_priority > 1 && !m_cc->IsStateValid(child, m_obj, m_priority)) {
 		return -1;
 	}
 
@@ -335,7 +351,7 @@ unsigned int Agent::cost(
 		Pointf s1f, s2f;
 		DiscToCont(s1->p, s1f);
 		DiscToCont(s2->p, s2f);
-		float dist = 1.0f + EuclideanDist(s1f, s2f);
+		float dist = std::max(1.0f, EuclideanDist(s1f, s2f));
 		return (dist * COST_MULT);
 
 		// // Works okay for WINDOW = 20, but not for WINDOW <= 10

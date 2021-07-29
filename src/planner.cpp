@@ -11,6 +11,7 @@
 #include <numeric>
 #include <algorithm>
 #include <iomanip>
+#include <cstdlib>
 
 namespace clutter
 {
@@ -28,8 +29,8 @@ m_ph("~")
 
 	m_agents.clear();
 
-	m_robot = std::make_unique<Robot>();
-	m_robot->Init();
+	// m_robot = std::make_unique<Robot>();
+	// m_robot->Init();
 
 	std::vector<Object> obstacles;
 	parse_scene(obstacles);
@@ -53,87 +54,38 @@ m_ph("~")
 	}
 
 	m_cc = std::make_shared<CollisionChecker>(this, obstacles);
-	m_cc->SetPhase(m_phase);
 	obstacles.clear();
 
 	// Get OOI goal
-	m_ooi_gf = m_cc->GetGoalState(m_ooi.GetObject());
+	m_ooi_gf = m_cc->GetRandomStateOutside(m_ooi.GetObject());
 	ContToDisc(m_ooi_gf, m_ooi_g);
 
-	set_ee_obj();
 	m_ooi.SetCC(m_cc);
 	m_ee.SetCC(m_cc);
 	for (auto& a: m_agents) {
 		a.SetCC(m_cc);
 	}
 
-	// Set agent current positions and time
-	m_ooi.Init();
-	m_ee.Init();
-	for (auto& a: m_agents) {
-		a.Init();
-	}
+	setupProblem();
 }
 
-void Planner::WHCAStar()
+void Planner::Plan()
 {
-	double start_time = GetTime(), total_time = 0.0;
-
-	int iter = 0;
-	writePlanState(iter);
-
-	reinit();
-	while (!m_ee.AtGoal(*(m_ee.GetCurrentState()), false))
+	double start_time = GetTime();
+	while (!whcastar())
 	{
-		// SMPL_INFO("Plan for OOI (number %d, id %d, priority %d)", 0, m_ooi.GetObject()->id, 0);
-		// Search() updates cc with found plan
-		m_ooi.Search(0);
-		m_ee.Search(1);
-		int robin = 2;
-		for (const auto& p: m_priorities) {
-			// SMPL_INFO("Plan for Object (number %d, id %d, priority %d)", p, m_agents.at(p).GetObject()->id, robin);
-			m_agents.at(p).Search(robin);
-			++robin;
+		// SMPL_WARN("Some agent search failed. Must solve again!");
+		m_t = 0;
+		m_phase = 0;
+		setupProblem(true);
+
+		int res = cleanupLogs();
+		if (res == -1) {
+			SMPL_ERROR("system command errored!");
 		}
-
-		step_agents(); // take 1 step by default
-		reinit();
-
-		++iter;
-		writePlanState(iter);
 	}
-	double end_time = GetTime();
-	double phase_time = end_time - start_time;
-	total_time += phase_time;
-	SMPL_INFO("WHCA* Phase 1 planning took %f seconds.", phase_time);
-
-	m_phase = 1;
-	m_cc->SetPhase(m_phase);
-
-	start_time = GetTime();
-	reinit();
-	while (!m_ooi.AtGoal(*(m_ooi.GetCurrentState()), false))
-	{
-		// SMPL_INFO("Plan for OOI (number %d, id %d, priority %d)", 0, m_ooi.GetObject()->id, 0);
-		m_ooi.Search(0);
-		m_ee.Search(1);
-		int robin = 2;
-		for (const auto& p: m_priorities) {
-			// SMPL_INFO("Plan for Object (number %d, id %d, priority %d)", p, m_agents.at(p).GetObject()->id, robin);
-			m_agents.at(p).Search(robin);
-			++robin;
-		}
-
-		step_agents();
-		reinit();
-
-		++iter;
-		writePlanState(iter);
-	}
-	end_time = GetTime();
-	phase_time = end_time - start_time;
-	total_time += phase_time;
-	SMPL_INFO("WHCA* Phase 2 planning took %f seconds. Total time = %f seconds.", phase_time, total_time);
+	double time_taken = GetTime() - start_time;
+	SMPL_INFO("Planning took %f seconds.", time_taken);
 }
 
 const Object* Planner::GetObject(int priority)
@@ -147,6 +99,73 @@ const Object* Planner::GetObject(int priority)
 	else {
 		return m_agents.at(m_priorities.at(priority-2)).GetObject();
 	}
+}
+
+bool Planner::whcastar()
+{
+	double start_time = GetTime(), total_time = 0.0;
+
+	int iter = 0;
+	writePlanState(iter);
+
+	reinit();
+	while (!m_ee.AtGoal(*(m_ee.GetCurrentState()), false))
+	{
+		if (!m_ooi.Search(0)) {
+			return false;
+		}
+		if (!m_ee.Search(1)) {
+			return false;
+		}
+		int robin = 2;
+		for (const auto& p: m_priorities) {
+			if (!m_agents.at(p).Search(robin)) {
+				return false;
+			}
+			++robin;
+		}
+
+		step_agents(); // take 1 step by default
+		reinit();
+
+		++iter;
+		writePlanState(iter);
+	}
+	double phase_time = GetTime() - start_time;
+	total_time += phase_time;
+	SMPL_INFO("WHCA* Phase 1 planning took %f seconds.", phase_time);
+
+	m_phase = 1;
+
+	start_time = GetTime();
+	reinit();
+	while (!m_ee.AtGoal(*(m_ee.GetCurrentState()), false))
+	{
+		if (!m_ooi.Search(0)) {
+			return false;
+		}
+		if (!m_ee.Search(1)) {
+			return false;
+		}
+		int robin = 2;
+		for (const auto& p: m_priorities) {
+			if (!m_agents.at(p).Search(robin)) {
+				return false;
+			}
+			++robin;
+		}
+
+		step_agents();
+		reinit();
+
+		++iter;
+		writePlanState(iter);
+	}
+	phase_time = GetTime() - start_time;
+	total_time += phase_time;
+	SMPL_INFO("WHCA* Phase 2 planning took %f seconds. Total time = %f seconds.", phase_time, total_time);
+
+	return true;
 }
 
 void Planner::reinit()
@@ -211,6 +230,29 @@ void Planner::step_agents(int k)
 		a.Step(k);
 	}
 	m_t += k;
+}
+
+void Planner::setupProblem(bool random)
+{
+	set_ee_obj(random);
+
+	// Set agent current positions and time
+	m_ooi.Init();
+	m_ee.Init();
+	for (auto& a: m_agents) {
+		a.Init();
+	}
+}
+
+int Planner::cleanupLogs()
+{
+	std::string files(__FILE__), command;
+	auto found = files.find_last_of("/\\");
+	files = files.substr(0, found + 1) + "../dat/txt/*.txt";
+
+	command = "rm " + files;
+	// SMPL_WARN("Execute command: %s", command.c_str());
+	return system(command.c_str());
 }
 
 void Planner::parse_scene(std::vector<Object>& obstacles)
@@ -299,14 +341,23 @@ void Planner::parse_scene(std::vector<Object>& obstacles)
 	SCENE.close();
 }
 
-void Planner::set_ee_obj()
+void Planner::set_ee_obj(bool random)
 {
 	Object o;
 	o.id = 99;
 	o.shape = 2; // circle
 	o.type = 1; // movable
-	o.o_x = 0.310248; // from start config FK
-	o.o_y = -0.673113; // from start config FK
+	if (!random)
+	{
+		o.o_x = 0.310248; // from start config FK
+		o.o_y = -0.673113; // from start config FK
+	}
+	else
+	{
+		Pointf ee = m_cc->GetRandomStateOutside(m_ee.GetObject());
+		o.o_x = ee.x;
+		o.o_y = ee.y;
+	}
 	// o.o_x = m_ooi_gf.x;
 	// o.o_y = m_ooi_gf.y;
 	o.o_z = m_ooi.GetObject()->o_z; // hand picked for now

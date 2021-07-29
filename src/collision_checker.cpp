@@ -69,10 +69,6 @@ bool CollisionChecker::IsStateValid(
 {
 	for (int p = 0; p < priority; ++p)
 	{
-		if (priority == 1 && p == 0) {
-			continue;
-		}
-
 		for (const auto& s2: m_trajs.at(p))
 		{
 			auto other_obj = m_planner->GetObject(p);
@@ -106,7 +102,7 @@ float CollisionChecker::BoundaryDistance(const Pointf& p)
 	return d;
 }
 
-Pointf CollisionChecker::GetGoalState(const Object* o)
+Pointf CollisionChecker::GetRandomStateOutside(const Object* o)
 {
 	Pointf g;
 	Pointf gmin, gmax;
@@ -117,31 +113,30 @@ Pointf CollisionChecker::GetGoalState(const Object* o)
 	gmin.y = m_base.at(0).y + (m_obstacles.at(m_base_loc).y_size/3);
 	gmax.y = m_base.back().y - (m_obstacles.at(m_base_loc).y_size/3);
 
-	switch (o->shape)
+	if (o->shape == 0) // object is rectangle
 	{
-		case 0: { // rectangle
-			std::vector<Pointf> o_goal;
-			do
-			{
-				g.x = (m_distD(m_rng) * (gmax.x - gmin.x)) + gmin.x;
-				g.y = (m_distD(m_rng) * (gmax.y - gmin.y)) + gmin.y;
-				GetRectObjAtPt(g, *o, o_goal);
-			} while (RectanglesIntersect(o_goal, m_base));
-			break;
-		}
-		case 2: { // circle
-			do
-			{
-				g.x = (m_distD(m_rng) * (gmax.x - gmin.x)) + gmin.x;
-				g.y = (m_distD(m_rng) * (gmax.y - gmin.y)) + gmin.y;
-			} while (LineSegCircleIntersect(g, o->x_size, m_base.at(0), m_base.back()));
-			break;
-		}
-		default: {
-			SMPL_ERROR("Invalid object type!");
-			g.x = -99;
-			g.y = -99;
-		}
+		std::vector<Pointf> o_goal;
+		do
+		{
+			g.x = (m_distD(m_rng) * (gmax.x - gmin.x)) + gmin.x;
+			g.y = (m_distD(m_rng) * (gmax.y - gmin.y)) + gmin.y;
+			GetRectObjAtPt(g, *o, o_goal);
+		} while (RectanglesIntersect(o_goal, m_base));
+	}
+
+	else if (o->shape == 2) // object is circle
+	{
+		do
+		{
+			g.x = (m_distD(m_rng) * (gmax.x - gmin.x)) + gmin.x;
+			g.y = (m_distD(m_rng) * (gmax.y - gmin.y)) + gmin.y;
+		} while (LineSegCircleIntersect(g, o->x_size, m_base.at(0), m_base.back()));
+	}
+	else
+	{
+		SMPL_ERROR("Invalid object type!");
+		g.x = -99;
+		g.y = -99;
 	}
 
 	return g;

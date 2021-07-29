@@ -28,7 +28,7 @@ robot:
   qw: 1.0
 
 whca:
-  window: 10
+  window: 4
   goal_thresh: 0.02
   res: 0.01
   grid: 8

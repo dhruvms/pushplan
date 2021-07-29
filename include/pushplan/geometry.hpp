@@ -188,6 +188,12 @@ float EuclideanDist(const Pointf& p1, const Pointf& p2)
 }
 
 inline
+float ManhattanDist(const Pointf& p1, const Pointf& p2)
+{
+	return std::abs(p1.x - p2.x) + std::abs(p1.y - p2.y);
+}
+
+inline
 float PtDistFromLine(
 	const Pointf& p,
 	const Pointf& A, const Pointf& B)

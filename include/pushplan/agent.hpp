@@ -44,12 +44,14 @@ public:
 	void SetStartState(const State& s);
 	void SetGoalState(const Point& p);
 
-	void Search(int robin);
+	bool Search(int robin);
 	bool AtGoal(const State& s, bool verbose=false);
 	void Step(int k);
 
 	const Object* GetObject() const { return &m_obj; };
 	const State* GetCurrentState() const { return &m_current; };
+	const State* GetInitState() const { return &m_init; };
+	const Trajectory* GetMoveTraj() const { return &m_move; };
 
 	void reset(int phase);
 
@@ -68,7 +70,7 @@ private:
 	State m_current, m_start, m_init;
 	Point m_goal;
 	Pointf m_goalf;
-	int m_t, m_priority, m_phase;
+	int m_t, m_priority, m_phase, m_retrieved;
 	Trajectory m_solve, m_move, m_retrieve;
 
 	std::shared_ptr<CollisionChecker> m_cc;
