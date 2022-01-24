@@ -111,6 +111,19 @@ private:
 		int id2, int p2, int t);
 	void cleanupChildren(std::vector<int>& check);
 
+	bool checkCollisionObjSet(
+		const Object& o1, const State& o1_loc,
+		bool rect_o1, const std::vector<State>& o1_rect,
+		const std::vector<Object>* a2_objs);
+
+	bool rectRectCollision(
+		const std::vector<State>& r1, const std::vector<State>& r2);
+	bool rectCircCollision(
+		const std::vector<State>& r1,
+		const Object& c1, const State& c1_loc);
+	bool circCircCollision(
+		const Object& c1, const State& c1_loc,
+		const Object& c2, const State& c2_loc);
 };
 
 } // namespace clutter

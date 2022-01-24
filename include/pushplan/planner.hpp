@@ -34,10 +34,20 @@ public:
 	bool TryExtract();
 	void AnimateSolution();
 
+	const std::vector<Object>* Get2DRobot(const LatticeState& s) {
+		return m_robot->GetObject(s);
+	}
 	fcl::CollisionObject* GetObject(const LatticeState& s, int priority);
 	bool CheckRobotCollision(const LatticeState& robot, int priority);
 
-	const std::vector<Object>* GetOOIObject() { return m_ooi.GetObject(); };
+	const std::vector<Object>* GetObject(int priority) {
+		if (priority == 1) {
+			return m_ooi.GetObject();
+		}
+		else {
+			return m_agents.at(m_priorities.at(priority-2)).GetObject();
+		}
+	};
 	const LatticeState* GetOOIState() { return m_ooi.GetCurrentState(); };
 
 	int GetID(int priority) {
