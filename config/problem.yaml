@@ -17,10 +17,11 @@ goal:
   roll: 0.0
   pitch: 0.0
   yaw: 0.0
-  plan_budget: 300.0
-  sim_budget: 900.0
-  total_budget: 300.0
+  plan_budget: 180.0
+  sim_budget: 180.0
+  total_budget: 180.0
   save: true
+  uid: 99
 
 robot:
   x: 0.0
@@ -30,7 +31,7 @@ robot:
   qy: 0.0
   qz: 0.0
   qw: 1.0
-  semi_minor: 0.05
+  semi_minor: 0.04
   robot_obj_mass: 0.5
   speed: 1.0
   pushes: 4
@@ -40,7 +41,7 @@ robot:
   grasp_clip: 5
   interpolate: true
   cc_2d: true
-  cc_3d: true
+  cc_3d: false
 
 whca:
   window: 2
