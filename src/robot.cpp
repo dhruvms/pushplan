@@ -200,7 +200,8 @@ bool Robot::SavePushData(int scene_id)
 {
 	std::string filename(__FILE__);
 	auto found = filename.find_last_of("/\\");
-	filename = filename.substr(0, found + 1) + "../dat/ROBOT.csv";
+	filename = filename.substr(0, found + 1) + "../dat/ROBOT_";
+	filename += std::to_string(m_uid) + ".csv";
 
 	bool exists = FileExists(filename);
 	std::ofstream STATS;
@@ -268,7 +269,6 @@ bool Robot::ProcessObstacles(const std::vector<Object>& obstacles, bool remove)
 bool Robot::Init()
 {
 	m_solve.clear();
-	m_move.clear();
 
 	m_t = 0;
 	m_grasp_at = -1;
@@ -419,14 +419,12 @@ bool Robot::attachOOI(const Object& ooi)
 	return true;
 }
 
-bool Robot::Plan(const Object& ooi, boost::optional<std::vector<Object>> obstacles)
+bool Robot::Plan(
+	const Object& ooi, const std::vector<Object>& obstacles,
+	bool extract, const std::unordered_set<int>& pushed_ids)
 {
-	if (obstacles != boost::none)
-	{
-		m_solve.clear();
-		ProcessObstacles(obstacles.get());
-	}
-
+	bool have_obs = !obstacles.empty();
+	std::vector<Object> to_keep, to_remove;
 	///////////////////
 	// Plan approach //
 	///////////////////
@@ -435,6 +433,12 @@ bool Robot::Plan(const Object& ooi, boost::optional<std::vector<Object>> obstacl
 	UpdateKDLRobot(0);
 	// setGripper(false); // closed
 	InitArmPlanner(true);
+
+	// add "obstacles" to collision space for heuristics
+	if (have_obs) {
+		ProcessObstacles(obstacles);
+	}
+	bool goal_collides = !m_cc_i->isStateValid(m_pregrasp_state);
 
 	moveit_msgs::MotionPlanRequest req;
 	moveit_msgs::MotionPlanResponse res;
@@ -445,7 +449,12 @@ bool Robot::Plan(const Object& ooi, boost::optional<std::vector<Object>> obstacl
 	req.max_velocity_scaling_factor = 1.0;
 	req.num_planning_attempts = 1;
 	// req.path_constraints;
-	req.planner_id = "arastar.joint_distance.manip";
+	if (goal_collides) {
+		req.planner_id = "arastar.manip.joint_distance";
+	}
+	else {
+		req.planner_id = "mhastar.manip.bfs.joint_distance";
+	}
 	req.start_state = m_start_state;
 	// req.trajectory_constraints;
 	// req.workspace_parameters;
@@ -454,12 +463,44 @@ bool Robot::Plan(const Object& ooi, boost::optional<std::vector<Object>> obstacl
 	moveit_msgs::PlanningScene planning_scene;
 	planning_scene.robot_state = m_start_state;
 
+	// remove "obstacles" from collision space after planner init
+	if (!m_planner->init_planner(planning_scene, req, res))
+	{
+		ROS_ERROR("Failed to init planner!");
+		if (have_obs) {
+			ProcessObstacles(obstacles, true);
+		}
+		return false;
+	}
+	else
+	{
+		if (have_obs)
+		{
+			if (!extract) {
+				ProcessObstacles(obstacles, true);
+			}
+			else {
+				for (const auto& o: obstacles)
+				{
+					auto search = pushed_ids.find(o.id);
+					if (search == pushed_ids.end()) {
+						to_remove.push_back(o);
+					}
+					else {
+						to_keep.push_back(o);
+					}
+				}
+				ProcessObstacles(to_remove, true);
+			}
+		}
+	}
+
 	SMPL_INFO("Planning to pregrasp state.");
-	if (!m_planner->solve(planning_scene, req, res))
+	if (!m_planner->solve(req, res))
 	{
 		ROS_ERROR("Failed to plan to pregrasp state.");
-		if (obstacles != boost::none) {
-			ProcessObstacles(obstacles.get(), true);
+		if (have_obs && extract) {
+			ProcessObstacles(to_keep, true);
 		}
 		return false;
 	}
@@ -474,7 +515,7 @@ bool Robot::Plan(const Object& ooi, boost::optional<std::vector<Object>> obstacl
 
 	m_traj = res.trajectory.joint_trajectory;
 	m_grasp_at = m_traj.points.size() - 1;
-	if (obstacles != boost::none) {
+	if (have_obs) {
 		m_grasp_at += 1; // WTF IS THIS???
 	}
 
@@ -498,12 +539,7 @@ bool Robot::Plan(const Object& ooi, boost::optional<std::vector<Object>> obstacl
 	// setGripper(true); // open
 	if (!attachOOI(ooi))
 	{
-		if (obstacles != boost::none) {
-			ProcessObstacles(obstacles.get(), true);
-		}
-		else {
-			++m_stats["attach_fails"];
-		}
+		++m_stats["attach_fails"];
 		ROS_ERROR("Failed to attach OOI.");
 		return false;
 	}
@@ -512,17 +548,23 @@ bool Robot::Plan(const Object& ooi, boost::optional<std::vector<Object>> obstacl
 		// ooi attached, but are we collision free with it grasped?
 		if (!m_cc_i->isStateValid(m_postgrasp_state))
 		{
-			if (obstacles != boost::none) {
-				ProcessObstacles(obstacles.get(), true);
-			}
-			else {
-				++m_stats["attach_collides"];
-			}
+			++m_stats["attach_collides"];
 			ROS_ERROR("Postgrasp state is in collision with attached OOI.");
 			return false;
 		}
 	}
 	InitArmPlanner(true);
+
+	// add "obstacles" to collision space for heuristics
+	if (have_obs)
+	{
+		if (!extract) {
+			ProcessObstacles(obstacles);
+		}
+		else {
+			ProcessObstacles(to_remove);
+		}
+	}
 
 	moveit_msgs::RobotState orig_start = m_start_state;
 	m_start_state.joint_state.position.erase(
@@ -541,15 +583,37 @@ bool Robot::Plan(const Object& ooi, boost::optional<std::vector<Object>> obstacl
 
 	addPathConstraint(req.path_constraints);
 
+	// remove "obstacles" from collision space after planner init
+	if (!m_planner->init_planner(planning_scene, req, res))
+	{
+		ROS_ERROR("Failed to init planner!");
+		if (have_obs) {
+			ProcessObstacles(obstacles, true);
+		}
+		return false;
+	}
+	else
+	{
+		if (have_obs)
+		{
+			if (!extract) {
+				ProcessObstacles(obstacles, true);
+			}
+			else {
+				ProcessObstacles(to_remove, true);
+			}
+		}
+	}
+
 	SMPL_INFO("Planning to home state with attached body.");
-	if (!m_planner->solve(planning_scene, req, res))
+	if (!m_planner->solve(req, res))
 	{
 		ROS_ERROR("Failed to plan to home state with attached body.");
-		if (obstacles != boost::none) {
-			ProcessObstacles(obstacles.get(), true);
-		}
 		detachOOI();
 		m_start_state = orig_start;
+		if (have_obs && extract) {
+			ProcessObstacles(to_keep, true);
+		}
 		return false;
 	}
 	SMPL_INFO("Robot found extraction plan! # wps = %d", res.trajectory.joint_trajectory.points.size());
@@ -568,6 +632,7 @@ bool Robot::Plan(const Object& ooi, boost::optional<std::vector<Object>> obstacl
 		m_traj.points.push_back(wp);
 	}
 
+	m_solve.clear();
 	int t = 0;
 	for (const auto& wp: m_traj.points)
 	{
@@ -583,11 +648,12 @@ bool Robot::Plan(const Object& ooi, boost::optional<std::vector<Object>> obstacl
 	m_cc->UpdateTraj(m_priority, m_solve);
 
 	SMPL_INFO("Robot has complete plan! m_solve.size() = %d", m_solve.size());
-	if (obstacles != boost::none) {
-		m_exec = m_traj;
-		SMPL_INFO("m_exec.points.size() = %d", m_exec.points.size());
-		ProcessObstacles(obstacles.get(), true);
+	m_exec = m_traj;
+
+	if (have_obs && extract) {
+		ProcessObstacles(to_keep, true);
 	}
+
 	return true;
 }
 
@@ -674,19 +740,6 @@ bool Robot::ComputeGrasps(
 			m_planner_time += GetTime() - start_time;
 			success = true;
 		}
-	}
-
-	if (success)
-	{
-		m_grasp_objs.clear();
-		reinitObjects(m_pregrasp_state);
-		m_grasp_objs.insert(m_grasp_objs.begin(), m_objs.begin(), m_objs.end());
-		reinitObjects(m_grasp_state);
-		m_grasp_objs.insert(m_grasp_objs.begin(), m_objs.begin(), m_objs.end());
-		reinitObjects(m_postgrasp_state);
-		m_grasp_objs.insert(m_grasp_objs.begin(), m_objs.begin(), m_objs.end());
-
-		displayObjectMarker(ooi);
 	}
 
 	return success;
@@ -805,8 +858,6 @@ void Robot::Step(int k)
 		{
 			m_current = s;
 			reinitObjects(m_current.state);
-
-			m_move.push_back(m_current);
 		}
 	}
 }
@@ -865,6 +916,15 @@ void Robot::SetPushGoal(const std::vector<double>& push)
 	m_goal_vec[3] = 0.0; // roll
 	m_goal_vec[4] = 0.0; // pitch
 
+	Eigen::Affine3d push_goal = Eigen::Translation3d(push[0], push[1], m_table_z + 0.075) *
+					Eigen::AngleAxisd(push[2], Eigen::Vector3d::UnitZ()) *
+					Eigen::AngleAxisd(0.0, Eigen::Vector3d::UnitY()) *
+					Eigen::AngleAxisd(0.0, Eigen::Vector3d::UnitX());
+
+	auto* vis_name = "push_goal";
+	SV_SHOW_INFO_NAMED(vis_name, smpl::visual::MakePoseMarkers(
+		push_goal, m_grid_i->getReferenceFrame(), vis_name));
+
 	fillGoalConstraint();
 }
 
@@ -887,8 +947,8 @@ bool Robot::PlanPush(
 		if (samplePush(o_traj, obs, push_start, push_end))
 		{
 			UpdateKDLRobot(0);
-			ProcessObstacles(obs);
 			InitArmPlanner(false);
+			ProcessObstacles(obs);
 
 			moveit_msgs::MotionPlanRequest req;
 			moveit_msgs::MotionPlanResponse res;
@@ -899,7 +959,7 @@ bool Robot::PlanPush(
 			req.max_velocity_scaling_factor = 1.0;
 			req.num_planning_attempts = 1;
 			// req.path_constraints;
-			req.planner_id = "arastar.joint_distance.manip";
+			req.planner_id = "arastar.manip.joint_distance";
 			req.start_state = m_start_state;
 			// req.trajectory_constraints;
 			// req.workspace_parameters;
@@ -908,8 +968,16 @@ bool Robot::PlanPush(
 			moveit_msgs::PlanningScene planning_scene;
 			planning_scene.robot_state = m_start_state;
 
+			// remove "obstacles" from collision space after planner init
+			if (!m_planner->init_planner(planning_scene, req, res))
+			{
+				ROS_ERROR("Failed to init planner!");
+				ProcessObstacles(obs, true);
+				return false;
+			}
+
 			SMPL_INFO("Found push! Plan to push start!");
-			if (!m_planner->solve(planning_scene, req, res))
+			if (!m_planner->solve(req, res))
 			{
 				ROS_ERROR("Failed to plan.");
 				ProcessObstacles(obs, true);
@@ -1036,48 +1104,52 @@ bool Robot::samplePush(
 	// (x, y) are linearly interpolated between object start and end
 	double x = object->front().state.at(0) * (1 - push_frac) + object->back().state.at(0) * push_frac;
 	double y = object->front().state.at(1) * (1 - push_frac) + object->back().state.at(1) * push_frac;
-	x += (m_distG(m_rng) * 0.025);
-	y += (m_distG(m_rng) * 0.025);
+	x += (m_distG(m_rng) * 0.05);
+	y += (m_distG(m_rng) * 0.05);
 
 	push_pose = Eigen::Translation3d(x, y, z) *
 				Eigen::AngleAxisd(yaw, Eigen::Vector3d::UnitZ()) *
 				Eigen::AngleAxisd(pitch, Eigen::Vector3d::UnitY()) *
 				Eigen::AngleAxisd(roll, Eigen::Vector3d::UnitX());
 
-	// auto* vis_name = "push_end_pose";
-	// SV_SHOW_INFO_NAMED(vis_name, smpl::visual::MakePoseMarkers(
-	// 	push_pose, m_grid_i->getReferenceFrame(), vis_name));
+	auto* vis_name = "push_end_pose";
+	SV_SHOW_INFO_NAMED(vis_name, smpl::visual::MakePoseMarkers(
+		push_pose, m_grid_i->getReferenceFrame(), vis_name));
 
 	// run IK for push end pose with random seed
-	if (getStateNearPose(push_pose, dummy, push_end, 1))
+	if (getStateNearPose(push_pose, dummy, push_end, 5))
 	{
 		// vis_name = "push_end";
-		// auto markers = m_cc_i->getCollisionModelVisualization(push_end);
+		auto markers = m_cc_i->getCollisionModelVisualization(push_end);
 		// for (auto& marker : markers) {
 		// 	marker.ns = vis_name;
 		// }
 		// SV_SHOW_INFO_NAMED(vis_name, markers);
 
 		push_pose = m_rm->computeFK(push_end);
-		push_pose.translation().x() = m_goal_vec[0] + (m_distG(m_rng) * 0.025);
-		push_pose.translation().y() = m_goal_vec[1] + (m_distG(m_rng) * 0.025);
+		push_pose.translation().x() = m_goal_vec[0] + (m_distG(m_rng) * 0.05);
+		push_pose.translation().y() = m_goal_vec[1] + (m_distG(m_rng) * 0.05);
 
-		// vis_name = "push_start_pose";
-		// SV_SHOW_INFO_NAMED(vis_name, smpl::visual::MakePoseMarkers(
-		// 	push_pose, m_grid_i->getReferenceFrame(), vis_name));
+		vis_name = "push_start_pose";
+		SV_SHOW_INFO_NAMED(vis_name, smpl::visual::MakePoseMarkers(
+			push_pose, m_grid_i->getReferenceFrame(), vis_name));
 
 		ProcessObstacles(obs);
 		if (getStateNearPose(push_pose, push_end, push_start, 1))
 		{
-			// vis_name = "push_start";
-			// markers = m_cc_i->getCollisionModelVisualization(push_start);
-			// for (auto& marker : markers) {
-			// 	marker.ns = vis_name;
-			// }
-			// SV_SHOW_INFO_NAMED(vis_name, markers);
+			vis_name = "push_start";
+			markers = m_cc_i->getCollisionModelVisualization(push_start);
+			for (auto& marker : markers) {
+				marker.ns = vis_name;
+			}
+			SV_SHOW_INFO_NAMED(vis_name, markers);
 
+			// does push_start to push_end collide when the object to be pushed
+			// is in the collision space?
 			bool collides = !(m_cc_i->isStateToStateValid(push_start, push_end));
 			ProcessObstacles(obs, true);
+			// is it collision free if that object is no longer
+			// in the collision space?
 			if (collides && m_cc_i->isStateToStateValid(push_start, push_end)) {
 				success = true;
 			}
@@ -2245,17 +2317,17 @@ bool Robot::getStateNearPose(
 	int tries = 0;
 	do
 	{
-		// if (!ns.empty())
-		// {
-		// 	auto markers = m_cc_i->getCollisionModelVisualization(seed);
-		// 	for (auto& marker : markers) {
-		// 		marker.ns = ns + "_seed";
-		// 	}
-		// 	SV_SHOW_INFO_NAMED(ns + "_seed", markers);
+		if (!ns.empty())
+		{
+			auto markers = m_cc_i->getCollisionModelVisualization(seed);
+			for (auto& marker : markers) {
+				marker.ns = ns + "_seed";
+			}
+			SV_SHOW_INFO_NAMED(ns + "_seed", markers);
 
-		// 	SV_SHOW_INFO_NAMED(ns + "_pose", smpl::visual::MakePoseMarkers(
-		// 		pose, m_grid_i->getReferenceFrame(), ns + "_pose"));
-		// }
+			SV_SHOW_INFO_NAMED(ns + "_pose", smpl::visual::MakePoseMarkers(
+				pose, m_grid_i->getReferenceFrame(), ns + "_pose"));
+		}
 
 		if (m_rm->computeIKSearch(pose, seed, state))
 		{

@@ -23,6 +23,7 @@
 #include <string>
 #include <memory>
 #include <random>
+#include <unordered_set>
 
 namespace clutter
 {
@@ -30,7 +31,7 @@ namespace clutter
 class Robot
 {
 public:
-	Robot() : m_ph("~"), m_rng(m_dev()) {};
+	Robot(int uid) : m_ph("~"), m_rng(m_dev()), m_uid(uid) {};
 
 
 	bool Setup();
@@ -39,7 +40,8 @@ public:
 	bool ProcessObstacles(const std::vector<Object>& obstacles, bool remove=false);
 	bool Init();
 	bool RandomiseStart();
-	bool Plan(const Object& ooi, boost::optional<std::vector<Object>> obstacles=boost::none);
+	bool Plan(const Object& ooi, const std::vector<Object>& obstacles,
+		bool extract=false, const std::unordered_set<int>& pushed_ids={});
 
 	void ProfileTraj(Trajectory& traj);
 	bool ComputeGrasps(
@@ -76,7 +78,6 @@ public:
 	void AnimateSolution();
 
 	const LatticeState* GetCurrentState() const { return &m_current; };
-	const Trajectory* GetMoveTraj() const { return &m_move; };
 	void GetExecTraj(trajectory_msgs::JointTrajectory& traj) const { traj = m_exec; };
 
 	void SetCC(const std::shared_ptr<CollisionChecker>& cc) {
@@ -127,7 +128,7 @@ private:
 	std::vector<int> m_coord_vals;
 	std::vector<double> m_coord_deltas;
 
-	int m_grasp_at;
+	int m_grasp_at, m_uid;
 	double m_mass, m_b, m_table_z;
 	std::string m_shoulder, m_elbow, m_wrist, m_tip;
 	const smpl::urdf::Link* m_link_s = nullptr;
@@ -135,7 +136,6 @@ private:
 	const smpl::urdf::Link* m_link_w = nullptr;
 	const smpl::urdf::Link* m_link_t = nullptr;
 	smpl::RobotState m_pregrasp_state, m_grasp_state, m_postgrasp_state;
-	std::vector<Object> m_grasp_objs;
 
 	std::random_device m_dev;
 	std::mt19937 m_rng;
@@ -159,7 +159,7 @@ private:
 
 	int m_t, m_priority;
 	LatticeState m_current, m_init;
-	Trajectory m_solve, m_move;
+	Trajectory m_solve;
 	std::vector<Object> m_objs;
 	std::shared_ptr<CollisionChecker> m_cc;
 
