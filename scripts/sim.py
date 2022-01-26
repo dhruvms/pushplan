@@ -278,6 +278,10 @@ class BulletSim:
 
 			for jidx, jval in zip(joint_idxs, joint_config):
 				sim.resetJointState(robot_id, jidx, jval, targetVelocity=0.0)
+			sim.setJointMotorControlArray(
+				robot_id, joint_idxs,
+				controlMode=sim.VELOCITY_CONTROL,
+				targetVelocities=[0.0] * len(joint_idxs))
 			sim.stepSimulation()
 
 			self.enableCollisionsWithObjects(sim_id)
@@ -411,6 +415,7 @@ class BulletSim:
 
 		self.disableCollisionsWithObjects(sim_id)
 
+		self.ResetScene(ResetSceneRequest(-1, True), sim_id)
 		if (len(req.objects.poses) != 0):
 			self.resetObjects(sim_id, req.objects.poses)
 
@@ -657,9 +662,8 @@ class BulletSim:
 					immovable = any([not sim_data['objs'][x]['movable'] for x in action_interactions])
 					table = self.checkTableCollision(sim_id)
 					velocity = self.checkVelConstraints(sim_id)
-					contact_error = False # len(robot_contacts) > 1
 
-					violation_flag = topple or immovable or table or velocity or contact_error
+					violation_flag = topple or immovable or table or velocity
 					if (violation_flag):
 						# cause = 'push violation: ' + topple*'topple' + immovable*'immovable' + table*'table' + velocity*'velocity' + contact_error*'contact_error'
 						# print(cause)
@@ -693,15 +697,14 @@ class BulletSim:
 				immovable = any([not sim_data['objs'][x]['movable'] for x in action_interactions])
 				table = self.checkTableCollision(sim_id)
 				velocity = self.checkVelConstraints(sim_id)
-				contact_error = False # len(robot_contacts) != 1
 
-				violation_flag = topple or immovable or table or velocity or contact_error
+				violation_flag = topple or immovable or table or velocity
 				if (violation_flag):
 					# cause = 'push violation: ' + topple*'topple' + immovable*'immovable' + table*'table' + velocity*'velocity' + contact_error*'contact_error'
 					# print(cause)
 					break
 
-			if (violation_flag):
+			if (violation_flag or req.oid not in robot_contacts):
 				continue # to next push
 			else:
 				successes += 1
