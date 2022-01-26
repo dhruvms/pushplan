@@ -15,11 +15,12 @@ using namespace clutter;
 void SaveData(
 	int scene_id,
 	int mapf_calls, int mapf_sucesses, bool lucky, bool rearranged,
-	bool dead, bool rearrange, std::uint32_t violation)
+	bool dead, bool rearrange, std::uint32_t violation, int uid=0)
 {
 	std::string filename(__FILE__);
 	auto found = filename.find_last_of("/\\");
-	filename = filename.substr(0, found + 1) + "../dat/MAIN.csv";
+	filename = filename.substr(0, found + 1) + "../dat/MAIN_";
+	filename += std::to_string(uid) + ".csv";
 
 	bool exists = FileExists(filename);
 	std::ofstream STATS;
@@ -55,11 +56,15 @@ int main(int argc, char** argv)
 	ros::Duration(1.0).sleep();
 
 	// read from NONE file
-	std::string filename(__FILE__), results(__FILE__);
+	int uid;
+	ph.getParam("goal/uid", uid);
+	std::string filename(__FILE__);
 	auto found = filename.find_last_of("/\\");
-	filename = filename.substr(0, found + 1) + "../dat/FIRST.txt";
-	results = results.substr(0, found + 1) + "../dat/RESULTS.csv";
+	filename = filename.substr(0, found + 1) + "../dat/FIRST_";
+	filename += std::to_string(uid) + ".txt";
 
+for (int counter = 0; counter < 3; ++counter)
+{
 	std::ifstream NONE;
 	NONE.open(filename);
 
@@ -94,75 +99,57 @@ int main(int argc, char** argv)
 			planfile += level + "/plan_" + line + "_SCENE.txt";
 			ROS_WARN("Run planner on: %s", planfile.c_str());
 
-			Planner p;
-			bool ycb;
-			ph.getParam("objects/ycb", ycb);
-			if (ycb) {
-				scene_id = -1;
-			}
-			if (!p.Init(planfile, scene_id, ycb)) {
+				Planner p;
+				bool ycb;
+				ph.getParam("objects/ycb", ycb);
+				if (ycb) {
+					scene_id = -1;
+				}
+				if (!p.Init(planfile, scene_id, ycb, uid)) {
+					continue;
+				}
+				ROS_INFO("Planner and simulator init-ed!");
+				getchar();
 				continue;
-			}
-			ROS_INFO("Planner and simulator init-ed!");
 
-			int mapf_calls = 0, mapf_sucesses = 0;
-			bool dead = false, rearrange = true, lucky = false, rearranged = false;
-			std::uint32_t violation;
-			do
-			{
-				++mapf_calls;
-				if (p.Plan())
+				int mapf_calls = 0, mapf_sucesses = 0;
+				bool dead = false, rearrange = true, lucky = false, rearranged = false;
+				std::uint32_t violation = 0;
+				do
 				{
-					++mapf_sucesses;
-
-					// ROS_WARN("Try extraction before rearrangement! Did we get lucky?");
-					// if (p.Alive() && p.TryExtract()) {
-					// 	lucky = true;
-					// }
-
-					if (p.Alive()) {
-						ROS_WARN("Try rearrangement!");
-						rearrange = p.Rearrange();
-					}
-
-					// ROS_WARN("Try extraction after rearrangement! Did we successfully rearrange?");
-					// if (p.Alive() && p.TryExtract()) {
-					// 	rearranged = true;
-					// }
-
-					ROS_WARN("Try planning with all objects as obstacles! Are we done?");
-					if (p.Alive() & p.PlanExtract())
+					++mapf_calls;
+					if (p.Plan())
 					{
-						ROS_WARN("YAYAYAY! We did it!");
-						break;
+						++mapf_sucesses;
+
+						if (p.Alive() & p.PlanExtract())
+						{
+							ROS_WARN("YAYAYAY! We did it!");
+							break;
+						}
+
+						if (p.Alive()) {
+							ROS_WARN("Try rearrangement!");
+							rearrange = p.Rearrange();
+						}
 					}
 				}
-			}
-			while (rearrange && p.Alive());
-			dead = !p.Alive();
+				while (rearrange && p.Alive());
+				dead = !p.Alive();
 
-			if (p.Alive()) {
-				violation = p.RunSim();
-
-				if (violation == 0) {
-					ROS_WARN("SUCCESS!!!");
+				if (!p.Alive())
+				{
+					violation |= 0x00000008;
+					ROS_ERROR("Planner terminated!!!");
 				}
-				else {
-					ROS_ERROR("FAILURE!!!");
-				}
-			}
-			else {
-				violation |= 0x00000008;
-				ROS_ERROR("Planner terminated!!!");
-			}
 
-			if (SAVE)
-			{
-				SaveData(
-					scene_id,
-					mapf_calls, mapf_sucesses, lucky, rearranged,
-					dead, rearrange, violation);
-			}
+				if (SAVE)
+				{
+					SaveData(
+						scene_id,
+						mapf_calls, mapf_sucesses, lucky, rearranged,
+						dead, rearrange, violation, uid);
+				}
 		}
 	}
 	else
@@ -172,6 +159,7 @@ int main(int argc, char** argv)
 	}
 
 	NONE.close();
+}
 
 	return 0;
 }
