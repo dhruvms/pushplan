@@ -21,7 +21,8 @@ public:
 	virtual bool Init() = 0;
 
 	void SetStartState(const LatticeState& s);
-	void SetGoalState(const Coord& p);
+	void SetGoalState(const Coord& p={});
+	virtual bool SetMAPFGoal() = 0;
 
 	bool Search(int robin);
 	virtual bool AtGoal(const LatticeState& s, bool verbose=false) = 0;
@@ -50,8 +51,10 @@ public:
 protected:
 	std::vector<Object> m_objs;
 	LatticeState m_current, m_init;
-	Coord m_start, m_goal;
+	Coord m_start, m_goal, m_mapf_goal;
 	State m_goalf;
+	bool m_mapf_set = false;
+
 	int m_t, m_priority, m_phase;
 
 	int m_start_id, m_goal_id, m_expansions = 0;

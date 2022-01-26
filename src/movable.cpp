@@ -26,8 +26,18 @@ void Movable::SetStartState(const LatticeState& s)
 
 void Movable::SetGoalState(const Coord& p)
 {
-	m_goal_id = getOrCreateState(p);
-	m_goal = p;
+	if (!m_mapf_set)
+	{
+		if (p.empty()) {
+			m_mapf_goal = m_current.coord;
+		}
+		else {
+			m_mapf_goal = p;
+		}
+	}
+
+	m_goal_id = getOrCreateState(m_mapf_goal);
+	m_goal = m_mapf_goal;
 	DiscToCont(m_goal, m_goalf);
 
 	m_wastar->set_goal(m_goal_id);
