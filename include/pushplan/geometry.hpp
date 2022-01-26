@@ -181,8 +181,9 @@ void GetRectObjAtPt(
 	}
 }
 
+template<typename T>
 inline
-double EuclideanDist(const State& p1, const State& p2)
+double EuclideanDist(const std::vector<T>& p1, const std::vector<T>& p2)
 {
 	assert(p1.size() == p2.size());
 	double val = 0.0;
