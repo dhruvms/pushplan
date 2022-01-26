@@ -18,6 +18,11 @@ void Agent::ResetObject()
 {
 	m_objs.back().o_x = m_orig_o.o_x;
 	m_objs.back().o_y = m_orig_o.o_y;
+
+	LatticeState s;
+	s.state.push_back(m_objs.back().o_x);
+	s.state.push_back(m_objs.back().o_y);
+	UpdatePose(s);
 }
 
 bool Agent::SetObjectPose(
@@ -31,6 +36,11 @@ bool Agent::SetObjectPose(
 	m_objs.back().o_roll = rpy.at(0);
 	m_objs.back().o_pitch = rpy.at(1);
 	m_objs.back().o_yaw = rpy.at(2);
+
+	LatticeState s;
+	s.state.push_back(m_objs.back().o_x);
+	s.state.push_back(m_objs.back().o_y);
+	UpdatePose(s);
 }
 
 bool Agent::Init()
@@ -54,7 +64,7 @@ bool Agent::Init()
 	m_move.push_back(m_current);
 
 	if (!m_wastar) {
-		m_wastar = std::make_unique<WAStar>(this, 1.0); // make A* search object
+		m_wastar = std::make_unique<WAStar>(this, 2.0); // make A* search object
 	}
 
 	return true;
@@ -90,6 +100,17 @@ void Agent::Step(int k)
 			}
 		}
 	}
+}
+
+bool Agent::SetMAPFGoal()
+{
+	if (m_mapf_set) {
+		return true;
+	}
+
+	m_mapf_goal = m_current.coord;
+	m_mapf_set = true;
+	return true;
 }
 
 void Agent::GetSE2Push(std::vector<double>& push)
@@ -178,17 +199,14 @@ unsigned int Agent::GetGoalHeuristic(int state_id)
 	LatticeState* s = getHashEntry(state_id);
 	assert(s);
 
-	if (s->state.empty()) {
-		DiscToCont(s->coord, s->state);
-	}
-	double dist = EuclideanDist(s->state, m_goalf);
+	double dist = EuclideanDist(s->coord, m_goal);
 	return (dist * COST_MULT);
 }
 
 unsigned int Agent::GetGoalHeuristic(const LatticeState& s)
 {
 	// TODO: RRA* informed backwards Dijkstra's heuristic
-	double dist = EuclideanDist(s.state, m_goalf);
+	double dist = EuclideanDist(s.coord, m_goal);
 	return (dist * COST_MULT);
 }
 
@@ -240,13 +258,8 @@ unsigned int Agent::cost(
 			return 0;
 		}
 
-		double dist = std::max(1.0, EuclideanDist(s1->state, s2->state));
+		double dist = std::max(1.0, EuclideanDist(s1->coord, s2->coord));
 		return (dist * COST_MULT);
-
-		// // Works okay for WINDOW = 20, but not for WINDOW <= 10
-		// double bdist = m_cc->BoundaryDistance(s2f);
-		// double bw = m_cc->GetBaseWidth(), bl = m_cc->GetBaseLength();
-		// return ((dist + WINDOW*(1 - bdist/std::min(bw, bl))*(m_priority > 0)) * COST_MULT);
 	}
 	else if (s2->t == m_t + WINDOW + 1) {
 		return GetGoalHeuristic(*s2);

@@ -29,6 +29,7 @@ public:
 
 	bool AtGoal(const LatticeState& s, bool verbose=false) override;
 	void Step(int k) override;
+	bool SetMAPFGoal() override;
 
 	void GetSE2Push(std::vector<double>& push);
 
@@ -51,6 +52,8 @@ public:
 
 private:
 	Object m_orig_o;
+	Coord m_mapf_goal;
+	bool m_mapf_set;
 
 	int generateSuccessor(
 		const LatticeState* parent,
