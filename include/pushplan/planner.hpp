@@ -14,6 +14,7 @@
 #include <string>
 #include <vector>
 #include <memory>
+#include <unordered_set>
 
 namespace clutter
 {
@@ -23,7 +24,7 @@ class Planner
 public:
 	Planner() : m_num_objs(-1), m_ooi_idx(-1), m_scene_id(-1),
 				m_t(0), m_phase(0), m_ph("~") {};
-	bool Init(const std::string& scene_file, int scene_id, bool ycb);
+	bool Init(const std::string& scene_file, int scene_id, bool ycb, int uid=0);
 
 	bool Plan();
 	bool PlanExtract();
@@ -63,7 +64,7 @@ private:
 	std::unique_ptr<Robot> m_robot;
 	std::shared_ptr<BulletSim> m_sim;
 
-	int m_num_objs, m_ooi_idx, m_t, m_phase, m_scene_id;
+	int m_num_objs, m_ooi_idx, m_t, m_phase, m_scene_id, m_uid;
 	std::vector<Agent> m_agents;
 	std::unordered_map<int, size_t> m_agent_map;
 	Agent m_ooi, m_ee;
@@ -72,8 +73,8 @@ private:
 	std::vector<double> m_goal;
 
 	trajectory_msgs::JointTrajectory m_exec;
-	Trajectory m_exec_interm;
 	std::vector<trajectory_msgs::JointTrajectory> m_rearrangements;
+	std::unordered_set<int> m_pushed_ids;
 	comms::ObjectsPoses m_rearranged;
 
 	std::vector<size_t> m_priorities;

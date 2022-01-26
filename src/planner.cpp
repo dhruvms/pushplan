@@ -13,16 +13,18 @@
 #include <algorithm>
 #include <iomanip>
 #include <cstdlib>
+#include <unordered_set>
 
 #include <gperftools/profiler.h>
 
 namespace clutter
 {
 
-bool Planner::Init(const std::string& scene_file, int scene_id, bool ycb)
+bool Planner::Init(const std::string& scene_file, int scene_id, bool ycb, int uid)
 {
 	m_scene_file = scene_file;
 	m_scene_id = scene_id;
+	m_uid = uid;
 
 	std::string tables;
 	int num_immov, num_mov;
@@ -35,7 +37,7 @@ bool Planner::Init(const std::string& scene_file, int scene_id, bool ycb)
 				m_scene_id, std::string(),
 				num_immov, num_mov);
 
-	m_robot = std::make_unique<Robot>();
+	m_robot = std::make_unique<Robot>(uid);
 
 	m_stats["whca_attempts"] = 0;
 	m_stats["robot_plan_time"] = 0.0;
@@ -161,7 +163,6 @@ bool Planner::Alive()
 
 bool Planner::Plan()
 {
-	++m_stats["whca_attempts"];
 	while (!setupProblem()) {
 		continue;
 	}
@@ -169,24 +170,23 @@ bool Planner::Plan()
 	double start_time = GetTime(), time_taken;
 	if (whcastar())
 	{
-		m_exec_interm.clear();
-
-		auto robot_traj = m_robot->GetMoveTraj();
-		m_exec_interm.insert(m_exec_interm.begin(), robot_traj->begin(), robot_traj->end());
-		SMPL_INFO("Exec trajj size = %d", m_exec_interm.size());
-		m_robot->ProfileTraj(m_exec_interm);
+		m_robot->GetExecTraj(m_exec);
+		for (auto& a: m_agents) {
+			a.SetMAPFGoal();
+		}
 	}
 	else
 	{
-		m_exec_interm.clear();
+		m_exec.points.clear();
 
 		time_taken = GetTime() - start_time;
-		SMPL_WARN("Need to re-run WHCA*! Planning took %f seconds.", time_taken);
-		m_stats["mapf_time"] += time_taken;
+		// SMPL_WARN("Need to re-run WHCA*! Planning took %f seconds.", time_taken);
+		// m_stats["mapf_time"] += time_taken;
 		m_plan_time += time_taken;
 		return false;
 	}
 	time_taken = GetTime() - start_time;
+	++m_stats["whca_attempts"];
 	m_stats["mapf_time"] += time_taken;
 	m_plan_time += time_taken;
 	SMPL_INFO("Planning took %f seconds. (%f runs so far)", time_taken, m_stats["whca_attempts"]);
@@ -204,36 +204,18 @@ bool Planner::PlanExtract()
 {
 	// Add rearranged objects as obstacles for extraction planning
 	std::vector<Object> extract_obs;
-	for (const auto& a: m_agents)
-	{
+	for (const auto& a: m_agents) {
 		extract_obs.push_back(a.GetObject()->back());
-		// auto search = m_agent_map.find(o.id);
-		// if (search != m_agent_map.end()) {
-		// }
 	}
-	if (!m_robot->Plan(m_ooi.GetObject()->back(), extract_obs)) {
-		moveit_msgs::RobotTrajectory to_exec;
-		m_robot->ConvertTraj(m_exec_interm, to_exec);
-		m_exec = to_exec.joint_trajectory;
-		return false;
-	}
-	else {
-		m_robot->GetExecTraj(m_exec);
-	}
-	SMPL_INFO("Exec traj size = %d", m_exec.points.size());
 
-	comms::ObjectsPoses rearranged = m_rearranged;
-	bool success = true;
-	double start_time = GetTime();
-	if (!m_sim->ExecTraj(m_exec, rearranged, m_robot->GraspAt(), m_ooi.GetID()))
+	if (m_robot->Plan(m_ooi.GetObject()->back(), extract_obs, true, m_pushed_ids))
 	{
-		SMPL_ERROR("Failed to exec traj!");
-		success = false;
+		m_robot->GetExecTraj(m_exec);
+		SMPL_INFO("Exec traj size = %d", m_exec.points.size());
+		return this->TryExtract();
 	}
 
-	m_sim->RemoveConstraint();
-
-	return success;
+	return false;
 }
 
 bool Planner::Rearrange()
@@ -264,16 +246,13 @@ std::uint32_t Planner::RunSim()
 
 bool Planner::TryExtract()
 {
-	if (m_exec_interm.empty() || !setupSim()) {
+	if (m_exec.points.empty() || !setupSim()) {
 		return false;
 	}
 
-	moveit_msgs::RobotTrajectory to_exec;
-	m_robot->ConvertTraj(m_exec_interm, to_exec);
 	comms::ObjectsPoses rearranged = m_rearranged;
 	bool success = true;
-	double start_time = GetTime();
-	if (!m_sim->ExecTraj(to_exec.joint_trajectory, rearranged, m_robot->GraspAt(), m_ooi.GetID()))
+	if (!m_sim->ExecTraj(m_exec, rearranged, m_robot->GraspAt(), m_ooi.GetID()))
 	{
 		SMPL_ERROR("Failed to exec traj!");
 		success = false;
@@ -305,20 +284,17 @@ bool Planner::whcastar()
 	double start_time = GetTime(), total_time = 0.0, iter_time = 0.0;
 
 	int iter = 0;
-	if (SAVE) {
-		writePlanState(iter);
+	// if (SAVE) {
+	// 	writePlanState(iter);
+	// }
+
+	// Add rearranged objects as obstacles for extraction planning
+	std::vector<Object> movable_obs;
+	for (const auto& a: m_agents) {
+		movable_obs.push_back(a.GetObject()->back());
 	}
 
-	// // Add rearranged objects as obstacles for extraction planning
-	// std::vector<Object> extract_obs;
-	// for (const auto& o: m_rearranged.poses)
-	// {
-	// 	auto search = m_agent_map.find(o.id);
-	// 	if (search != m_agent_map.end()) {
-	// 		extract_obs.push_back(m_agents.at(m_agent_map[o.id]).GetObject()->back());
-	// 	}
-	// }
-	if (!m_robot->Plan(m_ooi.GetObject()->back())) {
+	if (!m_robot->Plan(m_ooi.GetObject()->back(), movable_obs)) {
 		return false;
 	}
 	m_stats["robot_plan_time"] = m_robot->TrajPlanTime();
@@ -343,9 +319,9 @@ bool Planner::whcastar()
 		reinit();
 
 		++iter;
-		if (SAVE) {
-			writePlanState(iter);
-		}
+		// if (SAVE) {
+		// 	writePlanState(iter);
+		// }
 
 		iter_time = GetTime() - start_time;
 		if (iter_time > WHCA_PLANNING_TIME) {
@@ -381,9 +357,9 @@ bool Planner::whcastar()
 		reinit();
 
 		++iter;
-		if (SAVE) {
-			writePlanState(iter);
-		}
+		// if (SAVE) {
+		// 	writePlanState(iter);
+		// }
 
 		iter_time = GetTime() - start_time;
 		if (iter_time > WHCA_PLANNING_TIME) {
@@ -432,7 +408,8 @@ bool Planner::rearrange(std_srvs::Empty::Request& req, std_srvs::Empty::Response
 		SMPL_INFO("Rearranging object %d", oid);
 		// m_agents.at(m_agent_map[oid]).ResetObject();
 
-		auto oid_conflicts = m_cc->GetConflictsOf(oid);
+		std::unordered_set<int> descendents;
+		m_cc->GetDescendentsOf(oid, descendents);
 		std::vector<Object> new_obstacles;
 		for (const auto& a: m_agents)
 		{
@@ -440,30 +417,18 @@ bool Planner::rearrange(std_srvs::Empty::Request& req, std_srvs::Empty::Response
 				continue; // selected object cannot be obstacle
 			}
 
-			bool oid_child = false;
-			for (const auto& c: oid_conflicts)
-			{
-				if (c.first.first == a.GetObject()->back().id) {
-					oid_child = true;
-					break;
+			auto search = descendents.find(a.GetObject()->back().id);
+			if (search != descendents.end()) {
+				continue; // descendent object *should* not be obstacle
+			}
+			else {
+				new_obstacles.push_back(a.GetObject()->back());
+				SMPL_INFO("Adding object %d as obstacle", a.GetObject()->back().id);
+
+				auto attempted = std::find(ids_attempted.begin(), ids_attempted.end(), a.GetObject()->back().id);
+				if (attempted != ids_attempted.end()) {
+					ids_attempted.erase(attempted);
 				}
-			}
-			if (oid_child) {
-				continue; // children of selected object may not be obstacle
-			}
-
-			new_obstacles.push_back(a.GetObject()->back());
-			SMPL_INFO("Adding object %d as obstacle", a.GetObject()->back().id);
-		}
-
-		for (const auto& c: robot_conflicts)
-		{
-			if (c.first.first != oid && c.second < oid_t)
-			{
-				// first order conflicts earlier than selected object
-				// must be obstacles
-				new_obstacles.push_back(m_agents.at(m_agent_map[c.first.first]).GetObject()->back());
-				SMPL_INFO("Adding object %d as obstacle", c.first.first);
 			}
 		}
 
@@ -497,6 +462,7 @@ bool Planner::rearrange(std_srvs::Empty::Request& req, std_srvs::Empty::Response
 		if (m_robot->PlanPush(oid, m_agents.at(m_agent_map[oid]).GetMoveTraj(), m_agents.at(m_agent_map[oid]).GetObject()->back(), rearranged, result))
 		{
 			push_found = true;
+			m_pushed_ids.insert(oid);
 			m_rearrangements.push_back(m_robot->GetLastPlan());
 
 			// update positions of moved objects
@@ -634,14 +600,14 @@ void Planner::reinit()
 
 	// Set agent goals
 	if (m_phase == 0) {
-		m_ooi.SetGoalState(m_ooi.GetCurrentState()->coord);
+		m_ooi.SetGoalState();
 	}
 	else if (m_phase == 1) {
 		m_ooi.SetGoalState(m_robot->GetEECoord()); // EE position
 	}
 
 	for (auto& a: m_agents) {
-		a.SetGoalState(a.GetCurrentState()->coord);
+		a.SetGoalState();
 	}
 
 	// Set agent priorities
@@ -733,7 +699,7 @@ bool Planner::setupProblem()
 	m_ooi.Init();
 
 	m_robot->Init();
-	if (m_exec_interm.empty() && !m_robot->RandomiseStart()) {
+	if (m_exec.points.empty() && !m_robot->RandomiseStart()) {
 		return false;
 	}
 
@@ -1121,8 +1087,8 @@ void Planner::setupGlobals()
 	m_ph.getParam("robot/speed", R_SPEED);
 	m_ph.getParam("goal/save", SAVE);
 	m_ph.getParam("occupancy_grid/res", DF_RES);
-	m_ph.getParam("occupancy_grid/cc_2d", CC_2D);
-	m_ph.getParam("occupancy_grid/cc_3d", CC_3D);
+	m_ph.getParam("robot/cc_2d", CC_2D);
+	m_ph.getParam("robot/cc_3d", CC_3D);
 }
 
 int Planner::armId()
@@ -1149,7 +1115,8 @@ bool Planner::savePlanData()
 {
 	std::string filename(__FILE__);
 	auto found = filename.find_last_of("/\\");
-	filename = filename.substr(0, found + 1) + "../dat/PLANNER.csv";
+	filename = filename.substr(0, found + 1) + "../dat/PLANNER_";
+	filename += std::to_string(m_uid) + ".csv";
 
 	bool exists = FileExists(filename);
 	std::ofstream STATS;
