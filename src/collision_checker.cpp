@@ -26,6 +26,10 @@ m_rng(m_dev())
 			m_base_loc = i;
 			continue;
 		}
+		LatticeState s;
+		s.state.push_back(m_obstacles.at(i).o_x);
+		s.state.push_back(m_obstacles.at(i).o_y);
+		m_obstacles.at(i).UpdatePose(s);
 		m_fcl_immov->registerObject(m_obstacles.at(i).GetFCLObject());
 	}
 
@@ -210,8 +214,40 @@ bool CollisionChecker::UpdateConflicts(
 
 	if (!done)
 	{
-		if (m_planner->CheckRobotCollision(robot, priority)) {
-			updateConflicts(id1, priority, 100, 0, robot.t);
+		if (!CC_2D)
+		{
+			if (m_planner->CheckRobotCollision(robot, priority)) {
+				updateConflicts(id1, priority, 100, 0, robot.t);
+			}
+		}
+		else
+		{
+			auto o1_obj = m_planner->GetObject(priority)->back();
+			State o1_loc = {s.state.at(0), s.state.at(1)};
+			std::vector<State> o1_rect;
+			bool rect_o1 = false;
+
+			// preprocess rectangle once only
+			if (o1_obj.Shape() == 0)
+			{
+				GetRectObjAtPt(o1_loc, o1_obj, o1_rect);
+				rect_o1 = true;
+			}
+
+			auto robot_2d = m_planner->Get2DRobot(robot);
+
+			if (!checkCollisionObjSet(o1_obj, o1_loc, rect_o1, o1_rect, robot_2d))
+			{
+				if (!CC_3D) {
+					updateConflicts(id1, priority, 100, 0, robot.t);
+				}
+				else
+				{
+					if (m_planner->CheckRobotCollision(robot, priority)) {
+						updateConflicts(id1, priority, 100, 0, robot.t);
+					}
+				}
+			}
 		}
 	}
 
@@ -231,6 +267,35 @@ std::unordered_map<std::pair<int, int>, int, std::PairHash>
 	}
 
 	return pushed;
+}
+
+void CollisionChecker::getChildrenOf(int pusher, std::vector<int>& children) const
+{
+	children.clear();
+	for (const auto& c: m_conflicts)
+	{
+		if (c.first.second == pusher) {
+			children.push_back(c.first.first);
+		}
+	}
+}
+
+void CollisionChecker::GetDescendentsOf(int pusher, std::unordered_set<int>& descendents) const
+{
+	std::vector<int> to_check, children;
+	to_check.push_back(pusher);
+
+	while (!to_check.empty())
+	{
+		int check = to_check.back();
+		to_check.pop_back();
+
+		getChildrenOf(check, children);
+		to_check.insert(to_check.end(), children.begin(), children.end());
+		for (const auto& c: children) {
+			descendents.insert(c);
+		}
+	}
 }
 
 State CollisionChecker::GetRandomStateOutside(fcl::CollisionObject* o)
@@ -268,21 +333,6 @@ bool CollisionChecker::updateConflicts(
 	}
 	else {
 		m_conflicts.emplace(key, t);
-	}
-}
-
-void CollisionChecker::cleanupChildren(std::vector<int>& check)
-{
-	for (const auto& c: m_conflicts)
-	{
-		auto loc = std::find(check.begin(), check.end(), c.first.second);
-		if (loc != check.end())
-		{
-			loc = std::find(check.begin(), check.end(), c.first.first);
-			if (loc == check.end()) {
-				check.push_back(c.first.first);
-			}
-		}
 	}
 }
 

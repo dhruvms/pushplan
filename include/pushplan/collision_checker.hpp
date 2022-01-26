@@ -11,6 +11,7 @@
 #include <unordered_map>
 #include <utility>
 #include <iostream>
+#include <unordered_set>
 
 namespace std
 {
@@ -84,6 +85,8 @@ public:
 	const std::vector<Object>* GetObstacles() { return &m_obstacles; };
 
 	auto GetConflictsOf(int pusher) const -> std::unordered_map<std::pair<int, int>, int, std::PairHash>;
+	void GetDescendentsOf(int pusher, std::unordered_set<int>& descendents) const;
+
 	void PrintConflicts() { std::cout << m_conflicts << std::endl; }
 	void ClearConflicts() { m_conflicts.clear(); };
 	auto GetConflicts() const -> std::unordered_map<std::pair<int, int>, int, std::PairHash> {
@@ -106,10 +109,10 @@ private:
 	fcl::BroadPhaseCollisionManager* m_fcl_immov = nullptr;
 	fcl::BroadPhaseCollisionManager* m_fcl_mov = nullptr;
 
+	void getChildrenOf(int pusher, std::vector<int>& children) const;
 	bool updateConflicts(
 		int id1, int p1,
 		int id2, int p2, int t);
-	void cleanupChildren(std::vector<int>& check);
 
 	bool checkCollisionObjSet(
 		const Object& o1, const State& o1_loc,
