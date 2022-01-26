@@ -8,7 +8,7 @@
 
     <param name="fridge" type="bool" value="true"/>
     <node pkg="pushplan" type="coop_plan" name="coop_plan" output="screen" respawn="false">
-        <!-- launch-prefix="gdb -ex run - - args" -->
+        <!-- launch-prefix="gdb - - args" -->
         <param name="planning_frame" value="odom_combined"/>
 
         <!-- 1. robot model (for planning) -->
