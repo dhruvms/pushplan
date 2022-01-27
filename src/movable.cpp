@@ -1,6 +1,6 @@
 #include <pushplan/movable.hpp>
 #include <pushplan/geometry.hpp>
-#include <pushplan/constants.hpp>
+#include <smpl/constants.hpp>
 
 #include <smpl/console/console.h>
 

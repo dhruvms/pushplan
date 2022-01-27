@@ -55,6 +55,8 @@ public:
 private:
 	Object m_orig_o;
 	std::list<std::shared_ptr<Constraint> > m_constraints;
+	std::vector<std::pair<int, Trajectory*> >* m_all_agent_traj_ptr; // all agent trajectories
+	int m_my_id; // The agents id
 
 	int generateSuccessor(
 		const LatticeState* parent,
@@ -63,7 +65,16 @@ private:
 		std::vector<unsigned int>* costs);
 	unsigned int cost(
 		const LatticeState* s1,
-		const LatticeState* s2) override;
+		const LatticeState* s2,
+		const bool is_movable_collision = false);
+
+	unsigned int cost(
+		const LatticeState* s1,
+		const LatticeState* s2) override{
+			SMPL_ERROR("Cost function undefined in agent");
+			return 0;
+		};
+
 	bool convertPath(
 		const std::vector<int>& idpath) override;
 };

@@ -1,6 +1,6 @@
 #include <pushplan/planner.hpp>
 #include <pushplan/agent.hpp>
-#include <pushplan/constants.hpp>
+#include <smpl/constants.hpp>
 #include <pushplan/geometry.hpp>
 #include <pushplan/cbs.hpp>
 #include <pushplan/helpers.hpp>
@@ -715,6 +715,7 @@ void Planner::setupGlobals()
 	m_ph.getParam("whca/res", RES);
 	m_ph.getParam("whca/grid", GRID);
 	m_ph.getParam("whca/cost_mult", COST_MULT);
+	m_ph.getParam("whca/eecbs_movable_collision_mult", EECBS_MOVABLE_COLLISION_MULT);
 	m_ph.getParam("robot/semi_minor", SEMI_MINOR);
 	m_ph.getParam("robot/robot_obj_mass", R_MASS);
 	m_ph.getParam("robot/speed", R_SPEED);

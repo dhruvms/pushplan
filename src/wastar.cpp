@@ -1,5 +1,5 @@
 #include <pushplan/wastar.hpp>
-#include <pushplan/constants.hpp>
+#include <smpl/constants.hpp>
 #include <pushplan/types.hpp>
 #include <pushplan/movable.hpp>
 #include <pushplan/helpers.hpp>

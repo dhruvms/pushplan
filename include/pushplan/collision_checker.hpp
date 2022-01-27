@@ -92,7 +92,13 @@ public:
 	int NumObstacles() { return (int)m_obstacles.size(); };
 	const std::vector<Object>* GetObstacles() { return &m_obstacles; };
 
-
+	// ---------------- EECBS Edits -----------------------------
+	void initMovableCollisionChecker();
+	bool FCLCollisionMultipleAgents(
+			Agent* a1,
+			const std::vector<int>& all_agent_ids,
+			const std::vector<LatticeState>& all_agent_poses);
+	// ---------------- EECBS Edits -----------------------------
 private:
 	Planner* m_planner = nullptr;
 
@@ -105,6 +111,7 @@ private:
 	std::uniform_real_distribution<double> m_distD;
 
 	fcl::BroadPhaseCollisionManagerf* m_fcl_immov = nullptr;
+	fcl::BroadPhaseCollisionManagerf* m_fcl_mov = nullptr;
 
 	void cleanupChildren(std::vector<int>& check);
 

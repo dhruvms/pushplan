@@ -98,6 +98,9 @@ bool Agent::SatisfyPath(HighLevelNode* ct_node, Trajectory** sol_path)
 		}
 	}
 
+	m_all_agent_traj_ptr = &ct_node->m_solution;
+	m_my_id = ct_node->m_replanned;
+
 	std::vector<int> solution;
 	int solcost;
 	bool result = m_wastar->replan(&solution, &solcost);
@@ -288,19 +291,45 @@ int Agent::generateSuccessor(
 	int succ_state_id = getOrCreateState(child);
 	LatticeState* successor = getHashEntry(succ_state_id);
 
+	// For EECBS (the state of the object is collision checked with the state of all agents
+	// and the resulting number of collisions is used as part of the cost function
+	// therefore not a hard constraint (like constraints).)
+
+	std::vector<LatticeState> all_agent_poses;
+	std::vector<int> all_agent_ids;
+	
+	for(const auto& agent_traj: *m_all_agent_traj_ptr){
+		if(agent_traj.first == m_my_id) continue;
+
+		all_agent_ids.push_back(agent_traj.first);
+
+		if((*agent_traj.second).size() <= child.t){
+			//If size of agent traj is lesser than the time of query, 
+			//use the last pose of the agent
+			all_agent_poses.push_back((*agent_traj.second).back());
+		}
+		else	
+			all_agent_poses.push_back((*agent_traj.second)[child.t]);
+		
+	}
+	bool is_movable_collision = 
+		m_cc->FCLCollisionMultipleAgents(this, all_agent_ids, all_agent_poses);
+
+
 	succs->push_back(succ_state_id);
-	costs->push_back(cost(parent, successor));
+	costs->push_back(cost(parent, successor, is_movable_collision));
 
 	return succ_state_id;
 }
 
 unsigned int Agent::cost(
 	const LatticeState* s1,
-	const LatticeState* s2)
+	const LatticeState* s2,
+	bool is_movable_collision)
 {
 	double dist = EuclideanDist(s1->coord, s2->coord);
 	dist = dist == 0.0 ? 1.0 : dist;
-	return (dist * COST_MULT);
+	return (dist * COST_MULT) + (is_movable_collision * EECBS_MOVABLE_COLLISION_MULT);
 }
 
 bool Agent::convertPath(

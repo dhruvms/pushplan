@@ -1,9 +1,10 @@
 #ifndef TYPES_HPP
 #define TYPES_HPP
 
-#include <pushplan/constants.hpp>
+#include <smpl/constants.hpp>
 
 #include <smpl/angles.h>
+#include <smpl/types.h>
 #include <smpl/console/console.h>
 #include <fcl/narrowphase/collision.h> // collide
 #include <fcl/narrowphase/distance-inl.h> // distance
@@ -21,32 +22,32 @@
 #include <vector>
 #include <memory>
 
-namespace clutter
-{
+// namespace clutter
+// {
 
-typedef std::vector<int> Coord;
-typedef std::vector<double> State;
+// typedef std::vector<int> Coord;
+// typedef std::vector<double> State;
 
-struct LatticeState
-{
-	Coord coord;
-	State state;
-	int t;
-};
+// struct LatticeState
+// {
+// 	Coord coord;
+// 	State state;
+// 	int t;
+// };
 
-typedef std::vector<LatticeState> Trajectory;
-typedef std::vector<LatticeState*> STATES;
+// typedef std::vector<LatticeState> Trajectory;
+// typedef std::vector<LatticeState*> STATES;
 
-inline
-bool operator==(const LatticeState& a, const LatticeState& b)
-{
-	return (
-		a.coord == b.coord &&
-		a.t == b.t
-	);
-}
+// inline
+// bool operator==(const LatticeState& a, const LatticeState& b)
+// {
+// 	return (
+// 		a.coord == b.coord &&
+// 		a.t == b.t
+// 	);
+// }
 
-} // namespace clutter
+// } // namespace clutter
 
 namespace std {
 

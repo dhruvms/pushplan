@@ -1,7 +1,7 @@
 #include <pushplan/robot.hpp>
 #include <pushplan/agent.hpp>
 #include <pushplan/geometry.hpp>
-#include <pushplan/constants.hpp>
+#include <smpl/constants.hpp>
 #include <pushplan/pr2_allowed_collision_pairs.h>
 #include <pushplan/cbs_h_node.hpp>
 
@@ -645,7 +645,8 @@ bool Robot::SatisfyPath(HighLevelNode* ct_node, Trajectory** sol_path)
 	planning_scene.robot_state = m_start_state;
 
 	SMPL_INFO("Planning to pregrasp state.");
-	if (!m_planner->solve_with_constraints(planning_scene, req, res, m_movables, approach_cvecs))
+	if (!m_planner->solve_with_constraints(planning_scene, req, res, 
+		m_movables, approach_cvecs, ct_node->m_solution))
 	{
 		ROS_ERROR("Failed to plan to pregrasp state.");
 		return false;
@@ -704,7 +705,8 @@ bool Robot::SatisfyPath(HighLevelNode* ct_node, Trajectory** sol_path)
 	addPathConstraint(req.path_constraints);
 
 	SMPL_INFO("Planning to home state with attached body.");
-	if (!m_planner->solve_with_constraints(planning_scene, req, res, m_movables, retract_cvecs))
+	if (!m_planner->solve_with_constraints(planning_scene, req, res, m_movables, retract_cvecs,
+		ct_node->m_solution))
 	{
 		ROS_ERROR("Failed to plan to home state with attached body.");
 		detachObject();

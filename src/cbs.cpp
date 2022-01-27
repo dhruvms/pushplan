@@ -3,7 +3,7 @@
 #include <pushplan/robot.hpp>
 #include <pushplan/agent.hpp>
 #include <pushplan/collision_checker.hpp>
-#include <pushplan/constants.hpp>
+#include <smpl/constants.hpp>
 
 #include <smpl/console/console.h>
 

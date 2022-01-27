@@ -52,7 +52,8 @@ add_library(
 	src/agent.cpp
 	src/robot.cpp
 	src/wastar.cpp
-	src/constants.cpp)
+	# src/constants.cpp
+	)
 target_link_libraries(PUSHPLAN ${catkin_LIBRARIES} smpl::smpl fcl) # -lprofiler
 
 add_executable(coop_plan test/coop_plan.cpp)

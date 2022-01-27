@@ -28,6 +28,23 @@ m_rng(m_dev())
 	}
 
 	m_distD = std::uniform_real_distribution<double>(0.0, 1.0);
+
+	initMovableCollisionChecker();
+}
+
+void CollisionChecker::initMovableCollisionChecker(){
+	/*
+	Inits EECBS Collision Checker which is capable of collision
+	checking with multiple objects at the same time
+	*/
+	m_fcl_mov = new fcl::DynamicAABBTreeCollisionManagerf(); // Used for Collision checking with all other movable agents (EECBS)
+	auto all_agents = m_planner->GetAllAgents();
+
+	for(int i = 0; i < all_agents.size(); i++){
+		m_fcl_mov->registerObject(all_agents[i]->GetFCLObject());
+	}
+
+	return;
 }
 
 void CollisionChecker::UpdateTraj(const int& priority, const Trajectory& traj)
@@ -120,6 +137,34 @@ State CollisionChecker::GetRandomStateOutside(fcl::CollisionObjectf* o)
 	while (ImmovableCollision(g, o));
 
 	return g;
+}
+
+bool CollisionChecker::FCLCollisionMultipleAgents(
+	Agent* a1,
+	const std::vector<int>& all_agent_ids,
+	const std::vector<LatticeState>& all_agent_poses){
+	/*
+	EECBS stats
+	Collision checks between a1 and all the other agents (at the current timestep)
+	*/
+
+	m_fcl_mov->unregisterObject(a1->GetFCLObject());
+
+	for(int i = 0; i < all_agent_ids.size(); i++){
+		Agent* agent = m_planner->GetAgent(all_agent_ids[i]);
+		agent->UpdatePose(all_agent_poses[i]);
+		m_fcl_mov->update(agent->GetFCLObject());
+	}
+
+	m_fcl_mov->setup();
+	fcl::DefaultCollisionData<float> collision_data;
+	m_fcl_mov->collide(a1->GetFCLObject(), 
+		&collision_data, fcl::DefaultCollisionFunction);
+
+	m_fcl_mov->registerObject(a1->GetFCLObject());
+
+	return collision_data.result.isCollision();
+
 }
 
 } // namespace clutter

@@ -41,6 +41,14 @@ public:
 		return m_agents.at(m_agent_map[id]).get();
 	}
 
+	std::vector<Agent*> GetAllAgents(){
+		std::vector<Agent*> all_agents;
+		for(int i = 0; i < m_agents.size(); i++){
+			all_agents.push_back(m_agents[i].get());
+		}
+		return all_agents;
+	}
+
 private:
 	std::string m_scene_file;
 	std::shared_ptr<CollisionChecker> m_cc;

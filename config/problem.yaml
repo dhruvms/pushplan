@@ -46,6 +46,7 @@ whca:
   res: 0.05
   grid: 8
   cost_mult: 1000
+  eecbs_movable_collision_mult: 1000
   planning_time: 300.0
 
 objects:
