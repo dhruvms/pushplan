@@ -37,11 +37,19 @@
 #ifndef FCL_BROADPHASE_DEFAULTBROADPHASECALLBACKS_H
 #define FCL_BROADPHASE_DEFAULTBROADPHASECALLBACKS_H
 
-#include <fcl/collision_data.h>
-#include <fcl/collision.h>
-#include <fcl/continuous_collision.h>
-#include <fcl/distance.h>
-
+// // #include <fcl/collision_data.h>
+// #include <fcl/narrowphase/collision.h>
+// #include <fcl/narrowphase/continuous_collision.h>
+// #include <fcl/narrowphase/distance.h>
+#include <fcl/narrowphase/collision.h>
+#include <fcl/narrowphase/collision_request.h>
+#include <fcl/narrowphase/collision_result.h>
+#include <fcl/narrowphase/continuous_collision.h>
+#include <fcl/narrowphase/continuous_collision_request.h>
+#include <fcl/narrowphase/continuous_collision_result.h>
+#include <fcl/narrowphase/distance.h>
+#include <fcl/narrowphase/distance_request.h>
+#include <fcl/narrowphase/distance_result.h>
 namespace fcl {
 
 /// @brief Collision data for use with the DefaultCollisionFunction. It stores

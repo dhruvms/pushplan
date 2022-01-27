@@ -15,7 +15,7 @@ m_planner(planner),
 m_obstacles(obstacles),
 m_rng(m_dev())
 {
-	m_fcl_immov = new fcl::DynamicAABBTreeCollisionManager();
+	m_fcl_immov = new fcl::DynamicAABBTreeCollisionManagerf();
 
 	// preprocess immovable obstacles
 	for (size_t i = 0; i != m_obstacles.size(); ++i)
@@ -49,28 +49,29 @@ bool CollisionChecker::OutOfBounds(const LatticeState& s)
 	return oob;
 }
 
-bool CollisionChecker::ImmovableCollision(const State& s, fcl::CollisionObject* o)
+bool CollisionChecker::ImmovableCollision(const State& s, fcl::CollisionObjectf* o)
 {
 	LatticeState ls;
 	ls.state = s;
 	return this->ImmovableCollision(ls, o);
 }
 
-bool CollisionChecker::ImmovableCollision(const LatticeState& s, fcl::CollisionObject* o)
+bool CollisionChecker::ImmovableCollision(const LatticeState& s, fcl::CollisionObjectf* o)
 {
 	// double start_time = GetTime(), time_taken;
 
 	fcl::Transform3f pose;
 	pose.setIdentity();
-	fcl::Vec3f T(o->getTranslation());
-	T.setValue(s.state.at(0), s.state.at(1), T[2]);
-	pose.setTranslation(T);
+	fcl::Vector3f T(o->getTranslation());
+	// T.setValue(s.state.at(0), s.state.at(1), T[2]);
+	T << s.state.at(0), s.state.at(1), T[2];
+	pose.translation() = T;
 
 	o->setTransform(pose);
 	o->computeAABB();
 
 	m_fcl_immov->setup();
-	fcl::DefaultCollisionData collision_data;
+	fcl::DefaultCollisionData<float> collision_data;
 	m_fcl_immov->collide(o, &collision_data, fcl::DefaultCollisionFunction);
 
 	// time_taken = GetTime() - start_time;
@@ -82,8 +83,8 @@ bool CollisionChecker::ImmovableCollision(const LatticeState& s, fcl::CollisionO
 // called by CBS::findConflicts
 bool CollisionChecker::FCLCollision(Agent* a1, Agent* a2)
 {
-	fcl::CollisionRequest request;
-	fcl::CollisionResult result;
+	fcl::CollisionRequestf request;
+	fcl::CollisionResultf result;
 	fcl::collide(a1->GetFCLObject(), a2->GetFCLObject(), request, result);
 	return result.isCollision();
 }
@@ -94,13 +95,13 @@ bool CollisionChecker::FCLCollision(Agent* a1, const int& a2_id, const LatticeSt
 	Agent* a2 = m_planner->GetAgent(a2_id);
 	a2->UpdatePose(a2_q);
 
-	fcl::CollisionRequest request;
-	fcl::CollisionResult result;
+	fcl::CollisionRequestf request;
+	fcl::CollisionResultf result;
 	fcl::collide(a1->GetFCLObject(), a2->GetFCLObject(), request, result);
 	return result.isCollision();
 }
 
-State CollisionChecker::GetRandomStateOutside(fcl::CollisionObject* o)
+State CollisionChecker::GetRandomStateOutside(fcl::CollisionObjectf* o)
 {
 	State g(2, 0.0);
 	State gmin(2, 0.0), gmax(2, 0.0);

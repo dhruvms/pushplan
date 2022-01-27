@@ -16,7 +16,7 @@
 #include <iomanip>
 #include <cstdlib>
 
-#include <gperftools/profiler.h>
+// #include <gperftools/profiler.h>
 
 namespace clutter
 {
@@ -403,7 +403,7 @@ bool Planner::runSim(std_srvs::Empty::Request& req, std_srvs::Empty::Response& r
 	return m_violation == 0;
 }
 
-// fcl::CollisionObject* Planner::GetObject(const LatticeState& s, int priority)
+// fcl::CollisionObjectf* Planner::GetObject(const LatticeState& s, int priority)
 // {
 // 	fcl::Transform3f pose;
 // 	pose.setIdentity();

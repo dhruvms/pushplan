@@ -4,7 +4,19 @@
 #include <pushplan/types.hpp>
 
 #include <boost/functional/hash.hpp>
-#include <fcl/broadphase/broadphase.h>
+#include <fcl/config.h>
+#include <fcl/broadphase/broadphase_bruteforce.h>
+#include <fcl/broadphase/broadphase_spatialhash.h>
+#include <fcl/broadphase/broadphase_SaP.h>
+#include <fcl/broadphase/broadphase_SSaP.h>
+#include <fcl/broadphase/broadphase_interval_tree.h>
+#include <fcl/broadphase/broadphase_dynamic_AABB_tree.h>
+#include <fcl/broadphase/broadphase_dynamic_AABB_tree_array.h>
+#include <fcl/broadphase/default_broadphase_callbacks.h>
+#include <fcl/broadphase/detail/sparse_hash_table.h>
+#include <fcl/broadphase/detail/spatial_hash.h>
+#include <fcl/geometry/geometric_shape_to_BVH_model.h>
+// #include <fcl/broadphase/broadphase.h>
 
 #include <vector>
 #include <random>
@@ -64,12 +76,12 @@ public:
 	void UpdateTraj(const int& priority, const Trajectory& traj);
 
 	bool OutOfBounds(const LatticeState& s);
-	bool ImmovableCollision(const State& s, fcl::CollisionObject* o);
-	bool ImmovableCollision(const LatticeState& s, fcl::CollisionObject* o);
+	bool ImmovableCollision(const State& s, fcl::CollisionObjectf* o);
+	bool ImmovableCollision(const LatticeState& s, fcl::CollisionObjectf* o);
 	bool FCLCollision(Agent* a1, Agent* a2);
 	bool FCLCollision(Agent* a1, const int& a2_id, const LatticeState& a2_q);
 
-	State GetRandomStateOutside(fcl::CollisionObject* o);
+	State GetRandomStateOutside(fcl::CollisionObjectf* o);
 
 	double GetTableHeight() { return m_obstacles.at(m_base_loc).o_z + m_obstacles.at(0).z_size; };
 	double OutsideXMin() { return m_obstacles.at(m_base_loc).o_x - (2 * m_obstacles.at(m_base_loc).x_size); };
@@ -92,7 +104,7 @@ private:
 	std::mt19937 m_rng;
 	std::uniform_real_distribution<double> m_distD;
 
-	fcl::BroadPhaseCollisionManager* m_fcl_immov = nullptr;
+	fcl::BroadPhaseCollisionManagerf* m_fcl_immov = nullptr;
 
 	void cleanupChildren(std::vector<int>& check);
 

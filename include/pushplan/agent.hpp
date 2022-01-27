@@ -46,7 +46,7 @@ public:
 	const std::vector<Object>* GetObject(const LatticeState& s) override;
 	using Movable::GetObject;
 
-	fcl::CollisionObject* GetFCLObject() { return m_objs.back().GetFCLObject(); };
+	fcl::CollisionObjectf* GetFCLObject() { return m_objs.back().GetFCLObject(); };
 	void GetMoveitObj(moveit_msgs::CollisionObject& msg) const {
 		m_objs.back().GetMoveitObj(msg);
 	};

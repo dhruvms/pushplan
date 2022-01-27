@@ -5,9 +5,11 @@
 
 #include <smpl/angles.h>
 #include <smpl/console/console.h>
-#include <fcl/collision_object.h>
-#include <fcl/shape/geometric_shapes.h>
-#include <fcl/BVH/BVH_model.h>
+#include <fcl/narrowphase/collision.h> // collide
+#include <fcl/narrowphase/distance-inl.h> // distance
+#include <fcl/narrowphase/collision_object.h>
+// #include <fcl/geometry/shape/geometric_shapes.h>
+#include <fcl/geometry/bvh/BVH_model.h>
 #include <geometric_shapes/shapes.h>
 #include <geometric_shapes/mesh_operations.h>
 #include <geometric_shapes/shape_operations.h>
@@ -71,14 +73,14 @@ struct Object
 	bool movable, locked, ycb;
 
 	moveit_msgs::CollisionObject* moveit_obj = nullptr;
-	fcl::CollisionObject* fcl_obj = nullptr;
+	fcl::CollisionObjectf* fcl_obj = nullptr;
 
 	int Shape() const;
 	bool CreateCollisionObjects();
 	void GetMoveitObj(moveit_msgs::CollisionObject& msg) const {
 		msg = *moveit_obj;
 	};
-	fcl::CollisionObject* GetFCLObject() { return fcl_obj; };
+	fcl::CollisionObjectf* GetFCLObject() { return fcl_obj; };
 
 	void UpdatePose(const LatticeState& s)
 	{
@@ -115,8 +117,8 @@ struct Object
 		// Update FCL pose
 		fcl::Transform3f fcl_pose;
 		fcl_pose.setIdentity();
-		fcl::Vec3f T(s.state.at(0), s.state.at(1), o_z);
-		fcl_pose.setTranslation(T);
+		fcl::Vector3f T(s.state.at(0), s.state.at(1), o_z);
+		fcl_pose.translation() = T;
 
 		fcl_obj->setTransform(fcl_pose);
 		fcl_obj->computeAABB();
@@ -198,9 +200,9 @@ bool Object::CreateCollisionObjects()
 			prim.dimensions[2] = z_size * 2;
 
 			// Create FCL collision object
-			std::shared_ptr<fcl::Box> shape =
-				std::make_shared<fcl::Box>(x_size * 2, y_size * 2, z_size * 2);
-			fcl_obj = new fcl::CollisionObject(shape);
+			std::shared_ptr<fcl::Boxf> shape =
+				std::make_shared<fcl::Boxf>(x_size * 2, y_size * 2, z_size * 2);
+			fcl_obj = new fcl::CollisionObjectf(shape);
 		}
 		else if (shape == 2)
 		{
@@ -211,9 +213,9 @@ bool Object::CreateCollisionObjects()
 			prim.dimensions[1] = x_size;
 
 			// Create FCL collision object
-			std::shared_ptr<fcl::Cylinder> shape =
-				std::make_shared<fcl::Cylinder>(x_size, z_size);
-			fcl_obj = new fcl::CollisionObject(shape);
+			std::shared_ptr<fcl::Cylinderf> shape =
+				std::make_shared<fcl::Cylinderf>(x_size, z_size);
+			fcl_obj = new fcl::CollisionObjectf(shape);
 		}
 
 		int table_ids = FRIDGE ? 5 : 1;
@@ -283,7 +285,7 @@ bool Object::CreateCollisionObjects()
 		// Create FCL collision object
 		auto object_mesh = moveit_obj->meshes[0];
 
-	    std::vector<fcl::Vec3f> vertices;
+	    std::vector<fcl::Vector3f> vertices;
 	    std::vector<fcl::Triangle> triangles;
 
 	    vertices.reserve(object_mesh.vertices.size());
@@ -291,7 +293,7 @@ bool Object::CreateCollisionObjects()
 	        double x = object_mesh.vertices[i].x;
 	        double y = object_mesh.vertices[i].y;
 	        double z = object_mesh.vertices[i].z;
-	        vertices.push_back(fcl::Vec3f(x, y, z));
+	        vertices.push_back(fcl::Vector3f(x, y, z));
 	    }
 
 	    triangles.reserve(object_mesh.triangles.size());
@@ -302,14 +304,14 @@ bool Object::CreateCollisionObjects()
 	        t[2] = object_mesh.triangles[i].vertex_indices[2];
 	        triangles.push_back(t);
 	    }
-	    typedef fcl::BVHModel<fcl::OBBRSS> Model;
+	    typedef fcl::BVHModel<fcl::OBBRSSf> Model;
 	    std::shared_ptr<Model> mesh_geom = std::make_shared<Model>();
 
 	    mesh_geom->beginModel();
 	    mesh_geom->addSubModel(vertices, triangles);
 	    mesh_geom->endModel();
 
-	    fcl_obj = new fcl::CollisionObject(mesh_geom);
+	    fcl_obj = new fcl::CollisionObjectf(mesh_geom);
 	}
 
 	return true;

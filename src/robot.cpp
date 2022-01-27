@@ -484,7 +484,7 @@ bool Robot::attachObject(const Object& obj)
 	}
 
 	std::vector<shapes::ShapeConstPtr> shapes;
-	smpl::collision::Affine3dVector transforms;
+	smpl::collision::Isometry3dVector transforms;
 	if (obj_co)
 	{
 		for (size_t sidx = 0; sidx < obj_co->shapes.size(); ++sidx)
@@ -529,7 +529,11 @@ bool Robot::attachObject(const Object& obj)
 					return false;
 				}
 			}
-			transforms.push_back(transform);
+
+			Eigen::Isometry3d iso_transform;
+			iso_transform.translation() = transform.translation();
+			iso_transform.linear() = transform.rotation();
+			transforms.push_back(iso_transform);
 		}
 	}
 	else

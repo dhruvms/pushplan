@@ -11,6 +11,8 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14 -fmax-errors=5")
 
 find_package(Boost REQUIRED)
 find_package(Eigen3 REQUIRED)
+find_package(fcl REQUIRED)
+
 find_package(catkin REQUIRED COMPONENTS
 	roscpp
 	rospy
@@ -51,7 +53,7 @@ add_library(
 	src/robot.cpp
 	src/wastar.cpp
 	src/constants.cpp)
-target_link_libraries(PUSHPLAN ${catkin_LIBRARIES} smpl::smpl) # -lprofiler
+target_link_libraries(PUSHPLAN ${catkin_LIBRARIES} smpl::smpl fcl) # -lprofiler
 
 add_executable(coop_plan test/coop_plan.cpp)
 target_link_libraries(coop_plan ${catkin_LIBRARIES} smpl::smpl PUSHPLAN)

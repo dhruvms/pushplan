@@ -35,7 +35,7 @@ public:
 	bool TryExtract();
 	void AnimateSolution();
 
-	// fcl::CollisionObject* GetObject(const LatticeState& s, int priority);
+	// fcl::CollisionObjectf* GetObject(const LatticeState& s, int priority);
 	Agent* GetAgent(const int& id) {
 		assert(id > 0); // 0 is robot
 		return m_agents.at(m_agent_map[id]).get();
