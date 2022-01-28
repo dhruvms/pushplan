@@ -55,7 +55,7 @@ public:
 private:
 	Object m_orig_o;
 	std::list<std::shared_ptr<Constraint> > m_constraints;
-	std::vector<std::pair<int, Trajectory*> >* m_all_agent_traj_ptr; // all agent trajectories
+	std::vector<std::pair<int, Trajectory> >* m_all_agent_traj_ptr; // all agent trajectories
 	int m_my_id; // The agents id
 
 	int generateSuccessor(
