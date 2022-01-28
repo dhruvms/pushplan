@@ -204,7 +204,7 @@ void CBS::findConflictsRobot(HighLevelNode& curr, size_t oid)
 			else
 			{
 				// if (m_robot->CheckCollision(longer->at(t), t))
-				if (m_cc->RobotObjectCollision(m_objs[oid].get(), a_traj->back(), longer->at(t), t false))
+				if (m_cc->RobotObjectCollision(m_objs[oid].get(), longer->at(t), a_traj->back(), t, false))
 				{
 					std::shared_ptr<Conflict> conflict(new Conflict());
 					conflict->InitConflict(m_robot->GetID(), m_objs[oid]->GetID(), t, longer->at(t), shorter->back(), true);

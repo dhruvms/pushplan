@@ -53,7 +53,7 @@ public:
 		return m_robot->GetObject(s);
 	}
 	const std::vector<Object>* GetObject(int id) {
-		return m_agents.at(m_agent_map[id]).GetObject();
+		return m_agents.at(m_agent_map[id])->GetObject();
 	};
 
 	bool CheckRobotCollision(Agent* a, const LatticeState& robot_state, int t, bool process)
