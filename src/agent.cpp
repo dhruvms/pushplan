@@ -281,7 +281,7 @@ int Agent::generateSuccessor(
 			}
 			// successor is invalid if that (position, time) configuration
 			// is constrained
-			if (m_cc->RobotObjectCollision(this, m_all_agent_traj_ptr->at(0).second->at(constraint->m_time), constraint->m_time)) {
+			if (m_cc->RobotObjectCollision(this, child, m_all_agent_traj_ptr->at(0).second->at(constraint->m_time), constraint->m_time)) {
 				return -1;
 			}
 		}
@@ -325,10 +325,10 @@ int Agent::generateSuccessor(
 
 	// Successor vs. corresponding state in robot trajectory
 	if(m_all_agent_traj_ptr->at(0).second->size() <= child.t) {
-		is_movable_collision = is_movable_collision || m_cc->RobotObjectCollision(this, m_all_agent_traj_ptr->at(0).second->back(), child.t);
+		is_movable_collision = is_movable_collision || m_cc->RobotObjectCollision(this, child, m_all_agent_traj_ptr->at(0).second->back(), child.t);
 	}
 	else {
-		is_movable_collision = is_movable_collision || m_cc->RobotObjectCollision(this, m_all_agent_traj_ptr->at(0).second->at(child.t), child.t);
+		is_movable_collision = is_movable_collision || m_cc->RobotObjectCollision(this, child, m_all_agent_traj_ptr->at(0).second->at(child.t), child.t);
 	}
 
 
