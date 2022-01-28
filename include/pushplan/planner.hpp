@@ -49,6 +49,21 @@ public:
 		return all_agents;
 	}
 
+	const std::vector<Object>* Get2DRobot(const LatticeState& s) {
+		return m_robot->GetObject(s);
+	}
+	const std::vector<Object>* GetObject(int id) {
+		return m_agents.at(m_agent_map[id]).GetObject();
+	};
+
+	bool CheckRobotCollision(Agent* a, const LatticeState& robot_state, int t, bool process)
+	{
+		if (!process) {
+			return m_robot->CheckCollision(robot_state, t);
+		}
+		return m_robot->CheckCollisionWithObject(robot_state, a, t);
+	}
+
 private:
 	std::string m_scene_file;
 	std::shared_ptr<CollisionChecker> m_cc;
