@@ -109,8 +109,6 @@ for (int counter = 0; counter < 3; ++counter)
 					continue;
 				}
 				ROS_INFO("Planner and simulator init-ed!");
-				getchar();
-				continue;
 
 				int mapf_calls = 0, mapf_sucesses = 0;
 				bool dead = false, rearrange = true, lucky = false, rearranged = false;
