@@ -23,6 +23,8 @@ from comms.srv import SetColours, SetColoursResponse
 from comms.srv import ExecTraj, ExecTrajResponse
 from comms.srv import SimPushes, SimPushesResponse
 from comms.msg import ObjectPose, ObjectsPoses
+from comms.msg import ObjectTraj, ObjectsTrajs
+from geometry_msgs.msg import Pose
 
 from utils import *
 
@@ -598,7 +600,9 @@ class BulletSim:
 		best_idx = -1
 		best_dist = float('inf')
 		best_objs = self.getObjects(sim_id)
+		orig_objs = self.getObjects(sim_id)
 		goal_pos = None
+		obj_trajs_best = None
 		if (req.oid != -1):
 			assert(num_pushes == 1)
 			goal_pos = np.asarray([req.gx, req.gy])
@@ -642,6 +646,7 @@ class BulletSim:
 			oid_start_xyz = None
 			if (req.oid != -1):
 				oid_start_xyz, _ = self.sims[sim_id].getBasePositionAndOrientation(req.oid)
+			obj_trajs = {}
 
 			for point in push_traj.points[1:]:
 				sim.setJointMotorControlArray(
@@ -685,6 +690,29 @@ class BulletSim:
 						# print(cause)
 						break
 
+				objs_curr = self.getObjects(sim_id)
+				for i, obj_pose in enumerate(objs_curr):
+					pose = Pose()
+					pose.position.x = obj_pose.xyz[0]
+					pose.position.y = obj_pose.xyz[1]
+					pose.position.z = obj_pose.xyz[2]
+					quat = sim.getQuaternionFromEuler(obj_pose.rpy)
+					pose.orientation.x = quat[0]
+					pose.orientation.y = quat[1]
+					pose.orientation.z = quat[2]
+					pose.orientation.w = quat[3]
+
+					if (obj_pose.id not in obj_trajs):
+						assert(obj_pose.id == orig_objs[i].id)
+						if (np.linalg.norm(np.array(obj_pose.xyz) - orig_objs[i].xyz) <= 0.01):
+							continue
+						obj_trajs[obj_pose.id] = [pose]
+					else:
+						last_pos = [obj_trajs[obj_pose.id][-1].position.x, obj_trajs[obj_pose.id][-1].position.y, obj_trajs[obj_pose.id][-1].position.z]
+						if (np.linalg.norm(np.array(obj_pose.xyz) - last_pos) <= 0.01):
+							continue
+						obj_trajs[obj_pose.id].append(pose)
+
 				if (violation_flag):
 					break # stop simming this push
 
@@ -721,6 +749,29 @@ class BulletSim:
 					# print(cause)
 					break
 
+			objs_curr = self.getObjects(sim_id)
+			for i, obj_pose in enumerate(objs_curr):
+				pose = Pose()
+				pose.position.x = obj_pose.xyz[0]
+				pose.position.y = obj_pose.xyz[1]
+				pose.position.z = obj_pose.xyz[2]
+				quat = sim.getQuaternionFromEuler(obj_pose.rpy)
+				pose.orientation.x = quat[0]
+				pose.orientation.y = quat[1]
+				pose.orientation.z = quat[2]
+				pose.orientation.w = quat[3]
+
+				if (obj_pose.id not in obj_trajs):
+					assert(obj_pose.id == orig_objs[i].id)
+					if (np.linalg.norm(np.array(obj_pose.xyz) - orig_objs[i].xyz) <= 0.01):
+						continue
+					obj_trajs[obj_pose.id] = [pose]
+				else:
+					last_pos = [obj_trajs[obj_pose.id][-1].position.x, obj_trajs[obj_pose.id][-1].position.y, obj_trajs[obj_pose.id][-1].position.z]
+					if (np.linalg.norm(np.array(obj_pose.xyz) - last_pos) <= 0.01):
+						continue
+					obj_trajs[obj_pose.id].append(pose)
+
 			if (violation_flag):
 				continue # to next push
 			else:
@@ -737,9 +788,15 @@ class BulletSim:
 						best_dist = dist
 						best_idx = pidx
 						best_objs = self.getObjects(sim_id)
+
+						obj_trajs_best = copy.deepcopy(obj_trajs)
+						obj_trajs.clear()
 				else:
 					best_idx = 0
 					best_objs = self.getObjects(sim_id)
+
+					obj_trajs_best = copy.deepcopy(obj_trajs)
+					obj_trajs.clear()
 
 		res = best_idx != -1
 
@@ -749,6 +806,14 @@ class BulletSim:
 		output.successes = successes
 		output.objects = ObjectsPoses()
 		output.objects.poses = best_objs
+
+		output.moved = ObjectsTrajs()
+		for oid in obj_trajs_best:
+			obj_traj = ObjectTraj()
+			obj_traj.id = oid
+			obj_traj.poses = obj_trajs_best[oid]
+			output.moved.trajs.append(obj_traj)
+
 		return output
 
 	def RemoveConstraint(self, req):
