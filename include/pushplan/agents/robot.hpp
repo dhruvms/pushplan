@@ -6,6 +6,7 @@
 #include <pushplan/utils/collision_checker.hpp>
 #include <pushplan/utils/bullet_sim.hpp>
 #include <comms/ObjectsPoses.h>
+#include <comms/ObjectsTrajs.h>
 
 #include <smpl/console/console.h>
 #include <smpl/ros/planner_interface.h>
@@ -58,11 +59,16 @@ public:
 
 	bool Init();
 	void SetMovables(const std::vector<std::shared_ptr<Agent> >& agents);
+	void SetAgents(const std::vector<std::shared_ptr<Agent> >& agents) {
+		m_agents = agents;
+	}
 	bool RandomiseStart();
 	bool PlanApproachOnly(const std::vector<Object*>& movable_obstacles);
 	bool PlanRetrieval(const std::vector<Object*>& movable_obstacles, bool finalise=false, smpl::RobotState start_state={});
 	void UpdateNGR(bool vis=false);
 	bool SatisfyPath(HighLevelNode* ct_node, Trajectory** sol_path, int& expands, int& min_f);
+
+	bool Dogar(double time_limit, std::vector<trajectory_msgs::JointTrajectory>& plan);
 
 	void ProfileTraj(Trajectory& traj);
 	bool ComputeGrasps(
@@ -82,12 +88,12 @@ public:
 	bool UpdateKDLRobot(int mode);
 	bool InitArmPlanner(bool interp=false);
 	bool PlanPush(
-		const std::vector<double>& start_state,
+		const smpl::RobotState& start_state,
 		Agent* object, const std::vector<double>& push,
+		const std::vector<int>& irrelevant_ids,
 		const std::vector<Object*>& other_movables,
 		const comms::ObjectsPoses& rearranged,
 		comms::ObjectsPoses& result,
-		double& push_reward,
 		bool input=false);
 	trajectory_msgs::JointTrajectory GetLastPlanProfiled()
 	{
@@ -256,11 +262,14 @@ private:
 	Trajectory m_solve;
 	Object m_ooi;
 	std::vector<moveit_msgs::CollisionObject> m_movables;
+	std::vector<std::shared_ptr<Agent> > m_agents;
 	std::vector<Object> m_objs;
 	std::shared_ptr<CollisionChecker> m_cc;
+	comms::ObjectsTrajs m_moved_obj_trajs;
+	double m_timer, m_time_limit;
 
 	std::shared_ptr<BulletSim> m_sim;
-	std::vector<trajectory_msgs::JointTrajectory> m_push_trajs, m_push_actions;
+	std::vector<trajectory_msgs::JointTrajectory> m_trajs_vec, m_actions_vec;
 	int m_pushes_per_object, m_grasp_tries, m_invvel_iters;
 	double m_plan_push_time, m_grasp_lift, m_grasp_z, m_Kp, m_Ki, m_Kd, m_dt;
 
@@ -275,6 +284,11 @@ private:
 		const moveit_msgs::RobotState& start_state,
 		const Eigen::Affine3d& pose_goal,
 		trajectory_msgs::JointTrajectory& push_traj,
+		double t=0.1);
+	bool planToConfig(
+		const smpl::RobotState& start_config,
+		const smpl::RobotState& goal_config,
+		trajectory_msgs::JointTrajectory& solve_traj,
 		double t=0.1);
 	bool computePushAction(
 		const double time_start,
@@ -363,9 +377,18 @@ private:
 		moveit_msgs::MotionPlanResponse& res,
 		const std::vector<Object*>& movable_obstacles,
 		bool finalise=false);
+
 	void voxeliseTrajectory();
+	void voxeliseTrajectory(const trajectory_msgs::JointTrajectory& traj);
 
 	std::vector<std::vector<double> > m_push_debug_data;
+
+	std::vector<trajectory_msgs::JointTrajectory> dogarReconfigure(
+		int oid,
+		std::vector<std::vector<Eigen::Vector3d>> ngr={},
+		std::set<int> move_ids={},
+		std::set<int> avoid_ids={},
+		smpl::RobotState end_config={});
 };
 
 } // namespace clutter
