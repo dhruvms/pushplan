@@ -11,6 +11,7 @@
 #include <comms/SetColours.h>
 #include <comms/ExecTraj.h>
 #include <comms/SimPushes.h>
+#include <comms/SimPushesDogar.h>
 #include <comms/PoseStampedArray.h>
 
 #include <smpl/angles.h>
@@ -265,6 +266,36 @@ bool BulletSim::SimPushes(
 	pidx = srv.response.idx;
 	successes = srv.response.successes;
 	result = srv.response.objects;
+
+	return srv.response.res;
+}
+
+bool BulletSim::SimPushesDogar(
+	const std::vector<trajectory_msgs::JointTrajectory>& pushes,
+	int oid, float gx, float gy,
+	const std::vector<int>& irrelevant_ids,
+	int& pidx, int& successes,
+	const comms::ObjectsPoses& rearranged,
+	comms::ObjectsPoses& result)
+{
+	comms::SimPushesDogar srv;
+	srv.request.pushes = pushes;
+	srv.request.oid = oid;
+	srv.request.gx = gx;
+	srv.request.gy = gy;
+	srv.request.objects = rearranged;
+	srv.request.irrelevant = irrelevant_ids;
+
+	if (!m_services.at(m_servicemap["sim_pushes_dogar"]).call(srv))
+	{
+		ROS_ERROR("Failed to execute trajector in sim.");
+		return false;
+	}
+
+	pidx = srv.response.idx;
+	successes = srv.response.successes;
+	result = srv.response.objects;
+	m_moved_objs_trajs = srv.response.moved;
 
 	return srv.response.res;
 }
@@ -1024,6 +1055,10 @@ void BulletSim::setupServices()
 	m_servicemap["sim_pushes"] = m_services.size();
 	m_services.push_back(
 			m_nh.serviceClient<comms::SimPushes>("/sim_pushes"));
+
+	m_servicemap["sim_pushes_dogar"] = m_services.size();
+	m_services.push_back(
+			m_nh.serviceClient<comms::SimPushesDogar>("/sim_pushes_dogar"));
 
 	m_servicemap["remove_constraint"] = m_services.size();
 	m_services.push_back(

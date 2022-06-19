@@ -2,6 +2,7 @@
 #define BULLET_SIM_HPP
 
 #include <comms/ObjectsPoses.h>
+#include <comms/ObjectsTrajs.h>
 
 #include <sensor_msgs/JointState.h>
 #include <trajectory_msgs/JointTrajectory.h>
@@ -39,6 +40,13 @@ public:
 		int& pidx, int& successes,
 		const comms::ObjectsPoses& rearranged,
 		comms::ObjectsPoses& result);
+	bool SimPushesDogar(
+		const std::vector<trajectory_msgs::JointTrajectory>& pushes,
+		int oid, float gx, float gy,
+		const std::vector<int>& irrelevant_ids,
+		int& pidx, int& successes,
+		const comms::ObjectsPoses& rearranged,
+		comms::ObjectsPoses& result);
 	bool RemoveConstraint();
 
 	const std::vector<std::vector<double>>* GetImmovableObjs() const {
@@ -57,12 +65,17 @@ public:
 	void GetShelfParams(
 		double& ox, double& oy, double& oz,
 		double& sx, double& sy, double& sz);
+	void GetLastMovedObjsTrajs(comms::ObjectsTrajs& moved_objs_trajs) {
+		moved_objs_trajs = m_moved_objs_trajs;
+		m_moved_objs_trajs.trajs.clear();
+	}
 private:
 	int m_num_immov, m_num_mov, m_robot_id, m_tables;
 
 	ros::NodeHandle m_nh;
 	std::vector<ros::ServiceClient> m_services;
 	std::unordered_map<std::string, int> m_servicemap;
+	comms::ObjectsTrajs m_moved_objs_trajs;
 
 	std::vector<double> m_robot;
 	std::vector<std::vector<double>> m_immov, m_mov, m_removed;
