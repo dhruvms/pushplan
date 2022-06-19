@@ -36,7 +36,7 @@ public:
 	bool Alive();
 	bool SetupNGR();
 
-	bool Plan(bool& done);
+	bool Plan();
 	bool FinalisePlan(bool add_movables=true);
 	bool SaveData();
 	bool Rearrange();

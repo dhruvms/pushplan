@@ -54,6 +54,7 @@ bool Planner::Init(const std::string& scene_file, int scene_id, bool ycb)
 	m_stats["push_input_time"] = 0.0;
 	m_stats["mapf_time"] = 0.0;
 	m_stats["sim_time"] = 0.0;
+	m_stats["dogar_time"] = 0.0;
 
 	m_ph.getParam("goal/plan_budget", m_plan_budget);
 	m_ph.getParam("goal/sim_budget", m_sim_budget);
@@ -221,6 +222,13 @@ bool Planner::FinalisePlan(bool add_movables)
 	m_exec = m_robot->GetLastPlanProfiled();
 
 	m_stats["robot_planner_time"] += GetTime() - m_timer;
+
+	if (m_cbs)
+	{
+		m_cbs->WriteLastSolution();
+		m_cbs.reset();
+	}
+
 	return true;
 }
 
@@ -255,75 +263,25 @@ bool Planner::createCBS()
 	return true;
 }
 
-bool Planner::Plan(bool& done)
+bool Planner::Plan()
 {
-	done = false;
-	if (!m_replan) {
-		return true;
+	for (auto& a: m_agents) {
+		a->UpdateInit();
 	}
 
-	if (FinalisePlan())
+	m_plan_success = false;
+	m_robot->SetAgents(m_agents);
+	double timer = GetTime();
+	m_robot->Dogar(m_total_budget, m_rearrangements);
+	m_stats["dogar_time"] += GetTime() - timer;
+	if (!m_rearrangements.empty())
 	{
-		done = true;
+		m_exec = m_rearrangements.back();
+		m_rearrangements.pop_back();
 		m_plan_success = true;
-		if (m_cbs)
-		{
-			m_cbs->WriteLastSolution();
-			m_cbs.reset();
-		}
-		return true;
 	}
 
-	bool backwards = false; // ALGO == MAPFAlgo::OURS;
-	if (!setupProblem(backwards)) {
-		return false;
-	}
-
-	m_timer = GetTime();
-	if (!createCBS())
-	{
-		m_stats["mapf_time"] += GetTime() - m_timer;
-		return false;
-	}
-
-	SMPL_INFO("Replan MAPF");
-	bool result = m_cbs->Solve(backwards);
-	m_cbs->UpdateStats(m_cbs_stats);
-	m_stats["mapf_time"] += GetTime() - m_timer;
-
-	m_moved = 0;
-	m_cbs_soln_map.clear();
-	m_alphas.clear();
-	m_betas.clear();
-	if (result)
-	{
-		m_cbs->WriteLastSolution();
-		m_cbs_soln = m_cbs->GetSolution();
-		for (std::size_t i = 0; i < m_cbs_soln->m_solution.size(); ++i)
-		{
-			const auto& path = m_cbs_soln->m_solution[i];
-			if (path.first == 0 || path.second.front().coord == path.second.back().coord)
-			{
-				// either this is robot or the object did not move
-				continue;
-			}
-			m_cbs_soln_map[m_moved] = i;
-			++m_moved;
-		}
-
-		if (m_moved == 0)
-		{
-			m_plan_success = true;
-		}
-		else
-		{
-			m_alphas.resize(m_moved, 1.0);
-			m_betas.resize(m_moved, 1.0);
-		}
-	}
-
-	m_replan = !result;
-	return result;
+	return m_plan_success;
 }
 
 bool Planner::Rearrange()
@@ -450,9 +408,9 @@ bool Planner::rearrange()
 		push_start_state = m_rearrangements.back().points.back().positions;
 	}
 
-	double push_reward = 0.0;
+	std::vector<int> irrelevant_ids;
 	m_timer = GetTime();
-	if (m_robot->PlanPush(push_start_state, m_agents.at(m_agent_map[path.first]).get(), push, movable_obstacles, rearranged, result, push_reward, m_push_input))
+	if (m_robot->PlanPush(push_start_state, m_agents.at(m_agent_map[path.first]).get(), push, irrelevant_ids, movable_obstacles, rearranged, result, m_push_input))
 	{
 		m_rearrangements.push_back(m_robot->GetLastPlan());
 
@@ -463,6 +421,7 @@ bool Planner::rearrange()
 	}
 	m_stats["push_planner_time"] += GetTime() - m_timer;
 
+	// double push_reward = 0.0;
 	// if (push_reward > 0) {
 	// 	m_alphas[idx] += push_reward;
 	// }
@@ -873,7 +832,7 @@ bool Planner::SaveData()
 
 	std::string filename(__FILE__);
 	auto found = filename.find_last_of("/\\");
-	filename = filename.substr(0, found + 1) + "../../dat/PLANNER.csv";
+	filename = filename.substr(0, found + 1) + "../../dat/DOGAR.csv";
 
 	bool exists = FileExists(filename);
 	std::ofstream STATS;
@@ -881,26 +840,21 @@ bool Planner::SaveData()
 	if (!exists)
 	{
 		STATS << "UID,"
-				<< "PlanSuccess,SimSuccess,SimResult,SimTime,"
-				<< "RobotPlanTime,MAPFTime,PushInputTime,PlanPushTime,"
-				<< "PlanPushCalls,PushSamplesFound,PushActionsFound,"
-				<< "PushPlanningTime,PushSimTime,PushSimSuccesses,"
-				<< "CBSCalls,CBSSuccesses,CBSTime,"
-				<< "CTNodes,CTDeadends,CTExpansions,LLTime,ConflictDetectionTime\n";
+				<< "PlanSuccess,SimSuccess,SimResult,SimTime,PlanTime,"
+				<< "DogarReconfigureCalls,DogarGotoPlanTime,DogarPushPlanTime,DogarVoxelisationTime,"
+				<< "DogarPushesFound,PlanPushCalls,PushSamplesFound,PushActionsFound,"
+				<< "PushPlanningTime,PushSimTime,PushSimSuccesses\n";
 	}
 
 	STATS << m_scene_id << ','
 			<< m_plan_success << ',' << m_sim_success << ','
-			<< m_violation << ',' << m_stats["sim_time"] << ','
-			<< m_stats["robot_planner_time"] << ',' << m_stats["mapf_time"] << ','
-			<< m_stats["push_input_time"] << ',' << m_stats["push_planner_time"] << ','
+			<< m_violation << ',' << m_stats["sim_time"] << ',' << m_stats["dogar_time"] << ','
+			<< robot_stats["dogar_calls"] << ',' << robot_stats["dogar_goto_plan_time"] << ','
+			<< robot_stats["dogar_push_plan_time"] << ',' << robot_stats["dogar_voxelisation_time"] << ','
+			<< robot_stats["dogar_pushes"] << ','
 			<< robot_stats["plan_push_calls"] << ',' << robot_stats["push_samples_found"] << ','
 			<< robot_stats["push_actions_found"] << ',' << robot_stats["push_plan_time"] << ','
-			<< robot_stats["push_sim_time"] << ',' << robot_stats["push_sim_successes"] << ','
-			<< m_cbs_stats["calls"] << ',' << m_cbs_stats["solved"] << ','
-			<< m_cbs_stats["search_time"] << ',' << m_cbs_stats["ct_nodes"] << ','
-			<< m_cbs_stats["ct_deadends"] << ',' << m_cbs_stats["ct_expanded"] << ','
-			<< m_cbs_stats["ll_time"] << ',' << m_cbs_stats["conflict_time"] << '\n';
+			<< robot_stats["push_sim_time"] << ',' << robot_stats["push_sim_successes"] << '\n';
 	STATS.close();
 }
 

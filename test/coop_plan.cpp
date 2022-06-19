@@ -83,45 +83,9 @@ for (int i = 0; i < runs; ++i)
 			ROS_INFO("Planner and simulator init-ed!");
 
 			bool rearrange = true, lucky = false, rearranged = false;
-			do
+			if (p.Plan())
 			{
-				bool done;
-				if (p.Plan(done))
-				{
-					if (done)
-					{
-						SMPL_INFO("Final plan found!");
-						break;
-					}
-					// ROS_WARN("Try extraction before rearrangement! Did we get lucky?");
-					// if (p.Alive() && p.TryExtract())
-					// {
-					// 	lucky = true;
-					// 	break;
-					// }
-
-					if (p.Alive()) {
-						rearrange = p.Rearrange();
-					}
-
-					// ROS_WARN("Try extraction after rearrangement! Did we successfully rearrange?");
-					// if (p.Alive() && p.TryExtract())
-					// {
-					// 	rearranged = true;
-					// 	break;
-					// }
-
-					// ROS_WARN("Try planning with all objects as obstacles! Are we done?");
-					// if (p.Alive() && p.FinalisePlan())
-					// {
-					// 	ROS_WARN("MAMO Solved!");
-					// 	break;
-					// }
-				}
-			}
-			while (rearrange && p.Alive());
-
-			if (p.Alive()) {
+				SMPL_INFO("MAMO plan found!");
 				p.RunSim();
 			}
 
