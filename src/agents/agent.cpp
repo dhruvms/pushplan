@@ -30,6 +30,16 @@ bool Agent::ResetObject()
 	UpdatePose(s);
 }
 
+void Agent::UpdateInit()
+{
+	m_init.t = 0;
+	m_init.hc = 0;
+	m_init.state.clear();
+	m_init.state = { 	m_obj_desc.o_x, m_obj_desc.o_y, m_obj_desc.o_z,
+						m_obj_desc.o_roll, m_obj_desc.o_pitch, m_obj_desc.o_yaw };
+	ContToDisc(m_init.state, m_init.coord);
+}
+
 bool Agent::SetObjectPose(
 	const std::vector<double>& xyz,
 	const std::vector<double>& rpy)
@@ -301,6 +311,73 @@ void Agent::VisualiseState(const LatticeState& s, const std::string& ns, int hue
 	SV_SHOW_INFO_NAMED(ns, markers);
 }
 
+bool Agent::GetAABBIntersectingRay(const double& move_dir, Eigen::Vector3d& push_dir, float& t)
+{
+	// Ray-AABB intersection code from
+	// https://www.scratchapixel.com/code.php?id=10&origin=/lessons/3d-basic-rendering/ray-tracing-rendering-simple-shapes&src=1
+
+	// AABB bounds
+	m_obj.UpdatePose(m_init);
+	auto aabb = m_obj.ComputeAABBTight();
+	std::vector<fcl::Vec3f> bounds = {aabb.min_, aabb.max_};
+
+	// Push direction and inverse direction
+	push_dir = { std::cos(move_dir + M_PI), std::sin(move_dir + M_PI), 0.0 };
+	push_dir.normalize();
+	Eigen::Vector3d inv_dir = push_dir.array().inverse();
+
+	// Push direction sign vector
+	Eigen::Vector3i push_sign(
+		inv_dir[0] < 0, inv_dir[1] < 0, inv_dir[2] < 0);
+
+	float tmin, tmax, tymin, tymax, tzmin, tzmax;
+	tmin = (bounds[push_sign[0]][0] - m_obj_desc.o_x) * inv_dir[0];
+	tmax = (bounds[1 - push_sign[0]][0] - m_obj_desc.o_x) * inv_dir[0];
+	tymin = (bounds[push_sign[1]][1] - m_obj_desc.o_y) * inv_dir[1];
+	tymax = (bounds[1 - push_sign[1]][1] - m_obj_desc.o_y) * inv_dir[1];
+
+	if ((tmin > tymax) || (tymin > tmax)) {
+		return false;
+	}
+
+	if (tymin > tmin) {
+		tmin = tymin;
+	}
+	if (tymax < tmax) {
+		tmax = tymax;
+	}
+
+	tzmin = (bounds[push_sign[2]][2] - m_obj_desc.o_z) * inv_dir[2];
+	tzmax = (bounds[1 - push_sign[2]][2] - m_obj_desc.o_z) * inv_dir[2];
+
+	if ((tmin > tzmax) || (tzmin > tmax)) {
+		return false;
+	}
+
+	if (tzmin > tmin) {
+		tmin = tzmin;
+	}
+	if (tzmax < tmax) {
+		tmax = tzmax;
+	}
+
+	t = tmin;
+
+	if (t < 0)
+	{
+		t = tmax;
+		if (t < 0) {
+			return false;
+		}
+	}
+
+	if (t > 1) {
+		return false;
+	}
+
+	return true;
+}
+
 bool Agent::GetSE2Push(std::vector<double>& push, bool input)
 {
 	if (input)
@@ -341,76 +418,17 @@ bool Agent::GetSE2Push(std::vector<double>& push, bool input)
 	push.clear();
 	push.resize(4, 0.0);
 	double move_dir = std::atan2(
-					m_solve.back().state.at(1) - m_solve.front().state.at(1),
-					m_solve.back().state.at(0) - m_solve.front().state.at(0));
+					m_solve.back().state.at(1) - m_obj_desc.o_y,
+					m_solve.back().state.at(0) - m_obj_desc.o_x);
 
 	// default values
 	push[0] = m_obj_desc.o_x;
 	push[1] = m_obj_desc.o_y;
 	push[2] = move_dir;
 
-	// Ray-AABB intersection code from
-	// https://www.scratchapixel.com/code.php?id=10&origin=/lessons/3d-basic-rendering/ray-tracing-rendering-simple-shapes&src=1
-
-	// AABB bounds
-	m_obj.UpdatePose(m_init);
-	auto aabb = m_obj.ComputeAABBTight();
-	std::vector<fcl::Vec3f> bounds = {aabb.min_, aabb.max_};
-
-	// Push direction and inverse direction
-	Eigen::Vector3f push_dir(
-			std::cos(move_dir + M_PI),
-			std::sin(move_dir + M_PI),
-			0.0);
-	push_dir.normalize();
-	Eigen::Vector3f inv_dir = push_dir.array().inverse();
-
-	// Push direction sign vector
-	Eigen::Vector3i push_sign(
-		inv_dir[0] < 0, inv_dir[1] < 0, inv_dir[2] < 0);
-
-	float tmin, tmax, tymin, tymax, tzmin, tzmax;
-	tmin = (bounds[push_sign[0]][0] - m_obj_desc.o_x) * inv_dir[0];
-	tmax = (bounds[1 - push_sign[0]][0] - m_obj_desc.o_x) * inv_dir[0];
-	tymin = (bounds[push_sign[1]][1] - m_obj_desc.o_y) * inv_dir[1];
-	tymax = (bounds[1 - push_sign[1]][1] - m_obj_desc.o_y) * inv_dir[1];
-
-	if ((tmin > tymax) || (tymin > tmax)) {
-		return false;
-	}
-
-	if (tymin > tmin) {
-		tmin = tymin;
-	}
-	if (tymax < tmax) {
-		tmax = tymax;
-	}
-
-	tzmin = (bounds[push_sign[2]][2] - m_obj_desc.o_z) * inv_dir[2];
-	tzmax = (bounds[1 - push_sign[2]][2] - m_obj_desc.o_z) * inv_dir[2];
-
-	if ((tmin > tzmax) || (tzmin > tmax)) {
-		return false;
-	}
-
-	if (tzmin > tmin) {
-		tmin = tzmin;
-	}
-	if (tzmax < tmax) {
-		tmax = tzmax;
-	}
-
-	float t = tmin;
-
-	if (t < 0)
-	{
-		t = tmax;
-		if (t < 0) {
-			return false;
-		}
-	}
-
-	if (t > 1) {
+	Eigen::Vector3d push_dir;
+	float t;
+	if (!GetAABBIntersectingRay(move_dir, push_dir, t)) {
 		return false;
 	}
 
@@ -419,6 +437,42 @@ bool Agent::GetSE2Push(std::vector<double>& push, bool input)
 	push[3] = t;
 
 	return true;
+}
+
+void Agent::FindBestOutsideCell(Eigen::Vector3i& best_outside_pos, bool& inside)
+{
+	Eigen::Affine3d T = Eigen::Translation3d(m_obj_desc.o_x, m_obj_desc.o_y, m_obj_desc.o_z) *
+						Eigen::AngleAxisd(m_obj_desc.o_yaw, Eigen::Vector3d::UnitZ()) *
+						Eigen::AngleAxisd(m_obj_desc.o_pitch, Eigen::Vector3d::UnitY()) *
+						Eigen::AngleAxisd(m_obj_desc.o_roll, Eigen::Vector3d::UnitX());
+	m_obj.updateVoxelsState(T);
+	auto voxels_state = m_obj.VoxelsState();
+
+	double best_pos_dist = std::numeric_limits<double>::max(), dist;
+	Eigen::Vector3i pos;
+	inside = false;
+
+	double wx, wy, wz;
+	auto ngr_df = m_ngr_grid->getDistanceField();
+	for (const Eigen::Vector3d& v : voxels_state->voxels)
+	{
+		auto cell = dynamic_cast<smpl::PropagationDistanceField&>(*ngr_df).getNearestCell(v[0], v[1], v[2], dist, pos);
+		if (dist < 0)
+		{
+			if (!inside) {
+				inside = true;
+			}
+
+			m_ngr_grid->gridToWorld(pos[0], pos[1], pos[2], wx, wy, wz);
+			Eigen::Vector3d posd(wx, wy, wz);
+			double dist_to_outside = (posd - v).norm();
+			if (dist_to_outside < best_pos_dist)
+			{
+				best_pos_dist = dist_to_outside;
+				best_outside_pos = pos;
+			}
+		}
+	}
 }
 
 // find best NGR complement cell
@@ -444,43 +498,12 @@ bool Agent::computeGoal(bool backwards)
 	}
 	else
 	{
-		Eigen::Affine3d T = Eigen::Translation3d(m_obj_desc.o_x, m_obj_desc.o_y, m_obj_desc.o_z) *
-						Eigen::AngleAxisd(m_obj_desc.o_yaw, Eigen::Vector3d::UnitZ()) *
-						Eigen::AngleAxisd(m_obj_desc.o_pitch, Eigen::Vector3d::UnitY()) *
-						Eigen::AngleAxisd(m_obj_desc.o_roll, Eigen::Vector3d::UnitX());
-		m_obj.updateVoxelsState(T);
-		auto voxels_state = m_obj.VoxelsState();
+		Eigen::Vector3i best_outside_pos;
+		bool inside;
 
-		double best_pos_dist = std::numeric_limits<double>::max(), dist;
-		Eigen::Vector3i best_outside_pos, pos;
-		bool inside = false, outside = false;
-
-		double wx, wy, wz;
-		auto ngr_df = m_ngr_grid->getDistanceField();
-		for (const Eigen::Vector3d& v : voxels_state->voxels)
+		FindBestOutsideCell(best_outside_pos, inside);
+		if (!inside)
 		{
-			auto cell = dynamic_cast<smpl::PropagationDistanceField&>(*ngr_df).getNearestCell(v[0], v[1], v[2], dist, pos);
-
-			if (dist > 0) {
-				outside = true;
-			}
-			else if (dist < 0)
-			{
-				if (!inside) {
-					inside = true;
-				}
-
-				m_ngr_grid->gridToWorld(pos[0], pos[1], pos[2], wx, wy, wz);
-				Eigen::Vector3d posd(wx, wy, wz);
-				double dist_to_outside = (posd - v).norm();
-				if (dist_to_outside < best_pos_dist)
-				{
-					best_pos_dist = dist_to_outside;
-					best_outside_pos = pos;
-				}
-			}
-		}
-		if (!inside) {
 			SMPL_ERROR("m_init !stateOutsideNGR and !inside?");
 			m_goal = m_init.coord;
 
@@ -488,6 +511,7 @@ bool Agent::computeGoal(bool backwards)
 			return true;
 		}
 
+		double wx, wy, wz;
 		m_ngr_grid->gridToWorld(best_outside_pos[0], best_outside_pos[1], best_outside_pos[2], wx, wy, wz);
 
 		State goal = {wx, wy};

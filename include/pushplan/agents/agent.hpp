@@ -44,6 +44,7 @@ public:
 	}
 
 	bool ResetObject();
+	void UpdateInit();
 	bool SetObjectPose(
 		const std::vector<double>& xyz,
 		const std::vector<double>& rpy);
@@ -52,6 +53,8 @@ public:
 	void ComputeNGRComplement(
 		double ox, double oy, double oz,
 		double sx, double sy, double sz, bool vis=false);
+	void FindBestOutsideCell(Eigen::Vector3i& best_outside_pos, bool& inside);
+	bool GetAABBIntersectingRay(const double& move_dir, Eigen::Vector3d& push_dir, float& t);
 
 	bool SatisfyPath(
 		HighLevelNode* ct_node,
