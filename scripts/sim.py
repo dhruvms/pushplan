@@ -781,11 +781,15 @@ class BulletSim:
 				sim.setCollisionFilterGroupMask(obj_id, -1, \
 								self.defaultCollisionGroup, self.defaultCollisionFilter)
 
+		sim.stepSimulation()
+
 	def AddAlltoCollision(self, sim_id):
 		sim = self.sims[sim_id]
 		for obj_id in self.sim_datas[sim_id]['objs']:
 			sim.setCollisionFilterGroupMask(obj_id, -1, \
 				self.defaultCollisionGroup, self.defaultCollisionFilter)
+
+		sim.stepSimulation()
 
 	def SimPushesDogarDefault(self, req):
 		sim_id = 0
