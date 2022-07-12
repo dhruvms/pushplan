@@ -6,6 +6,7 @@
 #include <sbpl_collision_checking/base_collision_models.h>
 #include <sbpl_collision_checking/base_collision_states.h>
 #include <sbpl_collision_checking/shapes.h>
+#include <smpl/robot_model.h>
 #include <fcl/collision_object.h>
 #include <moveit_msgs/CollisionObject.h>
 
@@ -24,8 +25,9 @@ struct ObjectDesc
 	bool movable, locked, ycb;
 };
 
-struct Object
+struct Object : public smpl::SMPLObject
 {
+	~Object();
 	ObjectDesc desc;
 
 	// CollisionObjects
@@ -47,7 +49,7 @@ struct Object
 	bool CreateSMPLCollisionObject();
 	bool GenerateCollisionModels();
 
-	void SetTransform(const Eigen::Affine3d& T) { m_T = T; };
+	void SetTransform(const Eigen::Affine3d& T) override { m_T = T; };
 	void updateSphereState(const smpl::collision::SphereIndex& sidx);
 	void updateVoxelsState(const Eigen::Affine3d& T);
 
@@ -69,6 +71,7 @@ struct Object
 		msg = *moveit_obj;
 	};
 	fcl::CollisionObject* GetFCLObject() { return fcl_obj; };
+	int ID() override { return desc.id; };
 
 private:
 	Eigen::Affine3d m_T;

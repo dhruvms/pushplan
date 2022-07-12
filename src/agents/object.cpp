@@ -16,6 +16,10 @@
 namespace clutter
 {
 
+Object::~Object()
+{
+}
+
 int Object::Shape() const
 {
 	if (!desc.ycb) {

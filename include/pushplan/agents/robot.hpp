@@ -7,6 +7,7 @@
 #include <pushplan/utils/bullet_sim.hpp>
 #include <comms/ObjectsPoses.h>
 
+#include <smpl/robot_model.h>
 #include <smpl/console/console.h>
 #include <smpl/ros/planner_interface.h>
 #include <smpl/planning_params.h>
@@ -255,7 +256,7 @@ private:
 	int m_t, m_priority;
 	Trajectory m_solve;
 	Object m_ooi;
-	std::vector<moveit_msgs::CollisionObject> m_movables;
+	std::vector<smpl::SMPLObject*> m_movables;
 	std::vector<Object> m_objs;
 	std::shared_ptr<CollisionChecker> m_cc;
 

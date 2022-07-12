@@ -267,11 +267,8 @@ bool Robot::CheckCollision(const LatticeState& robot, int t)
 
 void Robot::SetMovables(const std::vector<std::shared_ptr<Agent> >& agents)
 {
-	moveit_msgs::CollisionObject mov_obj;
-	for (const auto& a: agents)
-	{
-		a->GetMoveitObj(mov_obj);
-		m_movables.push_back(mov_obj);
+	for (auto& a : agents) {
+		m_movables.push_back(a->GetObject());
 	}
 }
 
