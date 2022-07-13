@@ -8,6 +8,7 @@
 #include <pushplan/utils/types.hpp>
 #include <pushplan/utils/collision_checker.hpp>
 
+#include <sbpl_collision_checking/base_collision_states.h>
 #include <smpl/distance_map/distance_map_interface.h>
 #include <smpl/occupancy_grid.h>
 #include <ros/ros.h>
@@ -80,11 +81,16 @@ public:
 	int GetID() { return m_obj.desc.id; };
 
 	Object* GetObject() { return &m_obj; };
+	smpl::collision::SMPLObject* GetSMPLObject() { return &m_obj; };
 	fcl::CollisionObject* GetFCLObject() { return m_obj.GetFCLObject(); };
 	void GetMoveitObj(moveit_msgs::CollisionObject& msg) const {
 		m_obj.GetMoveitObj(msg);
 	};
+	auto GetSpheresState() -> smpl::collision::CollisionSpheresState* {
+		return m_obj.SpheresState();
+	}
 
+	void SetTransform(const std::vector<double>& s);
 	void UpdatePose(const LatticeState& s);
 	bool OutOfBounds(const LatticeState& s);
 	bool ImmovableCollision();

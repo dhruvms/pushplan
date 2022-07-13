@@ -6,7 +6,6 @@
 #include <sbpl_collision_checking/base_collision_models.h>
 #include <sbpl_collision_checking/base_collision_states.h>
 #include <sbpl_collision_checking/shapes.h>
-#include <smpl/robot_model.h>
 #include <fcl/collision_object.h>
 #include <moveit_msgs/CollisionObject.h>
 
@@ -25,7 +24,7 @@ struct ObjectDesc
 	bool movable, locked, ycb;
 };
 
-struct Object : public smpl::SMPLObject
+struct Object : public smpl::collision::SMPLObject
 {
 	~Object();
 	ObjectDesc desc;
@@ -50,7 +49,7 @@ struct Object : public smpl::SMPLObject
 	bool GenerateCollisionModels();
 
 	void SetTransform(const Eigen::Affine3d& T) override { m_T = T; };
-	void updateSphereState(const smpl::collision::SphereIndex& sidx);
+	void updateSphereState(const smpl::collision::SphereIndex& sidx) override;
 	void updateVoxelsState(const Eigen::Affine3d& T);
 
 	// bool TransformAndVoxelise(
@@ -61,7 +60,7 @@ struct Object : public smpl::SMPLObject
 	// 	const double& res, const Eigen::Vector3d& origin,
 	// 	const Eigen::Vector3d& gmin, const Eigen::Vector3d& gmax);
 
-	auto SpheresState() -> smpl::collision::CollisionSpheresState* { return spheres_state; }
+	auto SpheresState() -> smpl::collision::CollisionSpheresState* override { return spheres_state; }
 	auto VoxelsState() -> smpl::collision::CollisionVoxelsState* { return voxels_state; }
 
 	void UpdatePose(const LatticeState& s);

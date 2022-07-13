@@ -265,6 +265,22 @@ bool Robot::CheckCollision(const LatticeState& robot, int t)
 	return collision;
 }
 
+bool Robot::CheckRobotMovableObjectSpheresCollision(
+	const LatticeState& rstate,
+	const LatticeState& ostate,
+	Agent* o)
+{
+	m_cc_i->updateState(rstate.state);
+	o->SetTransform(ostate.state);
+
+	double dist;
+	return m_scm->checkRobotCollisionWithMovableObject(
+						*(m_cc_i->robotCollisionState()),
+						o->GetSMPLObject(),
+						m_cc_i->robotCollisionModel()->groupIndex(m_robot_config.group_name),
+						dist);
+}
+
 void Robot::SetMovables(const std::vector<std::shared_ptr<Agent> >& agents)
 {
 	for (auto& a : agents) {
@@ -967,57 +983,49 @@ bool Robot::planRetract(
 	return true;
 }
 
-void Robot::voxeliseTrajectory()
+void Robot::insertTrajVoxels(const std::vector<smpl::visual::Marker>& markers)
 {
-	m_traj_voxels.clear();
-	// double start_time = GetTime();
-
-	int sphere_count = 0;
-	for (const auto& wp: m_traj.points)
+	for (auto& marker : markers)
 	{
-		auto markers = m_cc_i->getCollisionModelVisualization(wp.positions);
-		for (auto& marker : markers)
-		{
-			std::unique_ptr<smpl::collision::CollisionShape> shape;
-			shape = smpl::make_unique<smpl::collision::SphereShape>(boost::get<smpl::visual::Ellipse>(marker.shape).axis_x - RES);
+		std::unique_ptr<smpl::collision::CollisionShape> shape;
+		shape = smpl::make_unique<smpl::collision::SphereShape>(boost::get<smpl::visual::Ellipse>(marker.shape).axis_x - RES);
 
-			std::vector<smpl::collision::CollisionShape*> shapes;
-			shapes.push_back(shape.get());
+		std::vector<smpl::collision::CollisionShape*> shapes;
+		shapes.push_back(shape.get());
 
-			geometry_msgs::Pose pose;
-			pose.position.x = marker.pose.position[0];
-			pose.position.y = marker.pose.position[1];
-			pose.position.z = marker.pose.position[2];
-			geometry_msgs::Quaternion orientation;
-			tf::quaternionEigenToMsg(marker.pose.orientation, orientation);
-			pose.orientation = orientation;
+		geometry_msgs::Pose pose;
+		pose.position.x = marker.pose.position[0];
+		pose.position.y = marker.pose.position[1];
+		pose.position.z = marker.pose.position[2];
+		geometry_msgs::Quaternion orientation;
+		tf::quaternionEigenToMsg(marker.pose.orientation, orientation);
+		pose.orientation = orientation;
 
-			smpl::collision::AlignedVector<Eigen::Affine3d> shape_poses;
-			Eigen::Affine3d transform;
-			tf::poseMsgToEigen(pose, transform);
-			shape_poses.push_back(transform);
+		smpl::collision::AlignedVector<Eigen::Affine3d> shape_poses;
+		Eigen::Affine3d transform;
+		tf::poseMsgToEigen(pose, transform);
+		shape_poses.push_back(transform);
 
-			// create the collision object
-			smpl::collision::CollisionObject co;
-			co.id = std::to_string(sphere_count++);
-			co.shapes = std::move(shapes);
-			co.shape_poses = std::move(shape_poses);
+		// create the collision object
+		smpl::collision::CollisionObject co;
+		co.id = std::to_string(m_sphere_count++);
+		co.shapes = std::move(shapes);
+		co.shape_poses = std::move(shape_poses);
 
-			const double res = m_grid_ngr->resolution();
-			const Eigen::Vector3d origin(
-					m_grid_ngr->originX(), m_grid_ngr->originY(), m_grid_ngr->originZ());
+		const double res = m_grid_ngr->resolution();
+		const Eigen::Vector3d origin(
+				m_grid_ngr->originX(), m_grid_ngr->originY(), m_grid_ngr->originZ());
 
-			const Eigen::Vector3d gmin(
-					m_grid_ngr->originX(), m_grid_ngr->originY(), m_grid_ngr->originZ());
+		const Eigen::Vector3d gmin(
+				m_grid_ngr->originX(), m_grid_ngr->originY(), m_grid_ngr->originZ());
 
-			const Eigen::Vector3d gmax(
-					m_grid_ngr->originX() + m_grid_ngr->sizeX(),
-					m_grid_ngr->originY() + m_grid_ngr->sizeY(),
-					m_grid_ngr->originZ() + m_grid_ngr->sizeZ());
+		const Eigen::Vector3d gmax(
+				m_grid_ngr->originX() + m_grid_ngr->sizeX(),
+				m_grid_ngr->originY() + m_grid_ngr->sizeY(),
+				m_grid_ngr->originZ() + m_grid_ngr->sizeZ());
 
-			if (!smpl::collision::VoxelizeObject(co, res, origin, gmin, gmax, m_traj_voxels)) {
-				continue;
-			}
+		if (!smpl::collision::VoxelizeObject(co, res, origin, gmin, gmax, m_traj_voxels)) {
+			continue;
 		}
 	}
 
@@ -1038,7 +1046,40 @@ void Robot::voxeliseTrajectory()
 
 void Robot::UpdateNGR(bool vis)
 {
-	voxeliseTrajectory();
+	m_traj_voxels.clear();
+	// double start_time = GetTime();
+
+	m_sphere_count = 0;
+	for (const auto& wp: m_traj.points)
+	{
+		auto markers = m_cc_i->getCollisionModelVisualization(wp.positions);
+		insertTrajVoxels(markers);
+	}
+
+	m_grid_ngr->reset();
+	for (auto& voxel_list : m_traj_voxels) {
+		m_grid_ngr->addPointsToField(voxel_list);
+	}
+
+	if (vis) {
+		// SV_SHOW_INFO(m_grid_ngr->getBoundingBoxVisualization());
+		// SV_SHOW_INFO(m_grid_ngr->getDistanceFieldVisualization());
+		SV_SHOW_INFO(m_grid_ngr->getOccupiedVoxelsVisualization());
+	}
+}
+
+void Robot::UpdateNGR(const Trajectory& trajectory, bool vis)
+{
+	m_traj_voxels.clear();
+	// double start_time = GetTime();
+
+	m_sphere_count = 0;
+	for (const auto& wp: trajectory)
+	{
+		auto markers = m_cc_i->getCollisionModelVisualization(wp.state);
+		insertTrajVoxels(markers);
+	}
+
 	m_grid_ngr->reset();
 	for (auto& voxel_list : m_traj_voxels) {
 		m_grid_ngr->addPointsToField(voxel_list);
@@ -1119,6 +1160,7 @@ bool Robot::PlanRetrieval(const std::vector<Object*>& movable_obstacles, bool fi
 
 bool Robot::SatisfyPath(HighLevelNode* ct_node, Trajectory** sol_path, int& expands, int& min_f)
 {
+	ProcessObstacles({ m_ooi }, true);
 	expands = 0;
 	min_f = 0;
 	// CBS TODO: must pick out constraints wrt planning phase:
@@ -1160,7 +1202,9 @@ bool Robot::SatisfyPath(HighLevelNode* ct_node, Trajectory** sol_path, int& expa
 
 	moveit_msgs::MotionPlanResponse res_a;
 	std::vector<Object*> dummy;
-	if (!planApproach(approach_cvecs, res_a, dummy)) {
+	if (!planApproach(approach_cvecs, res_a, dummy))
+	{
+		ProcessObstacles({ m_ooi });
 		return false;
 	}
 
@@ -1194,7 +1238,9 @@ bool Robot::SatisfyPath(HighLevelNode* ct_node, Trajectory** sol_path, int& expa
 	/////////////////////
 
 	moveit_msgs::MotionPlanResponse res_r;
-	if (!planRetract(retract_cvecs, res_r, dummy)) {
+	if (!planRetract(retract_cvecs, res_r, dummy))
+	{
+		ProcessObstacles({ m_ooi });
 		return false;
 	}
 
@@ -1230,6 +1276,9 @@ bool Robot::SatisfyPath(HighLevelNode* ct_node, Trajectory** sol_path, int& expa
 		++t;
 	}
 	*sol_path = &(this->m_solve);
+
+	ProcessObstacles({ m_ooi });
+	UpdateNGR();
 
 	// SMPL_INFO("Robot has complete plan! m_solve.size() = %d", m_solve.size());
 	// SV_SHOW_INFO_NAMED("trajectory", makePathVisualization());
@@ -2387,6 +2436,7 @@ bool Robot::initCollisionChecker()
 		ROS_ERROR("Failed to initialize immovable Collision Space");
 		return false;
 	}
+	m_scm = m_cc_i->selfCollisionModel();
 
 	if (m_cc_i->robotCollisionModel()->name() == "pr2") {
 		// sbpl_collision_checking/types.h

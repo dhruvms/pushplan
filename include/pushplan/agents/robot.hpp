@@ -16,6 +16,8 @@
 #include <smpl/occupancy_grid.h>
 #include <smpl/debug/visualizer_ros.h>
 #include <sbpl_collision_checking/collision_space.h>
+#include <sbpl_collision_checking/robot_collision_model.h>
+#include <sbpl_collision_checking/robot_collision_state.h>
 #include <sbpl_kdl_robot_model/pushing_kdl_robot_model.h>
 #include <moveit_msgs/RobotState.h>
 #include <moveit_msgs/RobotTrajectory.h>
@@ -45,6 +47,10 @@ public:
 
 	bool CheckCollisionWithObject(const LatticeState& robot, Agent* a, int t);
 	bool CheckCollision(const LatticeState& robot, int t);
+	bool CheckRobotMovableObjectSpheresCollision(
+		const LatticeState& rstate,
+		const LatticeState& ostate,
+		Agent* o);
 
 	bool ProcessObstacles(const std::vector<Object>& obstacles, bool remove=false, bool movable=false);
 	bool ProcessObstacles(const std::vector<Object*>& obstacles, bool remove=false, bool movable=false);
@@ -63,6 +69,7 @@ public:
 	bool PlanApproachOnly(const std::vector<Object*>& movable_obstacles);
 	bool PlanRetrieval(const std::vector<Object*>& movable_obstacles, bool finalise=false, smpl::RobotState start_state={});
 	void UpdateNGR(bool vis=false);
+	void UpdateNGR(const Trajectory& trajectory, bool vis=false);
 	bool SatisfyPath(HighLevelNode* ct_node, Trajectory** sol_path, int& expands, int& min_f);
 
 	void ProfileTraj(Trajectory& traj);
@@ -213,6 +220,7 @@ private:
 	std::string m_robot_description, m_planning_frame;
 	RobotModelConfig m_robot_config;
 	std::unique_ptr<smpl::PushingKDLRobotModel> m_rm;
+	std::shared_ptr<smpl::collision::SelfCollisionModel> m_scm;
 	moveit_msgs::RobotState m_start_state;
 	ros::Publisher m_vis_pub;
 
@@ -253,10 +261,10 @@ private:
 	trajectory_msgs::JointTrajectory m_traj;
 	std::vector<std::vector<Eigen::Vector3d>> m_traj_voxels;
 
-	int m_t, m_priority;
+	int m_t, m_priority, m_sphere_count;
 	Trajectory m_solve;
 	Object m_ooi;
-	std::vector<smpl::SMPLObject*> m_movables;
+	std::vector<smpl::ObjectModel*> m_movables;
 	std::vector<Object> m_objs;
 	std::shared_ptr<CollisionChecker> m_cc;
 
@@ -364,7 +372,7 @@ private:
 		moveit_msgs::MotionPlanResponse& res,
 		const std::vector<Object*>& movable_obstacles,
 		bool finalise=false);
-	void voxeliseTrajectory();
+	void insertTrajVoxels(const std::vector<smpl::visual::Marker>& markers);
 
 	std::vector<std::vector<double> > m_push_debug_data;
 };

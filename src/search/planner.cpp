@@ -119,6 +119,12 @@ bool Planner::Init(const std::string& scene_file, int scene_id, bool ycb)
 			SMPL_ERROR("Robot failed to compute grasp states!");
 			return false;
 		}
+
+		for (auto& a: m_agents)
+		{
+			a->SetObstacleGrid(m_robot->ObsGrid());
+			a->SetNGRGrid(m_robot->NGRGrid());
+		}
 	}
 	m_robot->VizCC();
 
@@ -175,25 +181,8 @@ bool Planner::SetupNGR()
 	}
 	m_stats["robot_planner_time"] = GetTime() - m_timer;
 	m_robot->ProcessObstacles({ m_ooi->GetObject() });
-	m_robot->UpdateNGR();
+	// m_robot->UpdateNGR();
 	m_exec = m_robot->GetLastPlanProfiled();
-
-	double ox, oy, oz, sx, sy, sz;
-	m_sim->GetShelfParams(ox, oy, oz, sx, sy, sz);
-
-	for (auto& a: m_agents) {
-		a->SetObstacleGrid(m_robot->ObsGrid());
-		a->SetNGRGrid(m_robot->NGRGrid());
-		a->ResetSolution();
-		if (ALGO == MAPFAlgo::OURS) {
-			a->ComputeNGRComplement(ox, oy, oz, sx, sy, sz);
-		}
-	}
-
-	// m_ooi->SetObstacleGrid(m_robot->Grid());
-	// if (ALGO == MAPFAlgo::OURS) {
-	// 	m_ooi->ComputeNGRComplement(ox, oy, oz, sx, sy, sz);
-	// }
 
 	return true;
 }

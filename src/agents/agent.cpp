@@ -135,7 +135,7 @@ bool Agent::SatisfyPath(
 	int& min_f,
 	std::unordered_set<int>* to_avoid)
 {
-	m_solve.clear();
+	ResetSolution();
 	expands = 0;
 	min_f = 0;
 
@@ -208,6 +208,24 @@ bool Agent::PrioritisedCollisionCheck(const LatticeState& s, bool goal_check)
 	return m_cc->PPCollisionCheck(this, s, m_obj.GetFCLObject(), m_priority, goal_check);
 }
 
+void Agent::SetTransform(const std::vector<double>& s)
+{
+	double r = 0.0, p = 0.0, y = 0.0;
+	if (s.size() == 6)
+	{
+		r = s[3];
+		p = s[4];
+		y = s[5];
+	}
+
+	Eigen::Affine3d T = Eigen::Translation3d(s[0], s[1], m_obj_desc.o_z) *
+						Eigen::AngleAxisd(y, Eigen::Vector3d::UnitZ()) *
+						Eigen::AngleAxisd(p, Eigen::Vector3d::UnitY()) *
+						Eigen::AngleAxisd(r, Eigen::Vector3d::UnitX());
+
+	m_obj.SetTransform(T);
+}
+
 void Agent::UpdatePose(const LatticeState& s)
 {
 	m_obj.UpdatePose(s);
@@ -261,19 +279,7 @@ void Agent::VisualiseState(const Coord& c, const std::string& ns, int hue)
 
 void Agent::VisualiseState(const LatticeState& s, const std::string& ns, int hue)
 {
-	double r = 0.0, p = 0.0, y = 0.0;
-	if (s.state.size() == 6)
-	{
-		r = s.state[3];
-		p = s.state[4];
-		y = s.state[5];
-	}
-	Eigen::Affine3d T = Eigen::Translation3d(s.state[0], s.state[1], m_obj_desc.o_z) *
-						Eigen::AngleAxisd(y, Eigen::Vector3d::UnitZ()) *
-						Eigen::AngleAxisd(p, Eigen::Vector3d::UnitY()) *
-						Eigen::AngleAxisd(r, Eigen::Vector3d::UnitX());
-
-	m_obj.SetTransform(T);
+	SetTransform(s.state);
 
 	std::vector<std::vector<double>> sphere_positions;
 	std::vector<double> sphere_radii;
@@ -543,20 +549,7 @@ bool Agent::stateObsCollision(const LatticeState& s)
 // return false => collide with NGR
 bool Agent::stateOutsideNGR(const LatticeState& s)
 {
-	double r = 0.0, p = 0.0, y = 0.0;
-	if (s.state.size() == 6)
-	{
-		r = s.state[3];
-		p = s.state[4];
-		y = s.state[5];
-	}
-
-	Eigen::Affine3d T = Eigen::Translation3d(s.state[0], s.state[1], m_obj_desc.o_z) *
-						Eigen::AngleAxisd(y, Eigen::Vector3d::UnitZ()) *
-						Eigen::AngleAxisd(p, Eigen::Vector3d::UnitY()) *
-						Eigen::AngleAxisd(r, Eigen::Vector3d::UnitX());
-
-	m_obj.SetTransform(T);
+	SetTransform(s.state);
 	std::vector<const smpl::collision::CollisionSphereState*> q = {
 									m_obj.SpheresState()->spheres.root() };
 
