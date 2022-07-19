@@ -48,7 +48,7 @@ private:
 
 	std::list<std::shared_ptr<Constraint> > m_constraints;
 	std::vector<std::pair<int, Trajectory> >* m_cbs_solution; // all agent trajectories
-	int m_cbs_id, m_max_time;
+	int m_cbs_id, m_cbs_grasp_at, m_max_time;
 	std::unordered_set<int> m_to_avoid;
 
 	// maps from coords to stateID

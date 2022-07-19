@@ -63,6 +63,7 @@ void AgentLattice::SetCTNode(HighLevelNode* ct_node)
 	m_cbs_solution = &(ct_node->m_solution);
 	m_cbs_id = ct_node->m_replanned;
 	m_max_time = ct_node->m_makespan;
+	m_cbs_grasp_at = ct_node->m_grasp_at;
 }
 
 void AgentLattice::AvoidAgents(const std::unordered_set<int>& to_avoid)
@@ -111,14 +112,15 @@ bool AgentLattice::IsGoal(int state_id)
 
 		if (!constrained)
 		{
-			bool conflict = goalConflict(*s);
+			// bool conflict = goalConflict(*s);
 
-			// for forward search goal must valid for all future time
+			// // for forward search goal must valid for all future time
 			// if (!conflict) {
-			// 	m_agent->VisualiseState(*s, "valid_goal", 147);
+			// 	m_agent->VisualiseState(*s, "movable_goal", 147);
 			// 	SMPL_WARN("Goal visualised!");
 			// }
-			return !conflict;
+			// return !conflict;
+			return true;
 		}
 
 		// for forward search goal must not be constrained
@@ -231,22 +233,23 @@ int AgentLattice::generateSuccessor(
 			// Conflict type 1: robot-object conflict
 			if (constraint->m_me == constraint->m_other)
 			{
-	 		// 	if (m_cbs_solution->at(0).second.size() <= constraint->m_time)
-				// {
-				// 	// This should never happen - the constraint would only have existed
-				// 	// if this object and the robot had a conflict at that time
-				// 	SMPL_WARN("How did this robot-object conflict happen with a small robot traj?");
-				// 	continue;
-				// }
+	 			if (m_cbs_solution->at(0).second.size() <= constraint->m_time)
+				{
+					// This should never happen - the constraint would only have existed
+					// if this object and the robot had a conflict at that time
+					SMPL_WARN("How did this robot-object conflict happen with a small robot traj?");
+					continue;
+				}
 
-				// // successor is invalid if I collide in state 'child'
-				// // with the robot configuration at the same time
-				// if (m_cc->RobotObjectCollision(
-				// 			this, child,
-				// 			m_cbs_solution->at(0).second.at(constraint->m_time), constraint->m_time))
-				// {
-				// 	return -1;
-				// }
+				// successor is invalid if I collide in state 'child'
+				// with the robot configuration at the same time
+				bool ooi_grasped = constraint->m_time >= m_cbs_grasp_at;
+				if (m_agent->RobotObjectCollision(
+							child, m_cbs_solution->at(0).second.at(constraint->m_time),
+							ooi_grasped))
+				{
+					return -1;
+				}
 			}
 			// Conflict type 2: object-object conflict
 			else
@@ -388,17 +391,18 @@ int AgentLattice::conflictHeuristic(const LatticeState& state)
 			}
 			bool conflict = m_agent->ObjectObjectsCollision(other_ids, other_poses);
 
-			// if (!conflict)
-			// {
-			// 	if (m_cbs_solution->at(0).second.size() <= state.t) {
-			// 		conflict = conflict ||
-			// 			m_cc->RobotObjectCollision(this, state, m_cbs_solution->at(0).second.back(), state.t);
-			// 	}
-			// 	else {
-			// 		conflict = conflict ||
-			// 			m_cc->RobotObjectCollision(this, state, m_cbs_solution->at(0).second.at(state.t), state.t);
-			// 	}
-			// }
+			if (!conflict)
+			{
+				bool ooi_grasped = state.t >= m_cbs_grasp_at;
+				if (m_cbs_solution->at(0).second.size() <= state.t) {
+					conflict = conflict ||
+						m_agent->RobotObjectCollision(state, m_cbs_solution->at(0).second.back(), ooi_grasped);
+				}
+				else {
+					conflict = conflict ||
+						m_agent->RobotObjectCollision(state, m_cbs_solution->at(0).second.at(state.t), ooi_grasped);
+				}
+			}
 
 			hc = (int)conflict;
 			break;
@@ -428,16 +432,17 @@ int AgentLattice::conflictHeuristic(const LatticeState& state)
 				}
 			}
 
-			// // same logic for robot
-			// if (m_cbs_solution->at(0).second.size() <= state.t) {
-			// 	other_pose = m_cbs_solution->at(0).second.back();
-			// }
-			// else {
-			// 	other_pose = m_cbs_solution->at(0).second.at(state.t);
-			// }
-			// if (m_cc->RobotObjectCollision(this, state, other_pose, state.t)) {
-			// 	++hc;
-			// }
+			// same logic for robot
+			if (m_cbs_solution->at(0).second.size() <= state.t) {
+				other_pose = m_cbs_solution->at(0).second.back();
+			}
+			else {
+				other_pose = m_cbs_solution->at(0).second.at(state.t);
+			}
+			bool ooi_grasped = state.t >= m_cbs_grasp_at;
+			if (m_agent->RobotObjectCollision(state, other_pose, ooi_grasped)) {
+				++hc;
+			}
 			break;
 		}
 		default:
@@ -494,23 +499,24 @@ bool AgentLattice::goalConflict(const LatticeState& state)
 		}
 	}
 
-	// // same logic for robot
-	// if (m_cbs_solution->at(0).second.size() <= state.t)
-	// {
-	// 	if (m_cc->RobotObjectCollision(this, state, m_cbs_solution->at(0).second.back(), state.t)) {
-	// 		return true;
-	// 	}
-	// }
-	// else
-	// {
-	// 	for (int t = state.t; t < (int)m_cbs_solution->at(0).second.size(); ++t)
-	// 	{
-	// 		other_pose = m_cbs_solution->at(0).second.at(t);
-	// 		if (m_cc->RobotObjectCollision(this, state, other_pose, state.t)) {
-	// 			return true;
-	// 		}
-	// 	}
-	// }
+	// same logic for robot
+	bool ooi_grasped = state.t >= m_cbs_grasp_at;
+	if (m_cbs_solution->at(0).second.size() <= state.t)
+	{
+		if (m_agent->RobotObjectCollision(state, m_cbs_solution->at(0).second.back(), ooi_grasped)) {
+			return true;
+		}
+	}
+	else
+	{
+		for (int t = state.t; t < (int)m_cbs_solution->at(0).second.size(); ++t)
+		{
+			other_pose = m_cbs_solution->at(0).second.at(t);
+			if (m_agent->RobotObjectCollision(state, other_pose, ooi_grasped)) {
+				return true;
+			}
+		}
+	}
 
 	return false;
 }
