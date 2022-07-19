@@ -74,7 +74,7 @@ bool Planner::Init(const std::string& scene_file, int scene_id, bool ycb)
 	}
 
 	// create collision checker
-	m_cc = std::make_shared<CollisionChecker>(this, all_obstacles);
+	m_cc = std::make_shared<CollisionChecker>(this, all_obstacles, m_robot);
 
 	m_robot->SetCC(m_cc);
 	for (auto& a: m_agents) {

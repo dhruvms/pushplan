@@ -1,5 +1,6 @@
-#include <pushplan/search/planner.hpp>
 #include <pushplan/utils/collision_checker.hpp>
+#include <pushplan/agents/robot.hpp>
+#include <pushplan/search/planner.hpp>
 #include <pushplan/utils/geometry.hpp>
 #include <pushplan/utils/default_broadphase_callbacks.h>
 
@@ -9,7 +10,7 @@
 namespace clutter
 {
 
-CollisionChecker::CollisionChecker(Planner* planner, const std::vector<Object>& obstacles)
+CollisionChecker::CollisionChecker(Planner* planner, const std::vector<Object>& obstacles, std::shared_ptr<Robot> r)
 :
 m_planner(planner),
 m_obstacles(obstacles),
@@ -35,6 +36,8 @@ m_rng(m_dev())
 	m_distD = std::uniform_real_distribution<double>(0.0, 1.0);
 
 	initMovableCollisionChecker();
+
+	m_robot = r;
 }
 
 void CollisionChecker::initMovableCollisionChecker()
