@@ -102,7 +102,8 @@ public:
 	double ObsDist(double x, double y);
 
 	void VisualiseState(const Coord& s, const std::string& ns="", int hue=180);
-	void VisualiseState(const LatticeState& s, const std::string& ns="", int hue=180);
+	auto VisualiseState(const LatticeState& s, const std::string& ns="", int hue=180, bool vis=true)
+		-> std::vector<smpl::visual::Marker>;
 
 	Coord Goal() const { return m_goal; };
 	auto InitState() const -> const LatticeState& { return m_init; };
@@ -147,6 +148,9 @@ private:
 	bool stateObsCollision(const LatticeState& s);
 	// check collisions with NGR
 	bool stateOutsideNGR(const LatticeState& s);
+
+	auto makePathVisualization()
+		-> std::vector<smpl::visual::Marker>;
 };
 
 } // namespace clutter

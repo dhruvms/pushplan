@@ -155,6 +155,8 @@ bool Agent::SatisfyPath(
 		*sol_path = &(this->m_solve);
 		expands = m_search->get_n_expands();
 		min_f = m_search->get_min_f();
+
+		// SV_SHOW_INFO_NAMED("movable_trajectory", makePathVisualization());
 	}
 
 	return result;
@@ -277,7 +279,8 @@ void Agent::VisualiseState(const Coord& c, const std::string& ns, int hue)
 	VisualiseState(s, ns, hue);
 }
 
-void Agent::VisualiseState(const LatticeState& s, const std::string& ns, int hue)
+auto Agent::VisualiseState(const LatticeState& s, const std::string& ns, int hue, bool vis)
+	-> std::vector<smpl::visual::Marker>
 {
 	SetTransform(s.state);
 
@@ -311,7 +314,11 @@ void Agent::VisualiseState(const LatticeState& s, const std::string& ns, int hue
 		marker.ns = ns;
 	}
 
-	SV_SHOW_INFO_NAMED(ns, markers);
+	if (vis) {
+		SV_SHOW_INFO_NAMED(ns, markers);
+	}
+
+	return markers;
 }
 
 bool Agent::GetSE2Push(std::vector<double>& push, bool input)
@@ -556,6 +563,33 @@ bool Agent::stateOutsideNGR(const LatticeState& s)
 	double padding = 0.0, dist = -1.0;
 	return smpl::collision::CheckVoxelsCollisions(
 							m_obj, q, *(m_ngr_grid.get()), padding, dist);
+}
+
+auto Agent::makePathVisualization()
+	-> std::vector<smpl::visual::Marker>
+{
+	std::vector<smpl::visual::Marker> ma;
+
+	if (m_solve.empty()) {
+		return ma;
+	}
+
+	for (size_t i = 0; i < m_solve.size(); ++i)
+	{
+		auto markers = VisualiseState(m_solve.at(i), "movable_trajectory", 180 + i, false);
+		for (auto& m : markers) {
+			ma.push_back(std::move(m));
+		}
+	}
+
+	for (size_t i = 0; i < ma.size(); ++i)
+	{
+		auto& marker = ma[i];
+		marker.ns = "movable_trajectory";
+		marker.id = i;
+	}
+
+	return ma;
 }
 
 } // namespace clutter
