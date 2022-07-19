@@ -223,62 +223,36 @@ bool Robot::SavePushData(int scene_id, bool reset)
 	}
 }
 
-bool Robot::CheckCollisionWithObject(const LatticeState& robot, Agent* a, int t)
-{
-	// if (t > m_grasp_at + 1) {
-	// 	attachObject(m_ooi);
-	// }
-	std::vector<Object*> o;
-	o.push_back(a->GetObject());
-	ProcessObstacles(o, false, true);
-
-	bool collision = !m_cc_m->isStateValid(robot.state);
-
-	// if (t > m_grasp_at + 1) {
-	// 	detachObject();
-	// }
-	ProcessObstacles(o, true, true);
-
-	return collision;
-}
-
-bool Robot::CheckCollision(const LatticeState& robot, int t)
-{
-	// if (t > m_grasp_at + 1) {
-	// 	attachObject(m_ooi);
-	// }
-
-	bool collision = !m_cc_m->isStateValid(robot.state);
-	// if (collision) {
-	// 	auto* vis_name = "conflict";
-	// 	auto markers = m_cc_m->getCollisionModelVisualization(robot.state);
-	// 	for (auto& marker : markers) {
-	// 		marker.ns = vis_name;
-	// 	}
-	// 	SV_SHOW_INFO_NAMED(vis_name, markers);
-	// 	SMPL_ERROR("Conflict at time %d", t);
-	// }
-
-	// if (t > m_grasp_at + 1) {
-	// 	detachObject();
-	// }
-	return collision;
-}
-
 bool Robot::CheckRobotMovableObjectSpheresCollision(
 	const LatticeState& rstate,
 	const LatticeState& ostate,
-	Agent* o)
+	Agent* o,
+	bool grasp)
 {
 	m_cc_i->updateState(rstate.state);
 	o->SetTransform(ostate.state);
 
 	double dist;
-	return m_scm->checkRobotCollisionWithMovableObject(
+	bool result = m_scm->robotMovableObjectCollision(
 						*(m_cc_i->robotCollisionState()),
 						o->GetSMPLObject(),
 						m_cc_i->robotCollisionModel()->groupIndex(m_robot_config.group_name),
 						dist);
+	// if (grasp)
+	// {
+	// 	attachObject(m_ooi);
+
+	// 	result = result &&
+	// 				m_scm->robotMovableObjectCollision(
+	// 					*(m_cc_i->attachedBodiesCollisionState()),
+	// 					o->GetSMPLObject(),
+	// 					m_cc_i->robotCollisionModel()->groupIndex(m_robot_config.group_name),
+	// 					dist);
+
+	// 	detachObject();
+	// }
+
+	return result;
 }
 
 void Robot::SetMovables(const std::vector<std::shared_ptr<Agent> >& agents)

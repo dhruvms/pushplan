@@ -243,6 +243,12 @@ bool Agent::ImmovableCollision()
 	return m_cc->ImmovableCollision(m_obj.GetFCLObject());
 }
 
+bool Agent::RobotObjectCollision(const LatticeState& o_state,
+	const LatticeState& r_state, bool grasp)
+{
+	return m_cc->RobotObjectCollision(this, o_state, r_state, grasp);
+}
+
 bool Agent::ObjectObjectCollision(const int& a2_id, const LatticeState& a2_q)
 {
 	return m_cc->ObjectObjectCollision(m_obj.GetFCLObject(), a2_id, a2_q);

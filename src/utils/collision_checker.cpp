@@ -198,40 +198,9 @@ double CollisionChecker::ObstacleDist(fcl::CollisionObject* o)
 bool CollisionChecker::RobotObjectCollision(
 	Agent* a1, const LatticeState& a1_state,
 	const LatticeState& robot_state,
-	int t, bool process)
+	bool grasp)
 {
-	bool collision = false;
-	if (!CC_2D) {
-		collision = collision || m_planner->CheckRobotCollision(a1, robot_state, t, process);
-	}
-	else
-	{
-		auto o1_obj = m_planner->GetObject(a1->GetID());
-		State o1_loc = {a1_state.state.at(0), a1_state.state.at(1)};
-		std::vector<State> o1_rect;
-		bool rect_o1 = false;
-
-		// preprocess rectangle once only
-		if (o1_obj->Shape() == 0)
-		{
-			GetRectObjAtPt(o1_loc, o1_obj->desc, o1_rect);
-			rect_o1 = true;
-		}
-
-		auto robot_2d = m_planner->Get2DRobot(robot_state);
-
-		if (!checkCollisionObjSet(*o1_obj, o1_loc, rect_o1, o1_rect, robot_2d))
-		{
-			if (!CC_3D) {
-				collision = true;
-			}
-			else {
-				collision = collision || m_planner->CheckRobotCollision(a1, robot_state, t, process);
-			}
-		}
-	}
-
-	return collision;
+	return !m_robot->CheckRobotMovableObjectSpheresCollision(robot_state, a1_state, a1, grasp);
 }
 
 State CollisionChecker::GetRandomStateOutside(fcl::CollisionObject* o)

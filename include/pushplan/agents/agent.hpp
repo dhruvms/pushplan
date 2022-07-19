@@ -94,6 +94,8 @@ public:
 	void UpdatePose(const LatticeState& s);
 	bool OutOfBounds(const LatticeState& s);
 	bool ImmovableCollision();
+	bool RobotObjectCollision(const LatticeState& o_state,
+		const LatticeState& r_state, bool grasp);
 	bool ObjectObjectCollision(const int& a2_id, const LatticeState& a2_q);
 	bool ObjectObjectsCollision(
 			const std::vector<int>& other_ids,

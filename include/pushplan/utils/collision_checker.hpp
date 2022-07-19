@@ -91,7 +91,7 @@ public:
 	bool RobotObjectCollision(
 		Agent* a1, const LatticeState& a1_state,
 		const LatticeState& robot_state,
-		int t, bool process=true);
+		bool grasp);
 
 	State GetRandomStateOutside(fcl::CollisionObject* o);
 

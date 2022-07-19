@@ -45,12 +45,11 @@ public:
 	bool Setup();
 	bool SavePushData(int scene_id, bool reset=true);
 
-	bool CheckCollisionWithObject(const LatticeState& robot, Agent* a, int t);
-	bool CheckCollision(const LatticeState& robot, int t);
 	bool CheckRobotMovableObjectSpheresCollision(
 		const LatticeState& rstate,
 		const LatticeState& ostate,
-		Agent* o);
+		Agent* o,
+		bool grasp=false);
 
 	bool ProcessObstacles(const std::vector<Object>& obstacles, bool remove=false, bool movable=false);
 	bool ProcessObstacles(const std::vector<Object*>& obstacles, bool remove=false, bool movable=false);
