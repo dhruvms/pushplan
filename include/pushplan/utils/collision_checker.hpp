@@ -51,12 +51,13 @@ namespace clutter
 {
 
 class Planner;
+class Robot;
 class Agent;
 
 class CollisionChecker
 {
 public:
-	CollisionChecker(Planner* planner, const std::vector<Object>& obstacles);
+	CollisionChecker(Planner* planner, const std::vector<Object>& obstacles, std::shared_ptr<Robot> r);
 
 	void AddObstacle(const Object& o)
 	{
@@ -73,6 +74,7 @@ public:
 	void AddObstacle(Object* o) {
 		AddObstacle(*o);
 	}
+	void SetRobot(std::shared_ptr<Robot> r) { m_robot = r; };
 
 	void UpdateTraj(const int& priority, const Trajectory& traj);
 
@@ -111,6 +113,7 @@ private:
 	Planner* m_planner = nullptr;
 
 	std::vector<Object> m_obstacles;
+	std::shared_ptr<Robot> m_robot;
 	size_t m_base_loc;
 	std::vector<Trajectory> m_trajs;
 
