@@ -74,7 +74,7 @@ bool Planner::Init(const std::string& scene_file, int scene_id, bool ycb)
 	}
 
 	// create collision checker
-	m_cc = std::make_shared<CollisionChecker>(this, all_obstacles);
+	m_cc = std::make_shared<CollisionChecker>(this, all_obstacles, m_robot);
 
 	m_robot->SetCC(m_cc);
 	for (auto& a: m_agents) {
@@ -100,7 +100,7 @@ bool Planner::Init(const std::string& scene_file, int scene_id, bool ycb)
 		m_cc->AddObstacle(m_ooi->GetObject());
 		m_ooi->SetCC(m_cc);
 		m_robot->SetOOI(m_ooi->GetObject());
-		// m_robot->SetMovables(m_agents);
+		m_robot->SetMovables(m_agents);
 
 		// Compute robot grasping states and plan path through them
 		int t = 0, grasp_tries;

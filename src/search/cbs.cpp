@@ -1,6 +1,6 @@
+#include <pushplan/search/cbs.hpp>
 #include <pushplan/agents/robot.hpp>
 #include <pushplan/agents/agent.hpp>
-#include <pushplan/search/cbs.hpp>
 #include <pushplan/utils/helpers.hpp>
 #include <pushplan/utils/collision_checker.hpp>
 #include <pushplan/utils/constants.hpp>
@@ -83,7 +83,7 @@ bool CBS::Solve(bool backwards)
 			// writeSolution(next);
 			return m_solved;
 		}
-		// writeSolution(next);
+		writeSolution(next);
 
 		if (!next->m_h_computed) {
 			next->computeH();
@@ -117,7 +117,8 @@ void CBS::growConstraintTree(HighLevelNode* parent)
 		if (updateChild(parent, child[i])) {
 			parent->m_children.push_back(child[i]);
 		}
-		else {
+		else
+		{
 			delete (child[i]);
 			continue;
 		}
@@ -149,6 +150,7 @@ bool CBS::initialiseRoot()
 	root->m_g += m_min_fs[0];
 	root->m_flowtime += m_paths[0]->size() - 1;
 	root->m_makespan = std::max(root->m_makespan, (int)m_paths[0]->size());
+	root->m_grasp_at = m_robot->GraspAt();
 
 	// Plan for objects
 	for (size_t i = 0; i < m_objs.size(); ++i)
@@ -258,11 +260,8 @@ void CBS::findConflictsRobot(HighLevelNode& curr, size_t oid)
 	int tmin = std::min(r_traj->size(), a_traj->size());
 	for (int t = 0; t < tmin; ++t)
 	{
-		// m_objs[oid]->UpdatePose(a_traj->at(t));
-		// // if (m_robot->CheckCollisionWithObject(r_traj->at(t), m_objs[oid].get(), t))
-		// if (m_cc->RobotObjectCollision(m_objs[oid].get(), a_traj->at(t), r_traj->at(t), t))
-
-		if (!m_robot->CheckRobotMovableObjectSpheresCollision(r_traj->at(t), a_traj->at(t), m_objs[oid].get()))
+		bool grasp = t >= curr.m_grasp_at;
+		if (!m_robot->CheckRobotMovableObjectSpheresCollision(r_traj->at(t), a_traj->at(t), m_objs[oid].get(), grasp))
 		{
 			std::shared_ptr<Conflict> conflict(new Conflict());
 			conflict->InitConflict(m_robot->GetID(), m_obj_idx_to_id[oid], t, r_traj->at(t), a_traj->at(t), true);
@@ -278,12 +277,10 @@ void CBS::findConflictsRobot(HighLevelNode& curr, size_t oid)
 
 		for (int t = tmin; t < longer->size(); ++t)
 		{
+			bool grasp = t >= curr.m_grasp_at;
 			if (robot_shorter)
 			{
-				// m_objs[oid]->UpdatePose(longer->at(t));
-				// // if (m_robot->CheckCollisionWithObject(shorter->back(), m_objs[oid].get(), t))
-				// if (m_cc->RobotObjectCollision(m_objs[oid].get(), longer->at(t), shorter->back(), t))
-				if (!m_robot->CheckRobotMovableObjectSpheresCollision(shorter->back(), longer->at(t), m_objs[oid].get()))
+				if (!m_robot->CheckRobotMovableObjectSpheresCollision(shorter->back(), longer->at(t), m_objs[oid].get(), grasp))
 				{
 					std::shared_ptr<Conflict> conflict(new Conflict());
 					conflict->InitConflict(m_robot->GetID(), m_obj_idx_to_id[oid], t, shorter->back(), longer->at(t), true);
@@ -292,9 +289,7 @@ void CBS::findConflictsRobot(HighLevelNode& curr, size_t oid)
 			}
 			else
 			{
-				// // if (m_robot->CheckCollision(longer->at(t), t))
-				// if (m_cc->RobotObjectCollision(m_objs[oid].get(), a_traj->back(), longer->at(t), t, false))
-				if (!m_robot->CheckRobotMovableObjectSpheresCollision(longer->at(t), shorter->back(), m_objs[oid].get()))
+				if (!m_robot->CheckRobotMovableObjectSpheresCollision(longer->at(t), shorter->back(), m_objs[oid].get(), grasp))
 				{
 					std::shared_ptr<Conflict> conflict(new Conflict());
 					conflict->InitConflict(m_robot->GetID(), m_obj_idx_to_id[oid], t, longer->at(t), shorter->back(), true);
@@ -463,18 +458,19 @@ bool CBS::updateChild(HighLevelNode* parent, HighLevelNode* child)
 		else {
 			child->m_makespan = std::max(child->m_makespan, (int)m_paths[0]->size());
 		}
+		child->m_grasp_at = m_robot->GraspAt();
 	}
 	else
 	{
-		// update NGR for agent
-		for (const auto& solution : child->m_solution)
-		{
-			if (solution.first == m_robot->GetID())
-			{
-				m_robot->UpdateNGR(solution.second);
-				break;
-			}
-		}
+		// // update NGR for agent
+		// for (const auto& solution : child->m_solution)
+		// {
+		// 	if (solution.first == m_robot->GetID())
+		// 	{
+		// 		m_robot->UpdateNGR(solution.second);
+		// 		break;
+		// 	}
+		// }
 
 		for (size_t i = 0; i < m_objs.size(); ++i)
 		{
@@ -586,14 +582,13 @@ void CBS::writeSolution(HighLevelNode* node)
 		// ss << "_";
 		// ss << std::setw(4) << std::setfill('0') << node->m_depth;
 		// ss << "_";
-		// ss << std::setw(4) << std::setfill('0') << node->m_replanned;
-		// ss << "_";
 		ss << std::setw(6) << std::setfill('0') << m_scene_id;
 		ss << "_";
 		ss << std::setw(4) << std::setfill('0') << tidx;
-		// ss << std::setw(4) << std::setfill('0') << node->m_depth;
-
 		ss << "_";
+		// ss << std::setw(4) << std::setfill('0') << node->m_replanned;
+		// ss << "_";
+
 		auto t = std::time(nullptr);
 		auto tm = *std::localtime(&t);
 		ss << std::put_time(&tm, "%d-%m-%Y-%H-%M-%S");
@@ -720,7 +715,7 @@ void CBS::writeSolution(HighLevelNode* node)
 
 		// write solution trajs
 		DATA << 'T' << '\n';
-		o = m_objs.size();
+		o = node->m_solution.size() - 1;
 		DATA << o << '\n';
 
 		// auto move = m_ooi->GetMoveTraj();
@@ -732,6 +727,10 @@ void CBS::writeSolution(HighLevelNode* node)
 
 		for (size_t oidx = 0; oidx < m_objs.size(); ++oidx)
 		{
+			if (node->m_solution.size() <= oidx+1) {
+				break;
+			}
+
 			auto agent_obs = m_objs[oidx]->GetObject();
 			DATA << agent_obs->desc.id << '\n';
 			DATA << makespan + 1 << '\n';

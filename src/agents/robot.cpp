@@ -1252,7 +1252,7 @@ bool Robot::SatisfyPath(HighLevelNode* ct_node, Trajectory** sol_path, int& expa
 	*sol_path = &(this->m_solve);
 
 	ProcessObstacles({ m_ooi });
-	UpdateNGR();
+	// UpdateNGR();
 
 	// SMPL_INFO("Robot has complete plan! m_solve.size() = %d", m_solve.size());
 	// SV_SHOW_INFO_NAMED("trajectory", makePathVisualization());

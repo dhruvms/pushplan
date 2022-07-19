@@ -110,7 +110,7 @@ struct HighLevelNode
 	std::vector<std::pair<int, Trajectory> > m_solution; // agent solutions
 	DAG m_priorities;
 
-	int m_g, m_flowtime, m_makespan, m_depth, m_generate, m_expand;
+	int m_g, m_flowtime, m_makespan, m_depth, m_generate, m_expand, m_grasp_at;
 	int m_h, m_d;
 	bool m_h_computed;
 
