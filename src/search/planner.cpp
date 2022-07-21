@@ -125,7 +125,6 @@ bool Planner::Init(const std::string& scene_file, int scene_id, bool ycb)
 	setupSim(m_sim.get(), m_robot->GetStartState()->joint_state, armId(), m_ooi->GetID());
 	m_violation = 0x00000008;
 	m_distD = std::uniform_real_distribution<double>(0.0, 1.0);
-	m_C = 25;
 	m_ph.getParam("robot/pushing/input", m_push_input);
 
 	return true;
@@ -295,8 +294,6 @@ bool Planner::Plan(bool& done)
 
 	m_moved = 0;
 	m_cbs_soln_map.clear();
-	m_alphas.clear();
-	m_betas.clear();
 	if (result)
 	{
 		m_cbs->WriteLastSolution();
@@ -313,14 +310,11 @@ bool Planner::Plan(bool& done)
 			++m_moved;
 		}
 
-		if (m_moved == 0)
-		{
+		if (m_moved == 0) {
 			m_plan_success = true;
 		}
-		else
-		{
-			m_alphas.resize(m_moved, 1.0);
-			m_betas.resize(m_moved, 1.0);
+		else {
+			m_distI = std::uniform_int_distribution<>(0, m_moved-1);
 		}
 	}
 
@@ -407,18 +401,6 @@ void Planner::AnimateSolution()
 	animateSolution();
 }
 
-int Planner::chooseObjDTS()
-{
-	std::vector<double> r(m_moved, 0);
-	for (int i = 0; i < m_moved; ++i)
-	{
-		boost::math::beta_distribution<> dist(m_alphas.at(i), m_betas.at(i));
-		r.at(i) = boost::math::quantile(dist, m_distD(m_rng));
-	}
-
-	return (int)std::distance(r.begin(), std::max_element(r.begin(), r.end()));
-}
-
 bool Planner::rearrange()
 {
 	if (m_moved == 0) {
@@ -432,8 +414,7 @@ bool Planner::rearrange()
 
 	comms::ObjectsPoses rearranged = m_rearranged;
 	bool push_found = false;
-	int idx = chooseObjDTS();
-	const auto& path = m_cbs_soln->m_solution[m_cbs_soln_map[idx]];
+	const auto& path = m_cbs_soln->m_solution[m_cbs_soln_map[m_distI(m_rng)]];
 
 	// get push location
 	std::vector<double> push;
@@ -463,9 +444,9 @@ bool Planner::rearrange()
 		push_start_state = m_rearrangements.back().points.back().positions;
 	}
 
-	double push_reward = 0.0;
+	int push_failure;
 	m_timer = GetTime();
-	if (m_robot->PlanPush(push_start_state, m_agents.at(m_agent_map[path.first]).get(), push, movable_obstacles, rearranged, result, push_reward, m_push_input))
+	if (m_robot->PlanPush(push_start_state, m_agents.at(m_agent_map[path.first]).get(), push, movable_obstacles, rearranged, result, push_failure, 1.0, m_push_input))
 	{
 		m_rearrangements.push_back(m_robot->GetLastPlan());
 
@@ -475,20 +456,6 @@ bool Planner::rearrange()
 		SMPL_INFO("Push found!");
 	}
 	m_stats["push_planner_time"] += GetTime() - m_timer;
-
-	// if (push_reward > 0) {
-	// 	m_alphas[idx] += push_reward;
-	// }
-	// if (push_reward < 0) {
-	// 	m_betas[idx] -= push_reward;
-	// }
-
-	// if (m_alphas[idx] + m_betas[idx] > m_C)
-	// {
-	// 	double factor = m_C/double((m_C + std::abs(push_reward)));
-	// 	m_alphas[idx] *= factor;
-	// 	m_betas[idx] *= factor;
-	// }
 
 	m_rearranged = rearranged;
 	m_replan = push_found;

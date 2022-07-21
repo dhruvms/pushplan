@@ -145,8 +145,7 @@ private:
 	std::random_device m_dev;
 	std::mt19937 m_rng;
 	std::uniform_real_distribution<double> m_distD;
-	std::vector<double> m_alphas, m_betas;
-	int m_C;
+	std::uniform_int_distribution<> m_distI;
 
 	ros::NodeHandle m_ph, m_nh;
 	std::uint32_t m_violation;
@@ -159,7 +158,6 @@ private:
 	bool runSim();
 	bool animateSolution();
 	bool rearrange();
-	int chooseObjDTS();
 
 	bool setupProblem(bool backwards);
 	void updateAgentPositions(
