@@ -1486,7 +1486,7 @@ bool Robot::computePushAction(
 		if (!m_rm->computeInverseVelocity(q_, x_dot, q_dot))
 		{
 			// SMPL_INFO("Failed to compute inverse velocity");
-			failure = 1;
+			failure = 2;
 			return false;
 		}
 
@@ -1571,7 +1571,8 @@ bool Robot::PlanPush(
 	Agent* object, const std::vector<double>& push,
 	const std::vector<Object*>& other_movables,	const comms::ObjectsPoses& rearranged,
 	comms::ObjectsPoses& result,
-	double& push_reward,
+	int& push_failure,
+	const double& push_frac,
 	bool input)
 {
 	m_push_trajs.clear();
@@ -1627,7 +1628,7 @@ bool Robot::PlanPush(
 				-99.0,
 				-99.0,
 				-1.0});
-			push_reward = -1;
+			push_failure = 1;
 			continue;
 		}
 
@@ -1651,7 +1652,7 @@ bool Robot::PlanPush(
 				-99.0,
 				-99.0,
 				0.0});
-			push_reward = -1;
+			push_failure = 1;
 			continue;
 		}
 		++m_stats["push_samples_found"];
@@ -1685,22 +1686,20 @@ bool Robot::PlanPush(
 		}
 
 		// compute push action end pose
-		double push_frac = m_distD(m_rng) * 0.5 + 0.5;
-		push_end_pose.translation().x() += std::cos(push_at_angle) * push_dist * push_frac + (m_distG(m_rng) * 0.025);
-		push_end_pose.translation().y() += std::sin(push_at_angle) * push_dist * push_frac + (m_distG(m_rng) * 0.025);
+		push_end_pose.translation().x() += std::cos(push_at_angle) * push_dist * push_frac;
+		push_end_pose.translation().y() += std::sin(push_at_angle) * push_dist * push_frac;
 		// SV_SHOW_INFO_NAMED("push_end_pose", smpl::visual::MakePoseMarkers(
 		// 	push_end_pose, m_grid_i->getReferenceFrame(), "push_end_pose"));
 
 		// get push action trajectory via inverse velocity
 		trajectory_msgs::JointTrajectory push_action;
 		smpl::RobotState joint_vel(m_rm->jointVariableCount(), 0.0);
-		int failure = 0;
 		if (computePushAction(
 				push_traj.points.back().time_from_start.toSec(),
 				push_traj.points.back().positions,
 				joint_vel,
 				push_end_pose,
-				push_action, failure))
+				push_action, push_failure))
 		{
 			// collision check push action against pushed object
 			// ensure that it collides
@@ -1725,7 +1724,7 @@ bool Robot::PlanPush(
 					push_end_pose.translation().x(),
 					push_end_pose.translation().y(),
 					4.0});
-				push_reward = 0.1;
+				push_failure = 4;
 				continue;
 			}
 			ProcessObstacles(pushed_obj, true, false);
@@ -1737,7 +1736,7 @@ bool Robot::PlanPush(
 				push_end_pose.translation().x(),
 				push_end_pose.translation().y(),
 				5.0});
-			push_reward = 1;
+			push_failure = 0;
 
 			// append waypoints to retract to push start pose
 			auto push_action_copy = push_action;
@@ -1765,8 +1764,7 @@ bool Robot::PlanPush(
 				push_start_pose.translation().y(),
 				push_end_pose.translation().x(),
 				push_end_pose.translation().y(),
-				(double)failure});
-			push_reward = -0.5;
+				(double)push_failure});
 		}
 	}
 
@@ -1862,15 +1860,15 @@ void Robot::getPushStartPose(
 	UpdateKDLRobot(link);
 
 	// z is between 3 to 8cm above table height
-	double z = m_table_z + (m_distD(m_rng) * 0.05) + 0.03;
+	double z = m_table_z + 0.03;
 
 	// (x, y) is randomly sampled near push start location
-	double x = push[0] + (m_distG(m_rng) * 0.025);
-	double y = push[1] + (m_distG(m_rng) * 0.025);
+	double x = push[0];
+	double y = push[1];
 	if (!input)
 	{
-		x += std::cos(push[2] + M_PI) * 0.05;
-		y += std::sin(push[2] + M_PI) * 0.05;
+		x += std::cos(push[2] + M_PI) * 0.03;
+		y += std::sin(push[2] + M_PI) * 0.03;
 	}
 
 	push_pose = Eigen::Translation3d(x, y, z) *
