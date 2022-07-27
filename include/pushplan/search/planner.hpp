@@ -59,14 +59,6 @@ public:
 		return m_agents.at(m_agent_map[id])->GetObject();
 	};
 
-	bool CheckRobotCollision(Agent* a, const LatticeState& robot_state, int t, bool process)
-	{
-		if (!process) {
-			return m_robot->CheckCollision(robot_state, t);
-		}
-		return m_robot->CheckCollisionWithObject(robot_state, a, t);
-	}
-
 	std::vector<Agent*> GetAllAgents()
 	{
 		std::vector<Agent*> all_agents;

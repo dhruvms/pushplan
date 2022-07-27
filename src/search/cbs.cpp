@@ -259,7 +259,6 @@ void CBS::findConflictsRobot(HighLevelNode& curr, size_t oid)
 	for (int t = 0; t < tmin; ++t)
 	{
 		m_objs[oid]->UpdatePose(a_traj->at(t));
-		// if (m_robot->CheckCollisionWithObject(r_traj->at(t), m_objs[oid].get(), t))
 		if (m_cc->RobotObjectCollision(m_objs[oid].get(), a_traj->at(t), r_traj->at(t), t))
 		{
 			std::shared_ptr<Conflict> conflict(new Conflict());
@@ -288,7 +287,6 @@ void CBS::findConflictsRobot(HighLevelNode& curr, size_t oid)
 			if (robot_shorter)
 			{
 				m_objs[oid]->UpdatePose(longer->at(t));
-				// if (m_robot->CheckCollisionWithObject(shorter->back(), m_objs[oid].get(), t))
 				if (m_cc->RobotObjectCollision(m_objs[oid].get(), longer->at(t), shorter->back(), t))
 				{
 					std::shared_ptr<Conflict> conflict(new Conflict());
