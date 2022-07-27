@@ -206,6 +206,13 @@ bool Planner::FinalisePlan(bool add_movables)
 		movable_obstacles.push_back(a->GetObject());
 	}
 
+	std::vector<int> reachables;
+	m_robot->IdentifyReachableMovables(movable_obstacles, reachables);
+	SMPL_WARN("Reachable movables:");
+	for (const auto& id: reachables) {
+		SMPL_WARN("\tObject %d", id);
+	}
+
 	m_robot->ProcessObstacles({ m_ooi->GetObject() }, true);
 	// if (!m_robot->PlanApproachOnly(movable_obstacles)) {
 	smpl::RobotState start_state = {};

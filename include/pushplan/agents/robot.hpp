@@ -40,15 +40,11 @@ public:
 	int GetID() { return m_id; };
 
 	bool Setup();
-	bool SavePushData(int scene_id, bool reset=true);
-
-	bool CheckCollisionWithObject(const LatticeState& robot, Agent* a, int t);
-	bool CheckCollision(const LatticeState& robot, int t);
-
+	void SetMovables(const std::vector<std::shared_ptr<Agent> >& agents);
+	bool SetScene(const comms::ObjectsPoses& objects);
 	bool ProcessObstacles(const std::vector<Object>& obstacles, bool remove=false, bool movable=false);
 	bool ProcessObstacles(const std::vector<Object*>& obstacles, bool remove=false, bool movable=false);
 
-	bool SetScene(const comms::ObjectsPoses& objects);
 	bool SteerAction(
 		const smpl::RobotState& to, int steps,
 		const smpl::RobotState& from, const comms::ObjectsPoses& start_objs,
@@ -57,7 +53,6 @@ public:
 	void GetRandomState(smpl::RobotState& s);
 
 	bool Init();
-	void SetMovables(const std::vector<std::shared_ptr<Agent> >& agents);
 	bool RandomiseStart();
 	bool PlanApproachOnly(const std::vector<Object*>& movable_obstacles);
 	bool PlanRetrieval(const std::vector<Object*>& movable_obstacles, bool finalise=false, smpl::RobotState start_state={});
@@ -90,6 +85,10 @@ public:
 		int& push_failure,
 		const double& push_frac,
 		bool input=false);
+	void IdentifyReachableMovables(
+		const std::vector<Object*>& movables,
+		std::vector<int>& reachable_ids);
+
 	trajectory_msgs::JointTrajectory GetLastPlanProfiled()
 	{
 		m_planner->ProfilePath(m_rm.get(), m_traj);
@@ -187,6 +186,7 @@ public:
 	void RunManipulabilityStudy(int N=1000);
 	void RunPushIKStudy(int N=25);
 	void VizPlane(double z);
+	bool SavePushData(int scene_id, bool reset=true);
 
 	// For KPIECE
 	bool ComputeGraspTraj(const smpl::RobotState& state, trajectory_msgs::JointTrajectory& grasp_traj);

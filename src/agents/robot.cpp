@@ -190,81 +190,6 @@ bool Robot::Setup()
 	return true;
 }
 
-bool Robot::SavePushData(int scene_id, bool reset)
-{
-	std::string filename(__FILE__);
-	auto found = filename.find_last_of("/\\");
-	filename = filename.substr(0, found + 1) + "../../dat/ROBOT.csv";
-
-	bool exists = FileExists(filename);
-	std::ofstream STATS;
-	STATS.open(filename, std::ofstream::out | std::ofstream::app);
-	if (!exists)
-	{
-		STATS << "UID,"
-				<< "PlanPushCalls,PushSamplesFound,PushActionsFound,"
-				<< "PushPlanTime,PushSimTime,PushSimSuccesses\n";
-	}
-
-	STATS << scene_id << ','
-			<< m_stats["plan_push_calls"] << ',' << m_stats["push_samples_found"] << ',' << m_stats["push_actions_found"] << ','
-			<< m_stats["push_plan_time"] << ',' << m_stats["push_sim_time"] << ','
-			<< m_stats["push_sim_successes"] << '\n';
-	STATS.close();
-
-	if (reset)
-	{
-		m_stats["plan_push_calls"] = 0;
-		m_stats["push_samples_found"] = 0;
-		m_stats["push_actions_found"] = 0;
-		m_stats["push_plan_time"] = 0.0;
-		m_stats["push_sim_time"] = 0.0;
-		m_stats["push_sim_successes"] = 0;
-	}
-}
-
-bool Robot::CheckCollisionWithObject(const LatticeState& robot, Agent* a, int t)
-{
-	// if (t > m_grasp_at + 1) {
-	// 	attachObject(m_ooi);
-	// }
-	std::vector<Object*> o;
-	o.push_back(a->GetObject());
-	ProcessObstacles(o, false, true);
-
-	bool collision = !m_cc_m->isStateValid(robot.state);
-
-	// if (t > m_grasp_at + 1) {
-	// 	detachObject();
-	// }
-	ProcessObstacles(o, true, true);
-
-	return collision;
-}
-
-bool Robot::CheckCollision(const LatticeState& robot, int t)
-{
-	// if (t > m_grasp_at + 1) {
-	// 	attachObject(m_ooi);
-	// }
-
-	bool collision = !m_cc_m->isStateValid(robot.state);
-	// if (collision) {
-	// 	auto* vis_name = "conflict";
-	// 	auto markers = m_cc_m->getCollisionModelVisualization(robot.state);
-	// 	for (auto& marker : markers) {
-	// 		marker.ns = vis_name;
-	// 	}
-	// 	SV_SHOW_INFO_NAMED(vis_name, markers);
-	// 	SMPL_ERROR("Conflict at time %d", t);
-	// }
-
-	// if (t > m_grasp_at + 1) {
-	// 	detachObject();
-	// }
-	return collision;
-}
-
 void Robot::SetMovables(const std::vector<std::shared_ptr<Agent> >& agents)
 {
 	moveit_msgs::CollisionObject mov_obj;
@@ -273,6 +198,40 @@ void Robot::SetMovables(const std::vector<std::shared_ptr<Agent> >& agents)
 		a->GetMoveitObj(mov_obj);
 		m_movables.push_back(mov_obj);
 	}
+}
+
+bool Robot::SetScene(const comms::ObjectsPoses& objects)
+{
+	for (const auto& object : objects.poses)
+	{
+		// find the collision object with this name
+		auto* cc_object = findCollisionObject(std::to_string(object.id), true);
+		if (!cc_object) {
+			return false;
+		}
+
+		Eigen::Affine3d pose = Eigen::Translation3d(object.xyz[0], object.xyz[1], object.xyz[2]) *
+			Eigen::AngleAxisd(object.rpy[2], Eigen::Vector3d::UnitZ()) *
+			Eigen::AngleAxisd(object.rpy[1], Eigen::Vector3d::UnitY()) *
+			Eigen::AngleAxisd(object.rpy[0], Eigen::Vector3d::UnitX());
+
+		if (cc_object->shape_poses[0].translation() == pose.translation()
+			&& cc_object->shape_poses[0].rotation() == pose.rotation()) {
+			continue;
+		}
+		else
+		{
+			cc_object->shape_poses[0] = pose;
+			if (!m_cc_m->moveShapes(cc_object)) {
+				return false;
+			}
+		}
+	}
+
+	// if (!objects.poses.empty()) {
+	// 	SV_SHOW_INFO(m_cc_m->getCollisionWorldVisualization());
+	// }
+	return true;
 }
 
 bool Robot::ProcessObstacles(const std::vector<Object>& obstacles,
@@ -328,40 +287,6 @@ bool Robot::ProcessObstacles(const std::vector<Object*>& obstacles,
 
 	auto cc = movable ? m_cc_m.get() : m_cc_i.get();
 	SV_SHOW_INFO(cc->getCollisionWorldVisualization());
-	return true;
-}
-
-bool Robot::SetScene(const comms::ObjectsPoses& objects)
-{
-	for (const auto& object : objects.poses)
-	{
-		// find the collision object with this name
-		auto* cc_object = findCollisionObject(std::to_string(object.id), true);
-		if (!cc_object) {
-			return false;
-		}
-
-		Eigen::Affine3d pose = Eigen::Translation3d(object.xyz[0], object.xyz[1], object.xyz[2]) *
-			Eigen::AngleAxisd(object.rpy[2], Eigen::Vector3d::UnitZ()) *
-			Eigen::AngleAxisd(object.rpy[1], Eigen::Vector3d::UnitY()) *
-			Eigen::AngleAxisd(object.rpy[0], Eigen::Vector3d::UnitX());
-
-		if (cc_object->shape_poses[0].translation() == pose.translation()
-			&& cc_object->shape_poses[0].rotation() == pose.rotation()) {
-			continue;
-		}
-		else
-		{
-			cc_object->shape_poses[0] = pose;
-			if (!m_cc_m->moveShapes(cc_object)) {
-				return false;
-			}
-		}
-	}
-
-	// if (!objects.poses.empty()) {
-	// 	SV_SHOW_INFO(m_cc_m->getCollisionWorldVisualization());
-	// }
 	return true;
 }
 
@@ -1564,6 +1489,33 @@ bool Robot::computePushAction(
 	// SMPL_INFO("Failed to reach end pose");
 	failure = 1;
 	return false;
+}
+
+void Robot::IdentifyReachableMovables(
+	const std::vector<Object*>& movables,
+	std::vector<int>& reachable_ids)
+{
+	reachable_ids.clear();
+	ProcessObstacles(movables);
+	Eigen::Affine3d obj_pose;
+	trajectory_msgs::JointTrajectory traj;
+
+	for (size_t i = 0; i < movables.size(); ++i)
+	{
+		std::vector<Object*> plan_to = { movables[i] };
+		ProcessObstacles(plan_to, true);
+
+		obj_pose = Eigen::Translation3d(movables[i]->desc.o_x, movables[i]->desc.o_y, movables[i]->desc.o_z) *
+				Eigen::AngleAxisd(movables[i]->desc.o_yaw, Eigen::Vector3d::UnitZ()) *
+				Eigen::AngleAxisd(movables[i]->desc.o_pitch, Eigen::Vector3d::UnitY()) *
+				Eigen::AngleAxisd(movables[i]->desc.o_roll, Eigen::Vector3d::UnitX());
+		if (planToPoseGoal(m_start_state, obj_pose, traj))
+		{
+			// object i is reachable
+			reachable_ids.push_back(movables[i]->desc.id);
+		}
+		ProcessObstacles(plan_to);
+	}
 }
 
 bool Robot::PlanPush(
@@ -3396,6 +3348,39 @@ void Robot::VizPlane(double z)
 	marker.color.b = 0.16;
 
 	m_vis_pub.publish(marker);
+}
+
+bool Robot::SavePushData(int scene_id, bool reset)
+{
+	std::string filename(__FILE__);
+	auto found = filename.find_last_of("/\\");
+	filename = filename.substr(0, found + 1) + "../../dat/ROBOT.csv";
+
+	bool exists = FileExists(filename);
+	std::ofstream STATS;
+	STATS.open(filename, std::ofstream::out | std::ofstream::app);
+	if (!exists)
+	{
+		STATS << "UID,"
+				<< "PlanPushCalls,PushSamplesFound,PushActionsFound,"
+				<< "PushPlanTime,PushSimTime,PushSimSuccesses\n";
+	}
+
+	STATS << scene_id << ','
+			<< m_stats["plan_push_calls"] << ',' << m_stats["push_samples_found"] << ',' << m_stats["push_actions_found"] << ','
+			<< m_stats["push_plan_time"] << ',' << m_stats["push_sim_time"] << ','
+			<< m_stats["push_sim_successes"] << '\n';
+	STATS.close();
+
+	if (reset)
+	{
+		m_stats["plan_push_calls"] = 0;
+		m_stats["push_samples_found"] = 0;
+		m_stats["push_actions_found"] = 0;
+		m_stats["push_plan_time"] = 0.0;
+		m_stats["push_sim_time"] = 0.0;
+		m_stats["push_sim_successes"] = 0;
+	}
 }
 
 } // namespace clutter
