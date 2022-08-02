@@ -1,5 +1,6 @@
 #include <pushplan/agents/agent_lattice.hpp>
 #include <pushplan/agents/agent.hpp>
+#include <pushplan/utils/discretisation.hpp>
 #include <pushplan/utils/geometry.hpp>
 
 auto std::hash<clutter::LatticeState>::operator()(
@@ -214,7 +215,10 @@ int AgentLattice::generateSuccessor(
 	child.coord = parent->coord;
 	child.coord.at(0) += dx;
 	child.coord.at(1) += dy;
-	DiscToCont(child.coord, child.state);
+
+	child.state.clear();
+	child.state.push_back(DiscretisationManager::DiscXToContX(child.coord.at(0)));
+	child.state.push_back(DiscretisationManager::DiscYToContY(child.coord.at(1)));
 	child.state.insert(child.state.end(), parent->state.begin() + 2, parent->state.end());
 
 	// m_agent->VisualiseState(child, "expansion");
@@ -314,7 +318,10 @@ int AgentLattice::generateSuccessorPP(
 	child.coord = parent->coord;
 	child.coord.at(0) += dx;
 	child.coord.at(1) += dy;
-	DiscToCont(child.coord, child.state);
+
+	child.state.clear();
+	child.state.push_back(DiscretisationManager::DiscXToContX(child.coord.at(0)));
+	child.state.push_back(DiscretisationManager::DiscYToContY(child.coord.at(1)));
 	child.state.insert(child.state.end(), parent->state.begin() + 2, parent->state.end());
 
 	m_agent->UpdatePose(child);

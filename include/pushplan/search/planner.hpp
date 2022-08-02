@@ -5,6 +5,7 @@
 #include <pushplan/agents/robot.hpp>
 #include <pushplan/utils/bullet_sim.hpp>
 #include <pushplan/utils/collision_checker.hpp>
+#include <pushplan/utils/discretisation.hpp>
 #include <pushplan/utils/types.hpp>
 #include <comms/ObjectsPoses.h>
 
@@ -125,6 +126,7 @@ private:
 	Coord m_ooi_g;
 	State m_ooi_gf;
 	std::vector<double> m_goal;
+	WorldResolutionParams m_disc_params;
 
 	int m_grasp_at;
 	trajectory_msgs::JointTrajectory m_exec;
@@ -163,6 +165,7 @@ private:
 	void read_solution();
 	void writePlanState(int iter);
 	void setupGlobals();
+	void readDiscretisationParams();
 	int armId();
 
 	bool savePlanData();

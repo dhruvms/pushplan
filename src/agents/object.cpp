@@ -1,9 +1,11 @@
 #include <pushplan/agents/object.hpp>
 #include <pushplan/utils/constants.hpp>
+#include <pushplan/utils/discretisation.hpp>
 #include <pushplan/utils/helpers.hpp>
 
 #include <sbpl_collision_checking/collision_model_config.h>
 #include <sbpl_collision_checking/voxel_operations.h>
+#include <smpl/angles.h>
 #include <smpl/stl/memory.h>
 #include <fcl/shape/geometric_shapes.h>
 #include <fcl/BVH/BVH_model.h>
@@ -440,7 +442,7 @@ fcl::AABB Object::ComputeAABBTight()
 void Object::updateSphereState(const smpl::collision::SphereIndex& sidx)
 {
 	smpl::collision::CollisionSphereState& sphere_state = spheres_state->spheres[sidx.s];
-    sphere_state.pos = m_T * sphere_state.model->center;
+	sphere_state.pos = m_T * sphere_state.model->center;
 }
 
 void Object::updateVoxelsState(const Eigen::Affine3d& T)
@@ -458,7 +460,7 @@ bool Object::createSpheresModel(
 	const std::vector<shapes::ShapeConstPtr>& shapes,
 	const smpl::collision::Affine3dVector& transforms)
 {
-	ROS_DEBUG("  Generate spheres model");
+	ROS_DEBUG("	Generate spheres model");
 
 	// create configuration spheres and a spheres model for this body
 	smpl::collision::CollisionSpheresModelConfig config;
@@ -470,7 +472,7 @@ bool Object::createSpheresModel(
 	spheres_model = new smpl::collision::CollisionSpheresModel;
 	spheres_model->link_index = 0;
 	spheres_model->spheres.buildFrom(config.spheres);
-	ROS_DEBUG("  Spheres Model: %p", spheres_model);
+	ROS_DEBUG("	Spheres Model: %p", spheres_model);
 
 	// TODO: possible make this more automatic?
 	for (auto& sphere : spheres_model->spheres.m_tree) {
@@ -488,7 +490,7 @@ bool Object::createVoxelsModel(
 	const std::vector<shapes::ShapeConstPtr>& shapes,
 	const smpl::collision::Affine3dVector& transforms)
 {
-	ROS_DEBUG("  Generate voxels model");
+	ROS_DEBUG("	Generate voxels model");
 
 	// create configuration voxels model for this body
 	smpl::collision::CollisionVoxelModelConfig config;
@@ -511,7 +513,7 @@ bool Object::createVoxelsModel(
 
 	voxels_state = new smpl::collision::CollisionVoxelsState;
 	voxels_state->model = voxels_model;
-    voxels_state->voxels = voxels_model->voxels;
+	voxels_state->voxels = voxels_model->voxels;
 
 	return true;
 }

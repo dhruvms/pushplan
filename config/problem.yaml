@@ -77,6 +77,12 @@ objects:
   num_immov: 5
   num_mov: 5
   ycb: false
+  discretisation:
+    x        0.01
+    y        0.01
+    theta    0.0872665
+    ox       0.0
+    oy       0.0
 
 sampling:
   samples: 25000

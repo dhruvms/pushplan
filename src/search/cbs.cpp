@@ -4,6 +4,7 @@
 #include <pushplan/utils/helpers.hpp>
 #include <pushplan/utils/collision_checker.hpp>
 #include <pushplan/utils/constants.hpp>
+#include <pushplan/utils/discretisation.hpp>
 
 #include <smpl/console/console.h>
 
@@ -715,7 +716,8 @@ void CBS::writeSolution(HighLevelNode* node)
 		{
 			auto g = m_objs[oidx]->Goal();
 			State gs;
-			DiscToCont(g, gs);
+			gs.push_back(DiscretisationManager::DiscXToContX(g.at(0)));
+			gs.push_back(DiscretisationManager::DiscYToContY(g.at(1)));
 			DATA << m_obj_idx_to_id[oidx] << ',' << gs.at(0) << ',' << gs.at(1) << '\n';
 		}
 
@@ -786,9 +788,9 @@ void CBS::writeSolution(HighLevelNode* node)
 		{
 			for (auto itr = itr_list->begin(); itr != itr_list->end(); ++itr)
 			{
-				State s = { itr->x(), itr->y() };
 				Coord c;
-				ContToDisc(s, c);
+				c.push_back(DiscretisationManager::ContXToDiscX(itr->x()));
+				c.push_back(DiscretisationManager::ContYToDiscY(itr->y()));
 				ngr.insert(c);
 			}
 		}

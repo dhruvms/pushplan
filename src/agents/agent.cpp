@@ -5,6 +5,7 @@
 #include <pushplan/search/wastar.hpp>
 #include <pushplan/search/focal.hpp>
 #include <pushplan/utils/constants.hpp>
+#include <pushplan/utils/discretisation.hpp>
 #include <pushplan/utils/geometry.hpp>
 
 #include <smpl/console/console.h>
@@ -54,7 +55,11 @@ bool Agent::Init(bool backwards)
 	m_init.state.clear();
 	m_init.state = { 	m_obj_desc.o_x, m_obj_desc.o_y, m_obj_desc.o_z,
 						m_obj_desc.o_roll, m_obj_desc.o_pitch, m_obj_desc.o_yaw };
-	ContToDisc(m_init.state, m_init.coord);
+
+	m_init.coord.clear();
+	m_init.coord.resize(2, 0);
+	m_init.coord.at(0) = DiscretisationManager::ContXToDiscX(m_init.state.at(0));
+	m_init.coord.at(1) = DiscretisationManager::ContYToDiscY(m_init.state.at(1));
 	// VisualiseState(m_init, "start_state", 90);
 
 	// if (m_solve.empty()) {
@@ -171,7 +176,11 @@ bool Agent::InitPP()
 	m_init.state.clear();
 	m_init.state = { 	m_obj_desc.o_x, m_obj_desc.o_y, m_obj_desc.o_z,
 						m_obj_desc.o_roll, m_obj_desc.o_pitch, m_obj_desc.o_yaw };
-	ContToDisc(m_init.state, m_init.coord);
+
+	m_init.coord.clear();
+	m_init.coord.resize(2, 0);
+	m_init.coord.at(0) = DiscretisationManager::ContXToDiscX(m_init.state.at(0));
+	m_init.coord.at(1) = DiscretisationManager::ContYToDiscY(m_init.state.at(1));
 }
 
 bool Agent::PlanPrioritised(int p)
@@ -256,8 +265,10 @@ double Agent::ObsDist(double x, double y)
 void Agent::VisualiseState(const Coord& c, const std::string& ns, int hue)
 {
 	LatticeState s;
-	s.coord = c;
-	DiscToCont(s.coord, s.state);
+	s.state.clear();
+	s.state.resize(2, 0.0);
+	s.state.at(0) = DiscretisationManager::DiscXToContX(c.at(0));
+	s.state.at(1) = DiscretisationManager::DiscYToContY(c.at(1));
 	VisualiseState(s, ns, hue);
 }
 
@@ -504,8 +515,10 @@ bool Agent::computeGoal(bool backwards)
 
 		m_ngr_grid->gridToWorld(best_outside_pos[0], best_outside_pos[1], best_outside_pos[2], wx, wy, wz);
 
-		State goal = {wx, wy};
-		ContToDisc(goal, m_goal);
+		m_goal.clear();
+		m_goal.resize(2, 0);
+		m_goal.at(0) = DiscretisationManager::ContXToDiscX(wx);
+		m_goal.at(1) = DiscretisationManager::ContYToDiscY(wy);
 
 		// VisualiseState(m_goal, "goal_state", 20);
 		return true;

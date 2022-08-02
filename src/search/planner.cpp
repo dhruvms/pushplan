@@ -8,6 +8,7 @@
 #include <pushplan/sampling/rrtstar.hpp>
 #include <pushplan/sampling/tcrrt.hpp>
 #include <pushplan/utils/constants.hpp>
+#include <pushplan/utils/discretisation.hpp>
 #include <pushplan/utils/geometry.hpp>
 #include <pushplan/utils/helpers.hpp>
 #include <comms/ObjectPose.h>
@@ -60,6 +61,7 @@ bool Planner::Init(const std::string& scene_file, int scene_id, bool ycb)
 	m_ph.getParam("goal/total_budget", m_total_budget);
 
 	setupGlobals();
+	readDiscretisationParams();
 
 	m_agent_map.clear();
 	m_agents.clear();
@@ -96,7 +98,8 @@ bool Planner::Init(const std::string& scene_file, int scene_id, bool ycb)
 	if (m_ooi->Set())
 	{
 		m_ooi_gf = m_cc->GetRandomStateOutside(m_ooi->GetFCLObject());
-		ContToDisc(m_ooi_gf, m_ooi_g);
+		m_ooi_g.push_back(DiscretisationManager::ContXToDiscX(m_ooi_gf.at(0)));
+		m_ooi_g.push_back(DiscretisationManager::ContYToDiscY(m_ooi_gf.at(1)));
 		m_cc->AddObstacle(m_ooi->GetObject());
 		m_ooi->SetCC(m_cc);
 		m_robot->SetOOI(m_ooi->GetObject());
@@ -951,6 +954,20 @@ void Planner::setupGlobals()
 	HLHC = static_cast<HighLevelConflictHeuristic>(hlhc);
 }
 
+void Planner::readDiscretisationParams()
+{
+	std::string disc_string;
+	if (!m_ph.getParam("objects/discretisation", disc_string)) {
+		throw std::runtime_error("Parameter 'objects/discretisation' not found in planning params");
+	}
+
+	auto disc = ParseMapFromString<double>(disc_string);
+	SetWorldResolutionParams(
+		disc["x"], disc["y"], disc["theta"],
+		disc["ox"], disc["oy"], m_disc_params);
+	DiscretisationManager::Initialize(m_disc_params);
+}
+
 int Planner::armId()
 {
 	int arm;
@@ -1156,9 +1173,9 @@ bool Planner::RunPP()
 	{
 		for (auto itr = itr_list->begin(); itr != itr_list->end(); ++itr)
 		{
-			State s = { itr->x(), itr->y() };
 			Coord c;
-			ContToDisc(s, c);
+			c.push_back(DiscretisationManager::ContXToDiscX(itr->x()));
+			c.push_back(DiscretisationManager::ContYToDiscY(itr->y()));
 			ngr.insert(c);
 		}
 	}

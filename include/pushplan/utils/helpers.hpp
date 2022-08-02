@@ -39,27 +39,6 @@ int sgn(T val) {
 	return (T(0) < val) - (val < T(0));
 }
 
-
-inline
-void ContToDisc(const State& in, Coord& out)
-{
-	out.clear();
-	out.resize(2, 0);
-
-	out.at(0) = (in.at(0) / RES) + sgn(in.at(0)) * 0.5;
-	out.at(1) = (in.at(1) / RES) + sgn(in.at(1)) * 0.5;
-}
-
-inline
-void DiscToCont(const Coord& in, State& out)
-{
-	out.clear();
-	out.resize(2, 0.0);
-
-	out.at(0) = in.at(0) * RES;
-	out.at(1) = in.at(1) * RES;
-}
-
 inline
 double dot(const State& a, const State& b)
 {

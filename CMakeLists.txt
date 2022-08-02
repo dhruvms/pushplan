@@ -44,7 +44,6 @@ include_directories(include)
 add_library(
 	PUSHPLAN
 	src/search/planner.cpp
-	src/utils/bullet_sim.cpp
 	src/search/cbs_nodes.cpp
 	src/search/cbs.cpp
 	src/search/cbswp.cpp
@@ -57,11 +56,13 @@ add_library(
 	src/sampling/rrtstar.cpp
 	src/sampling/tcrrt.cpp
 	src/sampling/ompl.cpp
-	src/utils/collision_checker.cpp
 	src/agents/object.cpp
 	src/agents/agent_lattice.cpp
 	src/agents/agent.cpp
 	src/agents/robot.cpp
+	src/utils/bullet_sim.cpp
+	src/utils/collision_checker.cpp
+	src/utils/discretisation.cpp
 	src/utils/constants.cpp)
 target_link_libraries(PUSHPLAN ${catkin_LIBRARIES} smpl::smpl) # -lprofiler
 
