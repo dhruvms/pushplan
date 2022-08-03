@@ -91,6 +91,126 @@ private:
 		smpl::collision::CollisionVoxelsModel& model) const;
 };
 
+class ContPose;
+class DiscPose;
+class ObjectState;
+
+class ContPose
+{
+public:
+	ContPose() = default;
+	ContPose(const ContPose& other) = default;
+	ContPose(double x, double y, double z, double roll, double pitch, double yaw);
+	ContPose(const DiscPose &disc_pose);
+
+	const double &x() const {
+		return m_x;
+	}
+	const double &y() const {
+		return m_y;
+	}
+	const double &z() const {
+		return m_z;
+	}
+	const double &roll() const {
+		return m_roll;
+	}
+	const double &pitch() const {
+		return m_pitch;
+	}
+	const double &yaw() const {
+		return m_yaw;
+	}
+	Eigen::Affine3d GetTransform() const;
+
+	bool operator==(const ContPose &other) const;
+	bool operator!=(const ContPose &other) const;
+
+private:
+	double m_x = 0.0;
+	double m_y = 0.0;
+	double m_z = 0.0;
+	double m_roll = 0.0;
+	double m_pitch = 0.0;
+	double m_yaw = 0.0;
+};
+
+class DiscPose
+{
+public:
+	DiscPose() = default;
+	DiscPose(const DiscPose& other) = default;
+	DiscPose(int x, int y, int z, int roll, int pitch, int yaw);
+	DiscPose(const ContPose &cont_pose);
+
+	const int &x() const {
+		return m_x;
+	}
+	const int &y() const {
+		return m_y;
+	}
+	const int &z() const {
+		return m_z;
+	}
+	const int &roll() const {
+		return m_roll;
+	}
+	const int &pitch() const {
+		return m_pitch;
+	}
+	const int &yaw() const {
+		return m_yaw;
+	}
+
+	bool operator==(const DiscPose &other) const;
+	bool operator!=(const DiscPose &other) const;
+	bool EqualsPosition(const DiscPose &other) const;
+
+private:
+	int m_x = 0;
+	int m_y = 0;
+	int m_z = 0;
+	int m_roll = 0;
+	int m_pitch = 0;
+	int m_yaw = 0;
+};
+
+class ObjectState
+{
+public:
+	ObjectState();
+	ObjectState(int id, bool symmetric, const ContPose &cont_pose);
+	ObjectState(int id, bool symmetric, const DiscPose &disc_pose);
+
+	const int &id() const {
+		return m_id;
+	}
+	const bool &symmetric() const {
+		return m_symmetric;
+	}
+	const ContPose &cont_pose() const {
+		return m_cont_pose;
+	}
+	const DiscPose &disc_pose() const {
+		return m_disc_pose;
+	}
+
+	// Two object states are equal if they have the same ID and have the same discrete pose (up to symmetry).
+	bool operator==(const ObjectState &other) const;
+	bool operator!=(const ObjectState &other) const;
+
+private:
+	int m_id;
+	bool m_symmetric;
+	ContPose m_cont_pose;
+	DiscPose m_disc_pose;
+};
+
+std::ostream &operator<< (std::ostream &stream, const DiscPose &disc_pose);
+std::ostream &operator<< (std::ostream &stream, const ContPose &cont_pose);
+std::ostream &operator<< (std::ostream &stream,
+							const ObjectState &object_state);
+
 } // namespace clutter
 
 

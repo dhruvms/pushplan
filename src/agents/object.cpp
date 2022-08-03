@@ -598,4 +598,169 @@ bool Object::voxelizeAttachedBody(
 	return true;
 }
 
+constexpr double kFloatingPointTolerance = 1e-5;
+
+///////////////////////////////////////////////////////////////////////////////
+// ContPose
+///////////////////////////////////////////////////////////////////////////////
+
+ContPose::ContPose(double x, double y, double z, double roll, double pitch,
+					double yaw) :
+m_x(x), m_y(y), m_z(z),
+m_roll(smpl::angles::normalize_angle_positive(roll)),
+m_pitch(smpl::angles::normalize_angle_positive(pitch)),
+m_yaw(smpl::angles::normalize_angle_positive(yaw))
+{}
+
+ContPose::ContPose(const DiscPose &disc_pose)
+{
+	m_x = DiscretisationManager::DiscXToContX(disc_pose.x());
+	m_y = DiscretisationManager::DiscYToContY(disc_pose.y());
+	// TODO: add DiscZToContZ, or use uniform resolution for x,y and z.
+	m_z = DiscretisationManager::DiscYToContY(disc_pose.z());
+	// TODO: use "DiscAngleToContAngle"
+	m_roll = DiscretisationManager::DiscYawToContYaw(disc_pose.roll());
+	m_pitch = DiscretisationManager::DiscYawToContYaw(disc_pose.pitch());
+	m_yaw = DiscretisationManager::DiscYawToContYaw(disc_pose.yaw());
+}
+
+bool ContPose::operator==(const ContPose &other) const
+{
+	return fabs(m_x - other.x()) < kFloatingPointTolerance &&
+			fabs(m_y - other.y()) < kFloatingPointTolerance &&
+			fabs(m_z - other.z()) < kFloatingPointTolerance &&
+			fabs(m_roll - other.roll()) < kFloatingPointTolerance &&
+			fabs(m_pitch - other.pitch()) < kFloatingPointTolerance &&
+			fabs(m_yaw - other.yaw()) < kFloatingPointTolerance;
+}
+
+bool ContPose::operator!=(const ContPose &other) const
+{
+	return !(*this == other);
+}
+
+Eigen::Affine3d ContPose::GetTransform() const
+{
+	const Eigen::AngleAxisd roll_angle(m_roll, Eigen::Vector3d::UnitX());
+	const Eigen::AngleAxisd pitch_angle(m_pitch, Eigen::Vector3d::UnitY());
+	const Eigen::AngleAxisd yaw_angle(m_yaw, Eigen::Vector3d::UnitZ());
+	const Eigen::Quaterniond quaternion = yaw_angle * pitch_angle * roll_angle;
+	const Eigen::Affine3d transform(Eigen::Translation3d(m_x, m_y, m_z) * quaternion);
+	return transform;
+}
+
+std::ostream &operator<< (std::ostream &stream, const ContPose &cont_pose)
+{
+	stream << "("
+			<< cont_pose.x() << ", "
+			<< cont_pose.y() << ", "
+			<< cont_pose.z() << ", "
+			<< cont_pose.roll() << ", "
+			<< cont_pose.pitch() << ", "
+			<< cont_pose.yaw()
+			<< ")";
+	return stream;
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// DiscPose
+///////////////////////////////////////////////////////////////////////////////
+
+DiscPose::DiscPose(int x, int y, int z, int roll, int pitch, int yaw) :
+m_x(x), m_y(y), m_z(z),
+m_roll(DiscretisationManager::NormalizeDiscreteTheta(roll)),
+m_pitch(DiscretisationManager::NormalizeDiscreteTheta(pitch)),
+m_yaw(DiscretisationManager::NormalizeDiscreteTheta(yaw))
+{}
+
+DiscPose::DiscPose(const ContPose &cont_pose)
+{
+	m_x = DiscretisationManager::ContXToDiscX(cont_pose.x());
+	m_y = DiscretisationManager::ContYToDiscY(cont_pose.y());
+	m_z = DiscretisationManager::ContYToDiscY(cont_pose.z());
+	m_roll = DiscretisationManager::ContYawToDiscYaw(cont_pose.roll());
+	m_pitch = DiscretisationManager::ContYawToDiscYaw(cont_pose.pitch());
+	m_yaw = DiscretisationManager::ContYawToDiscYaw(cont_pose.yaw());
+}
+
+bool DiscPose::operator==(const DiscPose &other) const
+{
+	return m_x == other.x() && m_y == other.y() && m_z == other.z() &&
+			m_roll == other.roll() && m_pitch == other.pitch() && m_yaw == other.yaw();
+}
+
+bool DiscPose::operator!=(const DiscPose &other) const
+{
+	return !(*this == other);
+}
+
+bool DiscPose::EqualsPosition(const DiscPose &other) const
+{
+	return m_x == other.x() && m_y == other.y() && m_z == other.z();
+}
+
+std::ostream &operator<< (std::ostream &stream, const DiscPose &disc_pose) {
+	stream << "("
+				<< disc_pose.x() << ", "
+				<< disc_pose.y() << ", "
+				<< disc_pose.z() << ", "
+				<< disc_pose.roll() << ", "
+				<< disc_pose.pitch() << ", "
+				<< disc_pose.yaw()
+				<< ")";
+	return stream;
+}
+
+///////////////////////////////////////////////////////////////////////////////
+// ObjectState
+///////////////////////////////////////////////////////////////////////////////
+
+ObjectState::ObjectState() :
+m_id(-1), m_symmetric(false),
+m_cont_pose(0.0, 0.0, 0.0, 0.0, 0.0, 0.0),
+m_disc_pose(0, 0, 0, 0, 0, 0)
+{}
+
+ObjectState::ObjectState(int id, bool symmetric, const ContPose &cont_pose) :
+m_id(id), m_symmetric(symmetric),	m_cont_pose(cont_pose), m_disc_pose(cont_pose) {}
+
+ObjectState::ObjectState(int id, bool symmetric, const DiscPose &disc_pose) :
+m_id(id), m_symmetric(symmetric),	m_cont_pose(disc_pose), m_disc_pose(disc_pose) {}
+
+bool ObjectState::operator==(const ObjectState &other) const
+{
+	if (m_id != other.id()) {
+		return false;
+	}
+
+	if (m_symmetric != other.symmetric()) {
+		return false;
+	}
+
+	if (!m_symmetric && m_disc_pose != other.disc_pose()) {
+		return false;
+	}
+
+	if (m_symmetric && !m_disc_pose.EqualsPosition(other.disc_pose())) {
+		return false;
+	}
+
+	return true;
+}
+
+bool ObjectState::operator!=(const ObjectState &other) const
+{
+	return !(*this == other);
+}
+
+std::ostream &operator<< (std::ostream &stream, const ObjectState &object_state)
+{
+	stream << "Object ID: " << object_state.id() << std::endl
+				 << '\t' << "Symmetric: " << std::boolalpha << object_state.symmetric() <<
+				 std::endl
+				 << '\t' << "Disc Pose: " << object_state.disc_pose() << std::endl
+				 << '\t' << "Cont Pose: " << object_state.cont_pose();
+	return stream;
+}
+
 } // namespace clutter
