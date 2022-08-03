@@ -43,6 +43,7 @@ struct Object
     smpl::collision::CollisionVoxelsState* voxels_state = nullptr;
 
 	int Shape() const;
+	bool Symmetric() const;
 	bool CreateCollisionObjects();
 	bool CreateSMPLCollisionObject();
 	bool GenerateCollisionModels();

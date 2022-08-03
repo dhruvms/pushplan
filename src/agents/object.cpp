@@ -32,6 +32,27 @@ int Object::Shape() const
 	}
 }
 
+bool Object::Symmetric() const
+{
+	if (!desc.ycb)
+	{
+		if (desc.shape == 0) {
+			return std::abs(desc.x_size - desc.y_size) <= RES; // cuboids are symmetric up to resolution
+		}
+		return true; // cylinders are symmetric
+	}
+	else
+	{
+		if (desc.shape == 2 || desc.shape == 5 || desc.shape == 19 ||
+				desc.shape == 25 || desc.shape == 36) {
+			return true;
+		}
+		else {
+			return false;
+		}
+	}
+}
+
 bool Object::CreateCollisionObjects()
 {
 	moveit_obj = new moveit_msgs::CollisionObject();
