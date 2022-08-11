@@ -25,7 +25,7 @@ m_ct_generated(0), m_ct_deadends(0), m_ct_expanded(0), m_ll_expanded(0), m_time_
 	m_solved = false;
 }
 
-CBS::CBS(std::shared_ptr<Robot> r, std::vector<std::shared_ptr<Agent> > objs,
+CBS::CBS(const std::shared_ptr<Robot>& r, const std::vector<std::shared_ptr<Agent> >& objs,
 	int scene_id) :
 m_ct_generated(0), m_ct_deadends(0), m_ct_expanded(0), m_ll_expanded(0), m_time_limit(30.0), m_scene_id(scene_id), m_soln_lb(0), m_wf(1000)
 {

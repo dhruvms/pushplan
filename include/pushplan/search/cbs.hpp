@@ -18,14 +18,14 @@ class CBS
 {
 public:
 	CBS();
-	CBS(std::shared_ptr<Robot> r, std::vector<std::shared_ptr<Agent> > objs, int scene_id=-1);
+	CBS(const std::shared_ptr<Robot>& r, const std::vector<std::shared_ptr<Agent> >& objs, int scene_id=-1);
 	void SetCC(const std::shared_ptr<CollisionChecker>& cc) {
 		m_cc = cc;
 	}
 
-	void SetRobot(std::shared_ptr<Robot> r) { m_robot = r; };
-	void AddObject(std::shared_ptr<Agent> o) { m_objs.push_back(o); };
-	void AddObjects(std::vector<std::shared_ptr<Agent> > objs) {
+	void SetRobot(const std::shared_ptr<Robot>& r) { m_robot = r; };
+	void AddObject(const std::shared_ptr<Agent>& o) { m_objs.push_back(o); };
+	void AddObjects(const std::vector<std::shared_ptr<Agent> >& objs) {
 		m_objs.insert(m_objs.end(), objs.begin(), objs.end());
 	};
 
