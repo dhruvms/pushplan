@@ -29,7 +29,7 @@ class SamplingPlanner;
 class Planner
 {
 public:
-	Planner() : m_num_objs(-1), m_scene_id(-1),
+	Planner() : m_scene_id(-1),
 				m_ph("~"), m_replan(true),
 				m_plan_success(false), m_sim_success(false),
 				m_push_input(false), m_rng(m_dev()), m_grasp_at(-1) {};
@@ -39,36 +39,43 @@ public:
 
 	bool Plan(bool& done);
 	bool FinalisePlan(bool add_movables=true);
-	bool SaveData();
+
 	bool Rearrange();
-	std::uint32_t RunSim(bool save=true);
-	std::uint32_t RunSolution();
+
 	bool TryExtract();
+	std::uint32_t RunSolution();
+	std::uint32_t RunSim(bool save=true);
 	void AnimateSolution();
+
+	bool SaveData();
 	bool RunRRT();
 	void RunStudy(int study);
 
-	Agent* GetAgent(const int& id) {
-		assert(id > 0); // 0 is robot
-		return m_agents.at(m_agent_map[id]).get();
-	}
-
-	const std::vector<Object>* Get2DRobot(const LatticeState& s) {
-		return m_robot->GetObject(s);
-	}
-	const Object* GetObject(int id) {
-		return m_agents.at(m_agent_map[id])->GetObject();
-	};
-
-	std::vector<Agent*> GetAllAgents()
+	const std::shared_ptr<Agent>& GetAgent(const int& id)
 	{
-		std::vector<Agent*> all_agents;
-		for(int i = 0; i < m_agents.size(); i++) {
-			all_agents.push_back(m_agents[i].get());
-		}
-		return all_agents;
+		assert(id > 0); // 0 is robot
+		return m_agents.at(m_agent_map[id]);
+	}
+	const std::vector<std::shared_ptr<Agent> >& GetAllAgents()	{
+		return m_agents;
 	}
 
+	bool Replan() { return m_replan; };
+
+	// For KPIECE/RRT
+	Robot* GetRobot() { return m_robot.get(); };
+	bool StateValidityChecker(const smpl::RobotState& state) {
+		return m_robot->IsStateValid(state);
+	};
+	void GetStartState(smpl::RobotState& state) {
+		m_robot->GetHomeState(state);
+	}
+	auto GoalPose() -> Eigen::Affine3d {
+		return m_robot->PregraspPose();
+	}
+	bool ExecTraj(const trajectory_msgs::JointTrajectory& traj, int grasp_at=-1) {
+		return m_sim->ExecTraj(traj, GetStartObjects(), grasp_at, m_ooi->GetID());
+	}
 	auto GetStartObjects() -> comms::ObjectsPoses
 	{
 		comms::ObjectsPoses start_objects;
@@ -85,23 +92,6 @@ public:
 		return start_objects;
 	}
 
-	bool Replan() { return m_replan; };
-
-	// For KPIECE
-	Robot* GetRobot() { return m_robot.get(); };
-	bool StateValidityChecker(const smpl::RobotState& state) {
-		return m_robot->IsStateValid(state);
-	};
-	void GetStartState(smpl::RobotState& state) {
-		m_robot->GetHomeState(state);
-	}
-	auto GoalPose() -> Eigen::Affine3d {
-		return m_robot->PregraspPose();
-	}
-	bool ExecTraj(const trajectory_msgs::JointTrajectory& traj, int grasp_at=-1) {
-		return m_sim->ExecTraj(traj, GetStartObjects(), grasp_at, m_ooi->GetID());
-	}
-
 	// For PP
 	bool RunPP();
 	fcl::CollisionObject* GetUpdatedObjectFromPriority(const LatticeState& s, int priority)
@@ -111,64 +101,59 @@ public:
 	}
 
 private:
+	ros::NodeHandle m_ph, m_nh;
+
 	std::string m_scene_file;
 	std::shared_ptr<CollisionChecker> m_cc;
 	std::shared_ptr<Robot> m_robot;
 	std::shared_ptr<BulletSim> m_sim;
 	std::shared_ptr<CBS> m_cbs;
 	std::shared_ptr<sampling::SamplingPlanner> m_sampling_planner;
-	bool m_replan, m_plan_success, m_sim_success, m_push_input;
 
-	int m_num_objs, m_scene_id;
 	std::vector<std::shared_ptr<Agent> > m_agents;
 	std::shared_ptr<Agent> m_ooi;
 	std::unordered_map<int, size_t> m_agent_map;
-	Coord m_ooi_g;
-	State m_ooi_gf;
 	std::vector<double> m_goal;
 	WorldResolutionParams m_disc_params;
 
-	int m_grasp_at;
 	trajectory_msgs::JointTrajectory m_exec;
 	std::vector<trajectory_msgs::JointTrajectory> m_rearrangements;
 	comms::ObjectsPoses m_rearranged;
 
 	HighLevelNode* m_cbs_soln;
 	std::unordered_map<int, std::size_t> m_cbs_soln_map;
-	int m_moved;
+	std::map<std::string, double> m_stats, m_cbs_stats;
+
 	std::random_device m_dev;
 	std::mt19937 m_rng;
 	std::uniform_real_distribution<double> m_distD;
 	std::uniform_int_distribution<> m_distI;
 
-	ros::NodeHandle m_ph, m_nh;
+	int m_scene_id, m_grasp_at, m_moved;
+	bool m_replan, m_plan_success, m_sim_success, m_push_input;
+	double m_plan_budget, m_sim_budget, m_total_budget, m_timer;
 	std::uint32_t m_violation;
 
-	std::map<std::string, double> m_stats, m_cbs_stats;
-	double m_plan_budget, m_sim_budget, m_total_budget, m_timer;
-
 	bool createCBS();
-
-	bool runSim();
-	bool animateSolution();
-	bool rearrange();
-
 	bool setupProblem(bool backwards);
+
+	bool rearrange();
 	void updateAgentPositions(
 		const comms::ObjectsPoses& result,
 		comms::ObjectsPoses& rearranged);
-	int cleanupLogs();
 
+	bool runSim();
+	bool animateSolution();
+	int armId();
+
+	int cleanupLogs();
 	void init_agents(
 		bool ycb, std::vector<Object>& obstacles);
 	void parse_scene(std::vector<Object>& obstacles);
 	void read_solution();
-	void writePlanState(int iter);
+
 	void setupGlobals();
 	void readDiscretisationParams();
-	int armId();
-
-	bool savePlanData();
 
 	// For PP
 	std::vector<size_t> m_priorities;

@@ -111,7 +111,7 @@ bool CollisionChecker::ObjectObjectCollision(fcl::CollisionObject* o1, fcl::Coll
 // called by Agent::generateSuccessor
 bool CollisionChecker::ObjectObjectCollision(fcl::CollisionObject* o1, const int& a2_id, const LatticeState& a2_q)
 {
-	Agent* a2 = m_planner->GetAgent(a2_id);
+	auto a2 = m_planner->GetAgent(a2_id);
 	a2->UpdatePose(a2_q);
 
 	fcl::CollisionRequest request;
@@ -129,7 +129,7 @@ bool CollisionChecker::ObjectObjectsCollision(
 
 	for(int i = 0; i < other_ids.size(); i++)
 	{
-		Agent* agent = m_planner->GetAgent(other_ids[i]);
+		auto agent = m_planner->GetAgent(other_ids[i]);
 		agent->UpdatePose(other_poses[i]);
 		m_fcl_mov->update(agent->GetFCLObject());
 	}
@@ -200,39 +200,8 @@ bool CollisionChecker::RobotObjectCollision(
 	const LatticeState& robot_state,
 	int t, bool process)
 {
+	SMPL_ERROR("CollisionChecker::RobotObjectCollision un-implemented!");
 	return false;
-	// bool collision = false;
-	// if (!CC_2D) {
-	// 	collision = collision || m_planner->CheckRobotCollision(a1, robot_state, t, process);
-	// }
-	// else
-	// {
-	// 	auto o1_obj = m_planner->GetObject(a1->GetID());
-	// 	State o1_loc = {a1_state.state.at(0), a1_state.state.at(1)};
-	// 	std::vector<State> o1_rect;
-	// 	bool rect_o1 = false;
-
-	// 	// preprocess rectangle once only
-	// 	if (o1_obj->Shape() == 0)
-	// 	{
-	// 		GetRectObjAtPt(o1_loc, o1_obj->desc, o1_rect);
-	// 		rect_o1 = true;
-	// 	}
-
-	// 	auto robot_2d = m_planner->Get2DRobot(robot_state);
-
-	// 	if (!checkCollisionObjSet(*o1_obj, o1_loc, rect_o1, o1_rect, robot_2d))
-	// 	{
-	// 		if (!CC_3D) {
-	// 			collision = true;
-	// 		}
-	// 		else {
-	// 			collision = collision || m_planner->CheckRobotCollision(a1, robot_state, t, process);
-	// 		}
-	// 	}
-	// }
-
-	// return collision;
 }
 
 State CollisionChecker::GetRandomStateOutside(fcl::CollisionObject* o)
@@ -306,8 +275,6 @@ bool CollisionChecker::checkCollisionObjSet(
 			}
 		}
 	}
-	// SMPL_WARN("collision! objects ids %d and %d (movable) collide at time %d", o1.id, m_planner->GetObject(p)->id, s.t);
-	// std::cout << o1.id << ',' << other_obj->id << ',' << s.t << std::endl;
 
 	return true;
 }
