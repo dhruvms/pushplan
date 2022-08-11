@@ -1177,26 +1177,20 @@ bool Robot::ComputeGrasps(
 	m_postgrasp_state.clear();
 
 	bool success = false;
-	int tries = 0;
 	UpdateKDLRobot(0);
 
 	smpl::RobotState ee_state;
-	Eigen::Affine3d ee_pose;
-	do
-	{
-		m_grasp_z = m_table_z + ((m_distD(m_rng) * 0.05) + 0.025);
-		ee_pose = Eigen::Translation3d(m_ooi.desc.o_x + 0.025 * std::cos(pregrasp_goal[5]), m_ooi.desc.o_y + 0.025 * std::sin(pregrasp_goal[5]), m_grasp_z) *
-						Eigen::AngleAxisd(pregrasp_goal[5], Eigen::Vector3d::UnitZ()) *
-						Eigen::AngleAxisd(0.0, Eigen::Vector3d::UnitY()) *
-						Eigen::AngleAxisd(0.0, Eigen::Vector3d::UnitX());
-	}
-	while (!getStateNearPose(ee_pose, ee_state, m_grasp_state, 5) && ++tries < m_grasp_tries);
+	m_grasp_z = m_table_z + ((m_distD(m_rng) * 0.05) + 0.025);
+	Eigen::Affine3d ee_pose = Eigen::Translation3d(m_ooi.desc.o_x + 0.025 * std::cos(pregrasp_goal[5]), m_ooi.desc.o_y + 0.025 * std::sin(pregrasp_goal[5]), m_grasp_z) *
+								Eigen::AngleAxisd(pregrasp_goal[5], Eigen::Vector3d::UnitZ()) *
+								Eigen::AngleAxisd(0.0, Eigen::Vector3d::UnitY()) *
+								Eigen::AngleAxisd(0.0, Eigen::Vector3d::UnitX());
 
 	auto* vis_name = "grasp_pose";
 	SV_SHOW_INFO_NAMED(vis_name, smpl::visual::MakePoseMarkers(
 		ee_pose, m_grid_i->getReferenceFrame(), vis_name));
 
-	if (tries == m_grasp_tries)	{
+	if (!getStateNearPose(ee_pose, ee_state, m_grasp_state, 1)) {
 		return false;
 	}
 	m_grasp_pose = m_rm->computeFK(m_grasp_state);

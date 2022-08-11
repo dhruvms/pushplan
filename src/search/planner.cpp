@@ -117,7 +117,8 @@ bool Planner::Init(const std::string& scene_file, int scene_id, bool ycb)
 					double ox, oy, oz, sx, sy, sz;
 					m_sim->GetShelfParams(ox, oy, oz, sx, sy, sz);
 
-					for (auto& a: m_agents) {
+					for (auto& a: m_agents)
+					{
 						a->SetObstacleGrid(m_robot->ObsGrid());
 						a->SetNGRGrid(m_robot->NGRGrid());
 						a->ResetSolution();
@@ -213,8 +214,7 @@ bool Planner::Plan(bool& done)
 		return true;
 	}
 
-	bool backwards = true; // ALGO == MAPFAlgo::OURS;
-	if (!setupProblem(backwards)) {
+	if (!setupProblem()) {
 		return false;
 	}
 
@@ -226,7 +226,7 @@ bool Planner::Plan(bool& done)
 	}
 
 	SMPL_INFO("Replan MAPF");
-	bool result = m_cbs->Solve(backwards);
+	bool result = m_cbs->Solve();
 	m_cbs->UpdateStats(m_cbs_stats);
 	m_stats["mapf_time"] += GetTime() - m_timer;
 
@@ -324,7 +324,7 @@ bool Planner::createCBS()
 	return true;
 }
 
-bool Planner::setupProblem(bool backwards)
+bool Planner::setupProblem()
 {
 	// CBS TODO: assign starts and goals to agents
 
@@ -340,7 +340,7 @@ bool Planner::setupProblem(bool backwards)
 	// }
 
 	for (auto& a: m_agents) {
-		a->Init(backwards);
+		a->Init();
 	}
 
 	return true;

@@ -29,7 +29,7 @@ public:
 		m_p0.Add(from, to);
 	}
 
-	bool Solve(bool backwards) override;
+	bool Solve() override;
 	void SaveStats();
 
 protected:

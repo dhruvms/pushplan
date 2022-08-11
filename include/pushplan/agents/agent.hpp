@@ -48,7 +48,7 @@ public:
 		const std::vector<double>& xyz,
 		const std::vector<double>& rpy);
 
-	bool Init(bool backwards);
+	bool Init();
 	void ComputeNGRComplement(
 		double ox, double oy, double oz,
 		double sx, double sy, double sz, bool vis=false);
@@ -135,8 +135,8 @@ private:
 	bool m_pp;
 	int m_priority, m_t;
 
-	bool computeGoal(bool backwards);
-	bool createLatticeAndSearch(bool backwards);
+	bool computeGoal();
+	bool createLatticeAndSearch();
 
 	// check collisions with static obstacles
 	bool stateObsCollision(const LatticeState& s);

@@ -48,7 +48,7 @@ bool Agent::SetObjectPose(
 	ResetObject();
 }
 
-bool Agent::Init(bool backwards)
+bool Agent::Init()
 {
 	m_init.t = 0;
 	m_init.hc = 0;
@@ -62,14 +62,8 @@ bool Agent::Init(bool backwards)
 	m_init.coord.at(1) = DiscretisationManager::ContYToDiscY(m_init.state.at(1));
 	// VisualiseState(m_init, "start_state", 90);
 
-	// if (m_solve.empty()) {
-		computeGoal(backwards);
-	// }
-	// else {
-	// 	m_goal = m_solve.back().coord;
-	// }
-	// createLatticeAndSearch(backwards);
-	createLatticeAndSearch(false);
+	computeGoal();
+	createLatticeAndSearch();
 	m_input_push.clear();
 
 	return true;
@@ -189,7 +183,7 @@ bool Agent::PlanPrioritised(int p)
 	m_goal = m_init.coord;
 
 	m_lattice = std::make_unique<AgentLattice>();
-	m_lattice->init(this, false);
+	m_lattice->init(this);
 	m_lattice->reset();
 
 	m_search = std::make_unique<WAStar>(m_lattice.get(), 1.0);
@@ -451,104 +445,88 @@ bool Agent::GetSE2Push(std::vector<double>& push, bool input)
 // 2. if object is partially inside NGR, this is the "farthest" object cell
 // 3. if object is fully inside NGR, this is the closest cell outside NGR
 // (ideally would inflate the NGR by the object and then find such a cell)
-bool Agent::computeGoal(bool backwards)
+bool Agent::computeGoal()
 {
-	if (backwards) {
-		m_goal = m_init.coord;
+	m_goal = m_init.coord;
 
-		// VisualiseState(m_goal, "goal_state", 20);
-		return true;
-	}
+	// VisualiseState(m_goal, "goal_state", 20);
+	return true;
 
-	if (stateOutsideNGR(m_init))
-	{
-		m_goal = m_init.coord;
+	// if (stateOutsideNGR(m_init))
+	// {
+	// 	m_goal = m_init.coord;
 
-		// VisualiseState(m_goal, "goal_state", 20);
-		return true;
-	}
-	else
-	{
-		Eigen::Affine3d T = Eigen::Translation3d(m_obj_desc.o_x, m_obj_desc.o_y, m_obj_desc.o_z) *
-						Eigen::AngleAxisd(m_obj_desc.o_yaw, Eigen::Vector3d::UnitZ()) *
-						Eigen::AngleAxisd(m_obj_desc.o_pitch, Eigen::Vector3d::UnitY()) *
-						Eigen::AngleAxisd(m_obj_desc.o_roll, Eigen::Vector3d::UnitX());
-		m_obj.updateVoxelsState(T);
-		auto voxels_state = m_obj.VoxelsState();
+	// 	// VisualiseState(m_goal, "goal_state", 20);
+	// 	return true;
+	// }
+	// else
+	// {
+	// 	Eigen::Affine3d T = Eigen::Translation3d(m_obj_desc.o_x, m_obj_desc.o_y, m_obj_desc.o_z) *
+	// 					Eigen::AngleAxisd(m_obj_desc.o_yaw, Eigen::Vector3d::UnitZ()) *
+	// 					Eigen::AngleAxisd(m_obj_desc.o_pitch, Eigen::Vector3d::UnitY()) *
+	// 					Eigen::AngleAxisd(m_obj_desc.o_roll, Eigen::Vector3d::UnitX());
+	// 	m_obj.updateVoxelsState(T);
+	// 	auto voxels_state = m_obj.VoxelsState();
 
-		double best_pos_dist = std::numeric_limits<double>::max(), dist;
-		Eigen::Vector3i best_outside_pos, pos;
-		bool inside = false, outside = false;
+	// 	double best_pos_dist = std::numeric_limits<double>::max(), dist;
+	// 	Eigen::Vector3i best_outside_pos, pos;
+	// 	bool inside = false, outside = false;
 
-		double wx, wy, wz;
-		auto ngr_df = m_ngr_grid->getDistanceField();
-		for (const Eigen::Vector3d& v : voxels_state->voxels)
-		{
-			auto cell = dynamic_cast<smpl::PropagationDistanceField&>(*ngr_df).getNearestCell(v[0], v[1], v[2], dist, pos);
+	// 	double wx, wy, wz;
+	// 	auto ngr_df = m_ngr_grid->getDistanceField();
+	// 	for (const Eigen::Vector3d& v : voxels_state->voxels)
+	// 	{
+	// 		auto cell = dynamic_cast<smpl::PropagationDistanceField&>(*ngr_df).getNearestCell(v[0], v[1], v[2], dist, pos);
 
-			if (dist > 0) {
-				outside = true;
-			}
-			else if (dist < 0)
-			{
-				if (!inside) {
-					inside = true;
-				}
+	// 		if (dist > 0) {
+	// 			outside = true;
+	// 		}
+	// 		else if (dist < 0)
+	// 		{
+	// 			if (!inside) {
+	// 				inside = true;
+	// 			}
 
-				m_ngr_grid->gridToWorld(pos[0], pos[1], pos[2], wx, wy, wz);
-				Eigen::Vector3d posd(wx, wy, wz);
-				double dist_to_outside = (posd - v).norm();
-				if (dist_to_outside < best_pos_dist)
-				{
-					best_pos_dist = dist_to_outside;
-					best_outside_pos = pos;
-				}
-			}
-		}
-		if (!inside) {
-			SMPL_ERROR("m_init !stateOutsideNGR and !inside?");
-			m_goal = m_init.coord;
+	// 			m_ngr_grid->gridToWorld(pos[0], pos[1], pos[2], wx, wy, wz);
+	// 			Eigen::Vector3d posd(wx, wy, wz);
+	// 			double dist_to_outside = (posd - v).norm();
+	// 			if (dist_to_outside < best_pos_dist)
+	// 			{
+	// 				best_pos_dist = dist_to_outside;
+	// 				best_outside_pos = pos;
+	// 			}
+	// 		}
+	// 	}
+	// 	if (!inside) {
+	// 		SMPL_ERROR("m_init !stateOutsideNGR and !inside?");
+	// 		m_goal = m_init.coord;
 
-			// VisualiseState(m_goal, "goal_state", 20);
-			return true;
-		}
+	// 		// VisualiseState(m_goal, "goal_state", 20);
+	// 		return true;
+	// 	}
 
-		m_ngr_grid->gridToWorld(best_outside_pos[0], best_outside_pos[1], best_outside_pos[2], wx, wy, wz);
+	// 	m_ngr_grid->gridToWorld(best_outside_pos[0], best_outside_pos[1], best_outside_pos[2], wx, wy, wz);
 
-		m_goal.clear();
-		m_goal.resize(2, 0);
-		m_goal.at(0) = DiscretisationManager::ContXToDiscX(wx);
-		m_goal.at(1) = DiscretisationManager::ContYToDiscY(wy);
+	// 	m_goal.clear();
+	// 	m_goal.resize(2, 0);
+	// 	m_goal.at(0) = DiscretisationManager::ContXToDiscX(wx);
+	// 	m_goal.at(1) = DiscretisationManager::ContYToDiscY(wy);
 
-		// VisualiseState(m_goal, "goal_state", 20);
-		return true;
-	}
+	// 	// VisualiseState(m_goal, "goal_state", 20);
+	// 	return true;
+	// }
 }
 
-bool Agent::createLatticeAndSearch(bool backwards)
+bool Agent::createLatticeAndSearch()
 {
 	m_lattice = std::make_unique<AgentLattice>();
-	m_lattice->init(this, backwards);
+	m_lattice->init(this);
 	m_lattice->reset();
 
-	if (backwards)
-	{
-		m_search = std::make_unique<WAStar>(m_lattice.get(), 1.0);
-		m_search->reset();
-
-		for (const auto& s : m_ngr_complement_states) {
-			m_search->push_start(m_lattice->PushStart(s));
-		}
-		m_search->push_goal(m_lattice->PushGoal(m_goal));
-	}
-	else
-	{
-		m_search = std::make_unique<Focal>(m_lattice.get(), 100.0);
-		m_search->reset();
-
-		m_search->push_start(m_lattice->PushStart(m_init));
-		m_search->push_goal(m_lattice->PushGoal(m_goal));
-	}
+	m_search = std::make_unique<Focal>(m_lattice.get(), 100.0);
+	m_search->reset();
+	m_search->push_start(m_lattice->PushStart(m_init));
+	m_search->push_goal(m_lattice->PushGoal(m_goal));
 
 	return true;
 }

@@ -135,7 +135,7 @@ private:
 	std::uint32_t m_violation;
 
 	bool createCBS();
-	bool setupProblem(bool backwards);
+	bool setupProblem();
 
 	bool rearrange();
 	void updateAgentPositions(

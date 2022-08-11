@@ -15,10 +15,9 @@ auto std::hash<clutter::LatticeState>::operator()(
 namespace clutter
 {
 
-void AgentLattice::init(Agent* agent, bool backwards)
+void AgentLattice::init(Agent* agent)
 {
 	m_agent = agent;
-	m_backwards = backwards;
 }
 
 void AgentLattice::reset()
@@ -81,10 +80,6 @@ bool AgentLattice::IsGoal(int state_id)
 	assert(state_id >= 0);
 	LatticeState* s = getHashEntry(state_id);
 	assert(s);
-
-	if (m_backwards) {
-		return s->coord == m_agent->Goal();
-	}
 
 	bool constrained = false, conflict = false, ngr = false;
 
@@ -210,7 +205,7 @@ int AgentLattice::generateSuccessor(
 	std::vector<unsigned int>* costs)
 {
 	LatticeState child;
-	child.t = parent->t + (m_backwards ? 0 : 1);
+	child.t = parent->t + 1;
 	child.hc = parent->hc;
 	child.coord = parent->coord;
 	child.coord.at(0) += dx;

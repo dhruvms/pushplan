@@ -17,7 +17,7 @@ class AgentLattice
 {
 public:
 
-	void init(Agent* agent, bool backwards);
+	void init(Agent* agent);
 	void reset();
 
 	int PushStart(const LatticeState& s);
@@ -43,7 +43,6 @@ private:
 	Agent* m_agent = nullptr;
 
 	std::vector<int> m_start_ids, m_goal_ids;
-	bool m_backwards;
 	STATES m_states, m_closed;
 
 	std::list<std::shared_ptr<Constraint> > m_constraints;

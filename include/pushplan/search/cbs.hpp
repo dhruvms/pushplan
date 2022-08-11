@@ -29,7 +29,8 @@ public:
 		m_objs.insert(m_objs.end(), objs.begin(), objs.end());
 	};
 
-	virtual bool Solve(bool backwards);
+	virtual bool Solve();
+
 	void SaveStats();
 	bool UpdateStats(std::map<std::string, double>& stats);
 	HighLevelNode* GetSolution() const { return m_goal; };
@@ -51,7 +52,7 @@ protected:
 
 	int m_ct_generated, m_ct_deadends, m_ct_expanded, m_ll_expanded, m_soln_cost, m_scene_id, m_soln_lb, m_wf;
 	double m_search_time, m_time_limit, m_ll_time, m_conflict_time;
-	bool m_solved, m_backwards;
+	bool m_solved;
 	HighLevelNode* m_goal;
 	HighLevelNode* m_root = nullptr;
 
