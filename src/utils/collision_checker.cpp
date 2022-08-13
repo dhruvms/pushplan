@@ -17,7 +17,6 @@ m_obstacles(obstacles),
 m_rng(m_dev())
 {
 	m_fcl_immov = new fcl::DynamicAABBTreeCollisionManager();
-
 	// preprocess immovable obstacles
 	for (size_t i = 0; i != m_obstacles.size(); ++i)
 	{
@@ -34,16 +33,16 @@ m_rng(m_dev())
 	m_fcl_immov->setup();
 
 	m_distD = std::uniform_real_distribution<double>(0.0, 1.0);
-
-	initMovableCollisionChecker();
-
 	m_robot = r;
 }
 
-void CollisionChecker::initMovableCollisionChecker()
+void CollisionChecker::InitMovableCC(const std::vector<std::shared_ptr<Agent> >& movables)
 {
+	if (m_fcl_mov != nullptr) {
+		m_fcl_mov->clear();
+	}
+
 	m_fcl_mov = new fcl::DynamicAABBTreeCollisionManager();
-	auto movables = m_planner->GetAllAgents();
 
 	for(int i = 0; i < movables.size(); i++) {
 		m_fcl_mov->registerObject(movables[i]->GetFCLObject());
