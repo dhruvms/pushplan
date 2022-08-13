@@ -1,0 +1,163 @@
+#ifndef MAMO_NODE_HPP
+#define MAMO_NODE_HPP
+
+#include <pushplan/agents/object.hpp>
+#include <pushplan/search/cbs.hpp>
+#include <pushplan/utils/types.hpp>
+
+#include <boost/heap/fibonacci_heap.hpp>
+#include <comms/ObjectsPoses.h>
+#include <smpl/heap/intrusive_heap.h>
+#include <trajectory_msgs/JointTrajectory.h>
+
+#include <vector>
+#include <utility>
+#include <memory>
+#include <stdexcept>
+
+namespace clutter
+{
+
+class Planner;
+
+class MAMONode
+{
+public:
+	MAMONode() :
+		m_parent(nullptr), m_oidx(-1), m_aidx(-1),
+		m_hash_set_C(false), m_hash_set_S(false) {} ;
+	MAMONode(int oidx, int aidx) :
+		m_parent(nullptr), m_oidx(oidx), m_aidx(oidx),
+		m_hash_set_C(false), m_hash_set_S(false) {} ;
+
+	void InitAgents(
+		const std::vector<std::shared_ptr<Agent> >& agents,
+		const comms::ObjectsPoses& all_objects);
+	std::vector<double>* GetCurrentStartState();
+	void RunMAPF(unsigned int my_state_id);
+
+	size_t GetConstraintHash() const;
+	size_t GetSearchHash() const;
+	void SetConstraintHash(const size_t& hash_val);
+	void SetSearchHash(const size_t& hash_val);
+
+	void SetParent(MAMONode *parent);
+	void SetRobotTrajectory(const trajectory_msgs::JointTrajectory& robot_traj);
+
+	void SetPlanner(Planner *planner);
+	void SetCBS(const std::shared_ptr<CBS>& cbs);
+	void SetCC(const std::shared_ptr<CollisionChecker>& cc);
+	void SetRobot(const std::shared_ptr<Robot>& robot);
+	void SetEdgeTo(int oidx, int aidx);
+
+	size_t num_objects() const;
+	const std::vector<ObjectState>& kobject_states() const;
+	trajectory_msgs::JointTrajectory& robot_traj();
+	const trajectory_msgs::JointTrajectory& krobot_traj() const;
+	const MAMONode* kparent() const;
+	MAMONode* parent();
+	const std::vector<MAMONode*>& kchildren() const;
+	std::pair<int, int> object_centric_action() const;
+
+private:
+	std::vector<std::shared_ptr<Agent> > m_agents; // pointers to relevant objects
+	std::vector<ObjectState> m_object_states; // current relevant object states
+	std::vector<std::pair<int, Trajectory> > m_mapf_solution; // mapf solution found at this node
+	trajectory_msgs::JointTrajectory m_robot_traj; // robot trajectory from parent to this node
+
+	MAMONode *m_parent; // parent node in tree
+	std::vector<MAMONode*> m_children; // children nodes in tree
+	int m_oidx, m_aidx; // object-to-move id, action-to-use id
+	comms::ObjectsPoses m_all_objects; // all object poses at node
+	std::vector<int> m_relevant_ids;
+
+	Planner *m_planner;
+	std::shared_ptr<CBS> m_cbs;
+	std::shared_ptr<CollisionChecker> m_cc;
+	std::shared_ptr<Robot> m_robot;
+
+	size_t m_hash_C, m_hash_S;
+	bool m_hash_set_C, m_hash_set_S;
+
+	void addAgent(
+		const std::shared_ptr<Agent>& agent,
+		const size_t& pidx);
+	void identifyRelevantMovables();
+
+	void resetAgents();
+};
+
+struct MAMOSearchState
+{
+	unsigned int state_id;
+	unsigned int g; // h, f?
+	bool leaf;
+	MAMOSearchState *bp;
+
+	struct OPENCompare
+	{
+		bool operator()(const MAMOSearchState *p, const MAMOSearchState *q) const
+		{
+			if (p->g == q->g) {
+				return rand() % 2 == 0;
+			}
+			return p->g > q->g;
+		}
+	};
+	boost::heap::fibonacci_heap<MAMOSearchState*, boost::heap::compare<MAMOSearchState::OPENCompare> >::handle_type m_OPEN_h;
+};
+
+////////////////////////
+// Equality operators //
+////////////////////////
+
+struct EqualsConstraint
+{
+	bool operator()(MAMONode *a, MAMONode *b) const
+	{
+		if (a->num_objects() != b->num_objects()) {
+			return false;
+		}
+
+		return std::is_permutation(a->kobject_states().begin(), a->kobject_states().end(), b->kobject_states().begin());
+	}
+};
+
+struct EqualsSearch
+{
+	bool operator()(MAMONode *a, MAMONode *b) const
+	{
+		EqualsConstraint checkObjects;
+		if (!checkObjects(a, b)) {
+			return false;
+		}
+		return a->object_centric_action() == b->object_centric_action();
+	}
+};
+
+///////////////////////////
+// Hash Function Structs //
+///////////////////////////
+
+struct HashConstraint {
+	size_t operator()(MAMONode *hashable_node) const
+	{
+		auto hash_val = hashable_node->GetConstraintHash();
+		hashable_node->SetConstraintHash(hash_val);
+		return hash_val;
+	}
+};
+
+struct HashSearch {
+	size_t operator()(MAMONode *hashable_node) const
+	{
+		auto hash_val = hashable_node->GetSearchHash();
+		hashable_node->SetSearchHash(hash_val);
+		return hash_val;
+	}
+};
+
+} // namespace clutter
+
+
+#endif // MAMO_NODE_HPP
