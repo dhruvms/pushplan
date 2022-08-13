@@ -984,7 +984,7 @@ class BulletSim:
 
 		objects = []
 		for obj_id in sim_data['objs']:
-			if (obj_id in table_id):
+			if (obj_id in table_id or not sim_data['objs'][obj_id]['movable']):
 				continue
 
 			xyz, quat = sim.getBasePositionAndOrientation(obj_id)
