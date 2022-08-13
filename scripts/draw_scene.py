@@ -19,6 +19,7 @@ RES = 0.01
 def ParseFile(filepath, saving=True):
 	objs = {}
 	trajs = {}
+	invalids = {}
 	ngr = []
 	goals = []
 	pushes = []
@@ -85,9 +86,26 @@ def ParseFile(filepath, saving=True):
 					push = [float(val) for val in line.split(',')]
 					pushes.append(push)
 
-	return objs, trajs, ngr, goals, pushes
+			if line == 'INVALID':
+				line = f.readline()[:-1]
+				num_objs = int(line)
+				for i in range(num_objs):
+					line = f.readline()[:-1]
+					obj_id = int(line)
 
-def DrawScene(filepath, objs, trajs, ngr, goals, pushes, alpha=1.0):
+					line = f.readline()[:-1]
+					num_invalids = int(line)
+
+					invalid = []
+					for i in range(num_invalids):
+						line = f.readline()[:-1]
+						invalid_g = [float(val) for val in line.split(',')]
+						invalid.append(invalid_g)
+					invalids[obj_id] = invalid
+
+	return objs, trajs, invalids, ngr, goals, pushes
+
+def DrawScene(filepath, objs, trajs, invalids, ngr, goals, pushes, alpha=1.0):
 	codes = [
 		Path.MOVETO,
 		Path.LINETO,
@@ -201,9 +219,17 @@ def DrawScene(filepath, objs, trajs, ngr, goals, pushes, alpha=1.0):
 				else:
 					AX.scatter(p[0], p[1], c=colours[int(p[4])], zorder=21, marker='p', alpha=0.5)
 			else:
-				AX.plot([p[0], p[2]], [p[1], p[3]], c=colours[int(p[4])], ls='-.', zorder=22, alpha=0.35)
-				AX.scatter(p[0], p[1], c=colours[int(p[4])], zorder=23, marker='P', alpha=0.35)
-				AX.scatter(p[2], p[3], c=colours[int(p[4])], zorder=23, marker='X', alpha=0.35)
+				AX.plot([p[0], p[2]], [p[1], p[3]], c=colours[int(p[4])], ls='-.', zorder=22, alpha=0.5)
+				AX.scatter(p[0], p[1], c=colours[int(p[4])], zorder=23, marker='P', alpha=0.5)
+				AX.scatter(p[2], p[3], c=colours[int(p[4])], zorder=23, marker='X', alpha=0.5)
+				AX.text(p[2], p[3], str(int(p[4])), color=colours[int(p[4])], zorder=33)
+
+	if (invalids):
+		cmap = cm.get_cmap('cool')
+		for i, oid in enumerate(invalids):
+			invalid_gs = np.asarray(invalids[oid])
+			if (invalid_gs.shape[0] > 0):
+				AX.scatter(invalid_gs[:, 0], invalid_gs[:, 1], c=[cmap(float(i/len(invalids)))], zorder=31, marker='D')
 
 	AX.axis('equal')
 	AX.set_xlim([0.0, 1.2])
@@ -228,8 +254,8 @@ def main():
 			imgfile = filepath.replace('txt', 'png')
 			if os.path.isfile(imgfile):
 				continue
-			objs, trajs, ngr, goals, pushes = ParseFile(filepath, False)
-			DrawScene(filepath, objs, trajs, ngr, goals, pushes)
+			objs, trajs, invalids, ngr, goals, pushes = ParseFile(filepath, False)
+			DrawScene(filepath, objs, trajs, invalids, ngr, goals, pushes)
 
 def click_push(scene_id):
 	filename = '../../../../simplan/src/simplan/data/clutter_scenes/'
@@ -245,8 +271,8 @@ def click_push(scene_id):
 		level = '15'
 
 	filename += level + '/plan_' + str(scene_id) + '_SCENE.txt'
-	objs, trajs, ngr, goals, pushes = ParseFile(filename, False)
-	DrawScene(filename, objs, trajs, ngr, goals, pushes)
+	objs, trajs, invalids, ngr, goals, pushes = ParseFile(filename, False)
+	DrawScene(filename, objs, trajs, invalids, ngr, goals, pushes)
 
 if __name__ == '__main__':
 	main()
