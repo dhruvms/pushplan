@@ -838,6 +838,24 @@ void CBS::writeSolution(HighLevelNode* node)
 					<< push.at(4) << '\n';
 		}
 
+		// write invalid goals
+		DATA << "INVALID" << '\n';
+		DATA << m_objs.size() << '\n';
+		for (size_t oidx = 0; oidx < m_objs.size(); ++oidx)
+		{
+			auto invalid = m_objs[oidx]->GetInvalidPushes();
+			DATA << m_obj_idx_to_id[oidx] << '\n';
+			DATA << invalid.size() << '\n';
+
+			for (const auto& c: invalid)
+			{
+				State s;
+				s.push_back(DiscretisationManager::DiscXToContX(c.at(0)));
+				s.push_back(DiscretisationManager::DiscYToContY(c.at(1)));
+				DATA << s.at(0) << ',' << s.at(1) << '\n';
+			}
+		}
+
 		DATA.close();
 		m_robot->ClearPushDebugData();
 	}
