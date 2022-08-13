@@ -74,7 +74,7 @@ bool Planner::Init(const std::string& scene_file, int scene_id, bool ycb)
 
 	// create collision checker
 	m_cc = std::make_shared<CollisionChecker>(this, all_obstacles, m_robot);
-	m_cc->InitMovableCC(m_agents);
+	// m_cc->ReinitMovableCC(m_agents);
 
 	m_robot->SetCC(m_cc);
 	for (auto& a: m_agents) {
@@ -238,6 +238,26 @@ bool Planner::FinalisePlan(
 	return true;
 }
 
+void Planner::AddLocallyInvalidPush(
+	unsigned int state_id, int agent_id, Coord bad_goal)
+{
+	const auto it1 = m_invalid_pushes_L.find(state_id);
+	if (it1 == m_invalid_pushes_L.end())
+	{
+		m_invalid_pushes_L[state_id][agent_id] = { bad_goal };
+	}
+	else
+	{
+		const auto it2 = it1->second.find(agent_id);
+		if (it2 == it1->second.end()) {
+			it1->second[agent_id] = { bad_goal };
+		}
+		else {
+			it1->second[agent_id].push_back(bad_goal);
+		}
+	}
+}
+
 bool Planner::createCBS()
 {
 	switch (ALGO)
@@ -299,117 +319,6 @@ bool Planner::setupProblem()
 	}
 
 	return true;
-}
-
-bool Planner::Rearrange()
-{
-	if (!rearrange())
-	{
-		SMPL_INFO("There were no conflicts to rearrange! WE ARE DONE!");
-		m_plan_success = true;
-
-		return false;
-	}
-
-	return true;
-}
-
-bool Planner::rearrange()
-{
-	if (m_moved == 0) {
-		return false;
-	}
-
-	SMPL_INFO("Rearrange?");
-	for (auto& a: m_agents) {
-		a->ResetObject();
-	}
-
-	comms::ObjectsPoses rearranged = m_rearranged;
-	bool push_found = false;
-	const auto& path = m_cbs_soln->m_solution[m_cbs_soln_map[m_distI(m_rng)]];
-
-	// get push location
-	std::vector<double> push;
-	SMPL_INFO("Pushing object %d", path.first);
-	m_timer = GetTime();
-	m_agents.at(m_agent_map[path.first])->GetSE2Push(push, m_push_input);
-	double push_compute_time = GetTime() - m_timer;
-	m_stats["push_input_time"] += push_compute_time;
-	SMPL_INFO("Object %d push is (%f, %f, %f) | Found in %f seconds", path.first, push[0], push[1], push[2], push_compute_time);
-
-	// other movables to be considered as obstacles
-	std::vector<Object*> movable_obstacles;
-	for (const auto& a: m_agents)
-	{
-		if (a->GetID() == path.first) {
-			continue; // selected object cannot be obstacle
-		}
-		movable_obstacles.push_back(a->GetObject());
-	}
-
-	// plan to push location
-	// m_robot->PlanPush creates the planner internally, because it might
-	// change KDL chain during the process
-	comms::ObjectsPoses result;
-
-	std::vector<double> push_start_state;
-	if (!m_rearrangements.empty()) {
-		push_start_state = m_rearrangements.back().points.back().positions;
-	}
-
-	int push_failure;
-	m_timer = GetTime();
-	if (m_robot->PlanPush(push_start_state, m_agents.at(m_agent_map[path.first]).get(), push, movable_obstacles, rearranged, result, push_failure, 1.0, m_push_input))
-	{
-		m_rearrangements.push_back(m_robot->GetLastPlan());
-
-		// update positions of moved objects
-		updateAgentPositions(result, rearranged);
-		push_found = true;
-		SMPL_INFO("Push found!");
-	}
-	m_stats["push_planner_time"] += GetTime() - m_timer;
-
-	m_rearranged = rearranged;
-	m_replan = push_found;
-
-	return true;
-}
-
-void Planner::updateAgentPositions(
-	const comms::ObjectsPoses& result,
-	comms::ObjectsPoses& rearranged)
-{
-	for (const auto& o: result.poses)
-	{
-		auto search = m_agent_map.find(o.id);
-		if (search != m_agent_map.end())
-		{
-			// auto orig_obj = m_agents.at(m_agent_map[o.id]).GetObject()->back();
-			// if (EuclideanDist(o.xyz, {orig_obj.o_x, orig_obj.o_y, orig_obj.o_z}) < RES)
-			// {
-			// 	SMPL_DEBUG("Object %d did not move > %f cm.", o.id, RES);
-			// 	continue;
-			// }
-
-			// SMPL_DEBUG("Object %d did moved > %f cm.", o.id, RES);
-			m_agents.at(m_agent_map[o.id])->SetObjectPose(o.xyz, o.rpy);
-			bool exist = false;
-			for (auto& p: rearranged.poses)
-			{
-				if (p.id == o.id)
-				{
-					p = o;
-					exist = true;
-					break;
-				}
-			}
-			if (!exist) {
-				rearranged.poses.push_back(o);
-			}
-		}
-	}
 }
 
 bool Planner::TryExtract()

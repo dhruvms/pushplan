@@ -14,8 +14,9 @@ void MAMOSearch::CreateRoot()
 	m_root_node->SetCBS(m_planner->GetCBS());
 	m_root_node->SetCC(m_planner->GetCC());
 	m_root_node->SetRobot(m_planner->GetRobot());
-	m_root_node->SetEdgeTo(-1, -1);
+
 	m_root_node->InitAgents(m_planner->GetAllAgents(), m_planner->GetStartObjects()); // inits required fields for hashing
+	m_root_node->SetEdgeTo(-1, -1);
 
 	m_search_nodes.push_back(m_root_node);
 	m_root_id = m_hashtable.GetStateIDForceful(m_root_node);
@@ -33,17 +34,18 @@ bool MAMOSearch::Solve()
 		auto next = m_OPEN.top();
 		if (done(next))
 		{
+			SMPL_INFO("Final plan found!");
+
 			auto node = m_hashtable.GetState(next->state_id);
 			next->g += node->robot_traj().points.size();
 
 			m_solved_node = node;
 			m_solved_search = next;
 			extractRearrangements();
-			m_grasp_at = m_planner->GetRobot()->GraspAt();
 
 			return true;
 		}
-		// expand(next);
+		expand(next);
 	}
 	return false;
 }
@@ -55,22 +57,41 @@ void MAMOSearch::GetRearrangements(std::vector<trajectory_msgs::JointTrajectory>
 	grasp_at = m_grasp_at;
 }
 
-// MAMOSearch::expand(MAMOSearchState *state)
-// {
-// 	if (!state->leaf) {
-// 		throw std::runtime_error("Trying to expand non-leaf MAMO search state!");
-// 	}
+bool MAMOSearch::expand(MAMOSearchState *state)
+{
+	if (!state->leaf) {
+		throw std::runtime_error("Trying to expand non-leaf MAMO search state!");
+	}
 
-// 	auto node = m_hashtable.GetState(state->state_id);
+	SMPL_WARN("Expand %d, g-value = %d", state->state_id, state->g);
+	auto node = m_hashtable.GetState(state->state_id);
 
-// 	if (valid_action)
-// 	{
-// 		// 1. run MAPF
-// 		node->RunMAPF(state->state_id);
+	// 1. run MAPF
+	bool mapf_solved = node->RunMAPF(state->state_id);
+	if (!mapf_solved)
+	{
+		m_OPEN.erase(state->m_OPEN_h);
+		return false;
+	}
 
-// 		// 2. init successors
-// 	}
-// }
+	// 2. generate appropriate successor states
+	std::vector<std::pair<int, int> > succ_object_centric_actions;
+	std::vector<comms::ObjectsPoses> succ_objects;
+	std::vector<trajectory_msgs::JointTrajectory> succ_trajs;
+	node->GetSuccs(&succ_object_centric_actions, &succ_objects, &succ_trajs);
+
+	assert(succ_object_centric_actions.size() == succ_objects.size());
+	assert(succ_objects.size() == succ_trajs.size());
+	assert(succ_trajs.size() == succ_object_centric_actions.size());
+
+	state->leaf = false;
+	createSuccs(node, state, &succ_object_centric_actions, &succ_objects, &succ_trajs);
+	if (!state->leaf) {
+		m_OPEN.erase(state->m_OPEN_h);
+	}
+
+	return true;
+}
 
 bool MAMOSearch::done(MAMOSearchState *state)
 {
@@ -80,18 +101,71 @@ bool MAMOSearch::done(MAMOSearchState *state)
 	}
 
 	auto start_state = node->GetCurrentStartState();
-	return m_planner->FinalisePlan(node->kobject_states(), start_state, node->robot_traj());
+	return m_planner->FinalisePlan(node->kobject_states(), start_state, m_exec_traj);
 }
 
 void MAMOSearch::extractRearrangements()
 {
 	m_rearrangements.clear();
+	m_rearrangements.push_back(std::move(m_exec_traj));
 	for (MAMOSearchState *state = m_solved_search; state; state = state->bp)
 	{
 		auto node = m_hashtable.GetState(state->state_id);
-		m_rearrangements.push_back(node->krobot_traj());
+		if (node->has_traj()) {
+			m_rearrangements.push_back(node->krobot_traj());
+		}
 	}
 	std::reverse(m_rearrangements.begin(), m_rearrangements.end());
+	m_grasp_at = m_planner->GetRobot()->GraspAt();
+}
+
+void MAMOSearch::createSuccs(
+	MAMONode *parent_node,
+	MAMOSearchState *parent_search_state,
+	std::vector<std::pair<int, int> > *succ_object_centric_actions,
+	std::vector<comms::ObjectsPoses> *succ_objects,
+	std::vector<trajectory_msgs::JointTrajectory> *succ_trajs)
+{
+	size_t num_succs = succ_object_centric_actions->size();
+
+	unsigned int parent_g = parent_search_state->g;
+	for (size_t i = 0; i < num_succs; ++i)
+	{
+		if (succ_object_centric_actions->at(i) == std::make_pair(-1, -1))
+		{
+			if (!parent_search_state->leaf)
+			{
+				parent_search_state->leaf = true;
+				parent_search_state->g += 1000; // TODO: better way to incur cost for calling MAPF again?
+				m_OPEN.update(parent_search_state->m_OPEN_h, parent_search_state);
+				SMPL_WARN("Update %d, g-value = %d", parent_search_state->state_id, parent_search_state->g);
+			}
+			continue;
+		}
+
+		auto succ = new MAMONode;
+		succ->SetPlanner(m_planner);
+		succ->SetCBS(m_planner->GetCBS());
+		succ->SetCC(m_planner->GetCC());
+		succ->SetRobot(m_planner->GetRobot());
+
+		succ->InitAgents(m_planner->GetAllAgents(), succ_objects->at(i)); // inits required fields for hashing
+		succ->SetEdgeTo(succ_object_centric_actions->at(i).first, succ_object_centric_actions->at(i).second);
+		succ->SetRobotTrajectory(succ_trajs->at(i));
+		succ->SetParent(parent_node);
+
+		m_search_nodes.push_back(succ);
+		parent_node->AddChild(succ);
+
+		unsigned int succ_id = m_hashtable.GetStateIDForceful(succ);
+		auto succ_search_state = getSearchState(succ_id);
+
+		succ_search_state->bp = parent_search_state;
+		succ_search_state->g = parent_g + succ->krobot_traj().points.size();
+		succ_search_state->leaf = true;
+		succ_search_state->m_OPEN_h = m_OPEN.push(succ_search_state);
+		SMPL_WARN("Generate %d, g-value = %d", succ_id, succ_search_state->g);
+	}
 }
 
 MAMOSearchState* MAMOSearch::getSearchState(unsigned int state_id)

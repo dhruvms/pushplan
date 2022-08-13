@@ -42,8 +42,8 @@ public:
 		const std::vector<ObjectState>& objects,
 		std::vector<double>* start_state,
 		trajectory_msgs::JointTrajectory& solution);
-
-	bool Rearrange();
+	void AddLocallyInvalidPush(
+		unsigned int state_id, int agent_id, Coord bad_goal);
 
 	bool TryExtract();
 	std::uint32_t RunSolution();
@@ -141,11 +141,6 @@ private:
 	bool createCBS();
 	bool createMAMOSearch();
 	bool setupProblem();
-
-	bool rearrange();
-	void updateAgentPositions(
-		const comms::ObjectsPoses& result,
-		comms::ObjectsPoses& rearranged);
 
 	bool runSim();
 	bool animateSolution();

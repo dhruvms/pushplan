@@ -34,7 +34,11 @@ public:
 		const std::vector<std::shared_ptr<Agent> >& agents,
 		const comms::ObjectsPoses& all_objects);
 	std::vector<double>* GetCurrentStartState();
-	void RunMAPF(unsigned int my_state_id);
+	bool RunMAPF(unsigned int my_state_id);
+	void GetSuccs(
+		std::vector<std::pair<int, int> > *succ_object_centric_actions,
+		std::vector<comms::ObjectsPoses> *succ_objects,
+		std::vector<trajectory_msgs::JointTrajectory> *succ_trajs);
 
 	size_t GetConstraintHash() const;
 	size_t GetSearchHash() const;
@@ -49,6 +53,7 @@ public:
 	void SetCC(const std::shared_ptr<CollisionChecker>& cc);
 	void SetRobot(const std::shared_ptr<Robot>& robot);
 	void SetEdgeTo(int oidx, int aidx);
+	void AddChild(MAMONode* child);
 
 	size_t num_objects() const;
 	const std::vector<ObjectState>& kobject_states() const;
@@ -58,17 +63,20 @@ public:
 	MAMONode* parent();
 	const std::vector<MAMONode*>& kchildren() const;
 	std::pair<int, int> object_centric_action() const;
+	bool has_traj() const;
 
 private:
+	comms::ObjectsPoses m_all_objects; // all object poses at node
 	std::vector<std::shared_ptr<Agent> > m_agents; // pointers to relevant objects
+	std::unordered_map<int, size_t> m_agent_map;
 	std::vector<ObjectState> m_object_states; // current relevant object states
-	std::vector<std::pair<int, Trajectory> > m_mapf_solution; // mapf solution found at this node
+	int m_oidx, m_aidx; // object-to-move id, action-to-use id
 	trajectory_msgs::JointTrajectory m_robot_traj; // robot trajectory from parent to this node
 
 	MAMONode *m_parent; // parent node in tree
 	std::vector<MAMONode*> m_children; // children nodes in tree
-	int m_oidx, m_aidx; // object-to-move id, action-to-use id
-	comms::ObjectsPoses m_all_objects; // all object poses at node
+
+	std::vector<std::pair<int, Trajectory> > m_mapf_solution; // mapf solution found at this node
 	std::vector<int> m_relevant_ids;
 
 	Planner *m_planner;

@@ -37,10 +37,18 @@ private:
 	HashManager<HashSearch, EqualsSearch> m_hashtable;
 
 	std::vector<trajectory_msgs::JointTrajectory> m_rearrangements;
+	trajectory_msgs::JointTrajectory m_exec_traj;
 	int m_grasp_at;
 
+	bool expand(MAMOSearchState *state);
 	bool done(MAMOSearchState *state);
 	void extractRearrangements();
+	void createSuccs(
+		MAMONode *parent_node,
+		MAMOSearchState *parent_search_state,
+		std::vector<std::pair<int, int> > *succ_object_centric_actions,
+		std::vector<comms::ObjectsPoses> *succ_objects,
+		std::vector<trajectory_msgs::JointTrajectory> *succ_trajs);
 
 	MAMOSearchState *getSearchState(unsigned int state_id);
 	MAMOSearchState *createSearchState(unsigned int state_id);

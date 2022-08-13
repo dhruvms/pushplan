@@ -32,7 +32,7 @@ std::vector<double>* MAMONode::GetCurrentStartState()
 	return m_parent->GetCurrentStartState();
 }
 
-void MAMONode::RunMAPF(unsigned int my_state_id)
+bool MAMONode::RunMAPF(unsigned int my_state_id)
 {
 	auto locally_invalid_pushes = m_planner->GetLocallyInvalidPushes(this->GetConstraintHash());
 	for (size_t i = 0; i < m_agents.size(); ++i)
@@ -51,10 +51,96 @@ void MAMONode::RunMAPF(unsigned int my_state_id)
 		}
 	}
 
-	m_cc->InitMovableCC(m_agents);
-
+	// set/update/init necessary components
+	m_cc->ReinitMovableCC(m_agents);
 	m_cbs->Reset();
 	m_cbs->AddObjects(m_agents);
+
+	bool result = m_cbs->Solve();
+	if (result)
+	{
+		m_cbs->WriteLastSolution();
+		m_mapf_solution = m_cbs->GetSolution()->m_solution;
+		// identifyRelevantMovables();
+		for (size_t i = 0; i < m_agents.size(); ++i) {
+			m_agents.at(i)->ResetObject(); // in preparation for push evaluation
+		}
+	}
+
+	return result;
+}
+
+void MAMONode::GetSuccs(
+	std::vector<std::pair<int, int> > *succ_object_centric_actions,
+	std::vector<comms::ObjectsPoses> *succ_objects,
+	std::vector<trajectory_msgs::JointTrajectory> *succ_trajs)
+{
+	for (size_t i = 0; i < m_mapf_solution.size(); ++i)
+	{
+		const auto& moved = m_mapf_solution.at(i);
+		// if (std::find(m_relevant_ids.begin(), m_relevant_ids.end(), m_agents.at(m_agent_map[moved.first])->GetID()) == m_relevant_ids.end())
+		// {
+		// 	// if something the robot cannot currently reach moved in the MAPF solution,
+		// 	// ignore and move on, i.e. no successor generated since the scene cannot and should not change
+		// 	continue;
+		// }
+		if (moved.second.size() == 1 || moved.second.front().coord == moved.second.back().coord) {
+			continue;
+		}
+
+		// get push location
+		std::vector<double> push;
+		m_agents.at(m_agent_map[moved.first])->GetSE2Push(push);
+
+		// other movables to be considered as obstacles
+		std::vector<Object*> movable_obstacles;
+		for (const auto& a: m_agents)
+		{
+			if (a->GetID() == moved.first) {
+				continue; // selected object cannot be obstacle
+			}
+			movable_obstacles.push_back(a->GetObject());
+		}
+
+		// plan to push location
+		// m_robot->PlanPush creates the planner internally, because it might
+		// change KDL chain during the process
+		comms::ObjectsPoses result;
+		int push_failure;
+		if (m_robot->PlanPush(this->GetCurrentStartState(), m_agents.at(m_agent_map[moved.first]).get(), push, movable_obstacles, m_all_objects, result, push_failure, 1.0))
+		{
+			// valid push found!
+			succ_object_centric_actions->emplace_back(moved.first, 0); // TODO: currently only one aidx
+			succ_objects->push_back(std::move(result));
+			succ_trajs->push_back(m_robot->GetLastPlan());
+		}
+		else
+		{
+			// SMPL_INFO("Tried pushing object %d.", moved.first);
+			// switch (push_failure)
+			// {
+			// 	case 1: SMPL_ERROR("Push start inside object."); break;
+			// 	case 2: SMPL_ERROR("Failed to reach push start."); break;
+			// 	case 3: SMPL_ERROR("Inverse dynamics failed to reach push end."); break;
+			// 	case 4: SMPL_ERROR("Inverse kinematics/dynamics failed (joint limits likely)."); break;
+			// 	case 5: SMPL_ERROR("Inverse kinematics hit static obstacle."); break;
+			// 	case 6: SMPL_ERROR("Push action did not collide with intended object."); break;
+			// 	case 0: SMPL_ERROR("Valid push computed! Failed in simulation."); break;
+			// 	case -1: SMPL_INFO("Push succeeded in simulation!"); break;
+			// 	default: SMPL_WARN("Unknown push failure cause.");
+			// }
+
+			m_planner->AddLocallyInvalidPush(
+				this->GetConstraintHash(),
+				moved.first,
+				moved.second.back().coord);
+
+			trajectory_msgs::JointTrajectory dummy_traj;
+			succ_object_centric_actions->emplace_back(-1, -1);
+			succ_objects->push_back(m_all_objects);
+			succ_trajs->push_back(dummy_traj);
+		}
+	}
 }
 
 size_t MAMONode::GetConstraintHash() const
@@ -159,6 +245,11 @@ void MAMONode::SetEdgeTo(int oidx, int aidx)
 	m_aidx = aidx;
 }
 
+void MAMONode::AddChild(MAMONode* child)
+{
+	m_children.push_back(child);
+}
+
 size_t MAMONode::num_objects() const
 {
 	if (m_agents.size() != m_object_states.size()) {
@@ -202,11 +293,17 @@ std::pair<int, int> MAMONode::object_centric_action() const
 	return std::make_pair(m_oidx, m_aidx);
 }
 
+bool MAMONode::has_traj() const
+{
+	return !m_robot_traj.points.empty();
+}
+
 void MAMONode::addAgent(
 	const std::shared_ptr<Agent>& agent,
 	const size_t& pidx)
 {
 	m_agents.push_back(agent);
+	m_agent_map[agent->GetID()] = m_agents.size() - 1;
 
 	assert(m_agents.back()->GetID() == m_all_objects.poses.at(pidx).id);
 	m_agents.back()->SetObjectPose(m_all_objects.poses.at(pidx).xyz, m_all_objects.poses.at(pidx).rpy);

@@ -58,7 +58,7 @@ class CollisionChecker
 {
 public:
 	CollisionChecker(Planner* planner, const std::vector<Object>& obstacles, std::shared_ptr<Robot> r);
-	void InitMovableCC(const std::vector<std::shared_ptr<Agent> >& movables);
+	void ReinitMovableCC(const std::vector<std::shared_ptr<Agent> >& movables);
 
 	void AddObstacle(const Object& o)
 	{

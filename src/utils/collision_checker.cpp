@@ -36,7 +36,7 @@ m_rng(m_dev())
 	m_robot = r;
 }
 
-void CollisionChecker::InitMovableCC(const std::vector<std::shared_ptr<Agent> >& movables)
+void CollisionChecker::ReinitMovableCC(const std::vector<std::shared_ptr<Agent> >& movables)
 {
 	if (m_fcl_mov != nullptr) {
 		m_fcl_mov->clear();
