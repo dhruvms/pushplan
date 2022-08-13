@@ -86,7 +86,7 @@ public:
 		const double& push_frac,
 		bool input=false);
 	void IdentifyReachableMovables(
-		const std::vector<Object*>& movables,
+		const std::vector<std::shared_ptr<Agent> >& agents,
 		std::vector<int>& reachable_ids);
 
 	trajectory_msgs::JointTrajectory GetLastPlanProfiled()

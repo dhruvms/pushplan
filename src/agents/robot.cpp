@@ -1486,11 +1486,17 @@ bool Robot::computePushAction(
 }
 
 void Robot::IdentifyReachableMovables(
-	const std::vector<Object*>& movables,
+	const std::vector<std::shared_ptr<Agent> >& agents,
 	std::vector<int>& reachable_ids)
 {
 	reachable_ids.clear();
+
+	std::vector<Object*> movables;
+	for (const auto& a: agents) {
+		movables.push_back(a->GetObject());
+	}
 	ProcessObstacles(movables);
+
 	Eigen::Affine3d obj_pose;
 	trajectory_msgs::JointTrajectory traj;
 
@@ -1510,6 +1516,8 @@ void Robot::IdentifyReachableMovables(
 		}
 		ProcessObstacles(plan_to);
 	}
+
+	ProcessObstacles(movables, true);
 }
 
 bool Robot::PlanPush(
