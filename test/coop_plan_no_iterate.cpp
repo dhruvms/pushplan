@@ -95,7 +95,7 @@ for (int i = 0; i < runs; ++i)
 								rearrange = p.Rearrange();
 							}
 
-							if (p.Alive() && p.Replan() && p.FinalisePlan())
+							if (p.Alive() && p.Replan())
 							{
 								SMPL_INFO("Final plan found!");
 								break;

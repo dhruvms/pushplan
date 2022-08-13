@@ -5,7 +5,6 @@
 #include <pushplan/agents/robot.hpp>
 #include <pushplan/utils/bullet_sim.hpp>
 #include <pushplan/utils/collision_checker.hpp>
-#include <pushplan/utils/discretisation.hpp>
 #include <pushplan/utils/types.hpp>
 #include <comms/ObjectsPoses.h>
 
@@ -114,7 +113,6 @@ private:
 	std::shared_ptr<Agent> m_ooi;
 	std::unordered_map<int, size_t> m_agent_map;
 	std::vector<double> m_goal;
-	WorldResolutionParams m_disc_params;
 
 	trajectory_msgs::JointTrajectory m_exec;
 	std::vector<trajectory_msgs::JointTrajectory> m_rearrangements;
@@ -151,9 +149,6 @@ private:
 		bool ycb, std::vector<Object>& obstacles);
 	void parse_scene(std::vector<Object>& obstacles);
 	void read_solution();
-
-	void setupGlobals();
-	void readDiscretisationParams();
 
 	// For PP
 	std::vector<size_t> m_priorities;

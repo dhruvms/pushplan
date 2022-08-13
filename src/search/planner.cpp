@@ -60,9 +60,6 @@ bool Planner::Init(const std::string& scene_file, int scene_id, bool ycb)
 	m_ph.getParam("goal/sim_budget", m_sim_budget);
 	m_ph.getParam("goal/total_budget", m_total_budget);
 
-	setupGlobals();
-	readDiscretisationParams();
-
 	m_agent_map.clear();
 	m_agents.clear();
 	m_ooi = std::make_shared<Agent>();
@@ -942,46 +939,6 @@ void Planner::read_solution()
 	}
 
 	SOLUTION.close();
-}
-
-void Planner::setupGlobals()
-{
-	m_ph.getParam("/fridge", FRIDGE);
-	m_ph.getParam("mapf/planning_time", MAPF_PLANNING_TIME);
-	m_ph.getParam("mapf/res", RES);
-	m_ph.getParam("mapf/cost_mult", COST_MULT);
-	m_ph.getParam("mapf/goal_thresh", GOAL_THRESH);
-	m_ph.getParam("mapf/whca/window", WINDOW);
-	m_ph.getParam("mapf/whca/grid", GRID);
-	m_ph.getParam("robot/semi_minor", SEMI_MINOR);
-	m_ph.getParam("robot/speed", R_SPEED);
-	m_ph.getParam("goal/save", SAVE);
-	m_ph.getParam("goal/cc_2d", CC_2D);
-	m_ph.getParam("goal/cc_3d", CC_3D);
-	m_ph.getParam("occupancy_grid/res", DF_RES);
-
-	int llhc, hlhc, algo;
-	m_ph.getParam("mapf/cbs/algo", algo);
-	m_ph.getParam("mapf/cbs/llhc", llhc);
-	m_ph.getParam("mapf/cbs/hlhc", hlhc);
-	m_ph.getParam("mapf/cbs/ecbs_mult", ECBS_MULT);
-	ALGO = static_cast<MAPFAlgo>(algo);
-	LLHC = static_cast<LowLevelConflictHeuristic>(llhc);
-	HLHC = static_cast<HighLevelConflictHeuristic>(hlhc);
-}
-
-void Planner::readDiscretisationParams()
-{
-	std::string disc_string;
-	if (!m_ph.getParam("objects/discretisation", disc_string)) {
-		throw std::runtime_error("Parameter 'objects/discretisation' not found in planning params");
-	}
-
-	auto disc = ParseMapFromString<double>(disc_string);
-	SetWorldResolutionParams(
-		disc["x"], disc["y"], disc["theta"],
-		disc["ox"], disc["oy"], m_disc_params);
-	DiscretisationManager::Initialize(m_disc_params);
 }
 
 bool Planner::SaveData()
