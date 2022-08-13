@@ -47,12 +47,15 @@ public:
 	bool SetObjectPose(
 		const std::vector<double>& xyz,
 		const std::vector<double>& rpy);
+	bool SetObjectPose(const ContPose& pose);
 
 	bool Init();
 	void ComputeNGRComplement(
 		double ox, double oy, double oz,
 		double sx, double sy, double sz, bool vis=false);
 
+	void ResetInvalidPushes(const std::vector<std::pair<Coord, Coord> >* invalids_G);
+	void SetLocallyInvalidPushes(const std::vector<Coord>& invalids);
 	bool SatisfyPath(
 		HighLevelNode* ct_node,
 		Trajectory** sol_path,
@@ -119,9 +122,9 @@ private:
 	Trajectory m_solve;
 	bool m_set;
 	std::vector<double> m_input_push;
-
 	std::unique_ptr<AgentLattice> m_lattice;
 	std::string m_planning_frame;
+
 	std::shared_ptr<smpl::OccupancyGrid> m_obs_grid, m_ngr_grid;
 	std::set<Eigen::Vector3d, Eigen_Vector3d_compare> m_ngr_complement;
 	std::vector<LatticeState> m_ngr_complement_states;

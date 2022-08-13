@@ -25,6 +25,8 @@ public:
 
 	void SetCTNode(HighLevelNode* ct_node);
 	void AvoidAgents(const std::unordered_set<int>& to_avoid);
+	void ResetInvalidPushes(const std::vector<std::pair<Coord, Coord> >* invalids_G);
+	void SetLocallyInvalidPushes(const std::vector<Coord>& invalids_L);
 
 	bool IsGoal(int state_id);
 	void GetSuccs(
@@ -49,6 +51,7 @@ private:
 	std::vector<std::pair<int, Trajectory> >* m_cbs_solution; // all agent trajectories
 	int m_cbs_id, m_max_time;
 	std::unordered_set<int> m_to_avoid;
+	std::set<Coord, coord_compare> m_invalid_pushes;
 
 	// maps from coords to stateID
 	typedef LatticeState StateKey;

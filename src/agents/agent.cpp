@@ -48,6 +48,21 @@ bool Agent::SetObjectPose(
 	ResetObject();
 }
 
+bool Agent::SetObjectPose(const ContPose& pose)
+{
+	m_obj_desc.o_x = pose.x();
+	m_obj_desc.o_y = pose.y();
+	m_obj_desc.o_z = pose.z();
+
+	m_obj_desc.o_roll = pose.roll();
+	m_obj_desc.o_pitch = pose.pitch();
+	m_obj_desc.o_yaw = pose.yaw();
+
+	m_obj.desc = m_obj_desc;
+
+	ResetObject();
+}
+
 bool Agent::Init()
 {
 	m_init.t = 0;
@@ -125,6 +140,16 @@ void Agent::ComputeNGRComplement(
 						m_planning_frame,
 						"complement"));
 	}
+}
+
+void Agent::ResetInvalidPushes(const std::vector<std::pair<Coord, Coord> >* invalids_G)
+{
+	m_lattice->ResetInvalidPushes(invalids_G);
+}
+
+void Agent::SetLocallyInvalidPushes(const std::vector<Coord>& invalids_L)
+{
+	m_lattice->SetLocallyInvalidPushes(invalids_L);
 }
 
 bool Agent::SatisfyPath(

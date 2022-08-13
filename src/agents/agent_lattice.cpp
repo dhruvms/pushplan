@@ -70,6 +70,22 @@ void AgentLattice::AvoidAgents(const std::unordered_set<int>& to_avoid)
 	m_to_avoid = to_avoid;
 }
 
+void AgentLattice::ResetInvalidPushes(const std::vector<std::pair<Coord, Coord> >* invalids_G)
+{
+	m_invalid_pushes.clear();
+	for (size_t i = 0; i < invalids_G->size(); ++i)
+	{
+		if (invalids_G->at(i).first == m_agent->InitState().coord) {
+			m_invalid_pushes.insert(invalids_G->at(i).second);
+		}
+	}
+}
+
+void AgentLattice::SetLocallyInvalidPushes(const std::vector<Coord>& invalids)
+{
+	m_invalid_pushes.insert(invalids.begin(), invalids.end());
+}
+
 // As long as I am not allowed to be in this location at some later time,
 // I have not reached a valid goal state
 // Conversely, if I can remain in this location (per existing constraints),
@@ -81,8 +97,14 @@ bool AgentLattice::IsGoal(int state_id)
 	LatticeState* s = getHashEntry(state_id);
 	assert(s);
 
-	bool constrained = false, conflict = false, ngr = false;
+	if (!m_invalid_pushes.empty())
+	{
+		if (std::find(m_invalid_pushes.begin(), m_invalid_pushes.end(), s->coord) != m_invalid_pushes.end()) {
+			return false;
+		}
+	}
 
+	bool constrained = false, conflict = false, ngr = false;
 	ngr = m_agent->OutsideNGR(*s);
 	if (m_agent->PP())
 	{
