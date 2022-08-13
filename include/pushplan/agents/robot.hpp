@@ -77,7 +77,7 @@ public:
 	bool UpdateKDLRobot(int mode);
 	bool InitArmPlanner(bool interp=false);
 	bool PlanPush(
-		const std::vector<double>& start_state,
+		std::vector<double> *start_state,
 		Agent* object, const std::vector<double>& push,
 		const std::vector<Object*>& other_movables,
 		const comms::ObjectsPoses& rearranged,
@@ -89,12 +89,12 @@ public:
 		const std::vector<std::shared_ptr<Agent> >& agents,
 		std::vector<int>& reachable_ids);
 
-	trajectory_msgs::JointTrajectory GetLastPlanProfiled()
+	const trajectory_msgs::JointTrajectory& GetLastPlanProfiled()
 	{
 		m_planner->ProfilePath(m_rm.get(), m_traj);
 		return m_traj;
 	};
-	trajectory_msgs::JointTrajectory GetLastPlan() {
+	const trajectory_msgs::JointTrajectory& GetLastPlan() {
 		return m_traj;
 	};
 
@@ -277,12 +277,12 @@ private:
 		const Eigen::Affine3d& pose_goal,
 		trajectory_msgs::JointTrajectory& push_traj,
 		double t=0.1);
-	bool computePushAction(
+	int computePushAction(
 		const double time_start,
 		const smpl::RobotState& jnt_positions,
 		const smpl::RobotState& jnt_velocities,
 		const Eigen::Affine3d& end_pose,
-		trajectory_msgs::JointTrajectory& action, int& failure);
+		trajectory_msgs::JointTrajectory& action);
 
 	bool reinitStartState();
 
@@ -365,6 +365,7 @@ private:
 		const std::vector<Object*>& movable_obstacles,
 		bool finalise=false);
 	void voxeliseTrajectory();
+	void createVirtualTable();
 
 	std::vector<std::vector<double> > m_push_debug_data;
 };

@@ -186,6 +186,7 @@ bool Robot::Setup()
 	m_ph.getParam("robot/grasping/tries", m_grasp_tries);
 	m_ph.getParam("robot/grasping/lift", m_grasp_lift);
 	m_vis_pub = m_nh.advertise<visualization_msgs::Marker>( "/visualization_marker", 10);
+	createVirtualTable();
 
 	return true;
 }
@@ -1341,13 +1342,14 @@ bool Robot::planToPoseGoal(
 	return true;
 }
 
-bool Robot::computePushAction(
+int Robot::computePushAction(
 	const double time_start,
 	const smpl::RobotState& jnt_positions,
 	const smpl::RobotState& jnt_velocities,
 	const Eigen::Affine3d& end_pose,
-	trajectory_msgs::JointTrajectory& action, int& failure)
+	trajectory_msgs::JointTrajectory& action)
 {
+	int failure = 0;
 	// Constants
 	double xy_thresh = 0.01;
 
@@ -1359,7 +1361,7 @@ bool Robot::computePushAction(
 	Eigen::Affine3d xo_ = end_pose;
 
 	bool push_end = false;
-	for(int iter = 0; iter < m_invvel_iters; iter++)
+	for (int iter = 0; iter < m_invvel_iters; iter++)
 	{
 
 		// Get difference between current EE pose and desired EE pose
@@ -1405,8 +1407,10 @@ bool Robot::computePushAction(
 		if (!m_rm->computeInverseVelocity(q_, x_dot, q_dot))
 		{
 			// SMPL_INFO("Failed to compute inverse velocity");
-			failure = 2;
-			return false;
+			failure = 4;
+			// return false;
+			action.points.pop_back();
+			break;
 		}
 
 		// Add waypoint to action
@@ -1449,11 +1453,12 @@ bool Robot::computePushAction(
 			}
 			SV_SHOW_INFO_NAMED("push_action", ma);
 
-			return true;
+			return failure;
 		}
 
 		// Move arm joints
-		for(size_t i = 0; i < q_.size(); ++i) {
+		for (size_t i = 0; i < q_.size(); ++i)
+		{
 			// q_[i] += (q_dot[i] * m_dt);
 			double limit = m_rm->velLimit(i);
 			q_[i] += std::min(std::max(-limit, q_dot[i]), limit) * m_dt;
@@ -1470,19 +1475,28 @@ bool Robot::computePushAction(
 
 		// TODO: check velocity limit
 		// Check joint limits
-		if (!m_rm->checkJointLimits(q_)) {
-			failure = 2;
-			return false;
+		if (!m_rm->checkJointLimits(q_))
+		{
+			failure = 4;
+			// return false;
+			action.points.pop_back();
+			break;
 		}
-		if (!m_cc_i->isStateValid(q_)) {
-			failure = 3;
-			return false;
+		if (!m_cc_i->isStateValid(q_))
+		{
+			failure = 5;
+			// return false;
+			action.points.pop_back();
+			break;
 		}
 	}
 
-	// SMPL_INFO("Failed to reach end pose");
-	failure = 1;
-	return false;
+	if (failure == 0)
+	{
+		SMPL_WARN("Push action failed to reach end pose.");
+		failure = 3;
+	}
+	return failure;
 }
 
 void Robot::IdentifyReachableMovables(
@@ -1521,7 +1535,7 @@ void Robot::IdentifyReachableMovables(
 }
 
 bool Robot::PlanPush(
-	const std::vector<double>& start_state,
+	std::vector<double> *start_state,
 	Agent* object, const std::vector<double>& push,
 	const std::vector<Object*>& other_movables,	const comms::ObjectsPoses& rearranged,
 	comms::ObjectsPoses& result,
@@ -1589,14 +1603,16 @@ bool Robot::PlanPush(
 		// plan path to push start pose with all other objects as obstacles
 		trajectory_msgs::JointTrajectory push_traj;
 		moveit_msgs::RobotState push_start_state = m_start_state;
-		if (start_state.size() == m_rm->jointVariableCount())
+		if (start_state != nullptr)
 		{
+			assert(start_state->size() == m_rm->jointVariableCount());
+
 			push_start_state.joint_state.position.erase(
 				push_start_state.joint_state.position.begin() + 1,
-				push_start_state.joint_state.position.begin() + 1 + start_state.size());
+				push_start_state.joint_state.position.begin() + 1 + start_state->size());
 			push_start_state.joint_state.position.insert(
 				push_start_state.joint_state.position.begin() + 1,
-				start_state.begin(), start_state.end());
+				start_state->begin(), start_state->end());
 		}
 		if (!planToPoseGoal(push_start_state, push_start_pose, push_traj))
 		{
@@ -1606,7 +1622,7 @@ bool Robot::PlanPush(
 				-99.0,
 				-99.0,
 				0.0});
-			push_failure = 1;
+			push_failure = 2;
 			continue;
 		}
 		++m_stats["push_samples_found"];
@@ -1625,7 +1641,7 @@ bool Robot::PlanPush(
 		double push_dist, push_at_angle;
 		if (!input)
 		{
-			push_dist = EuclideanDist({ push_end_pose.translation().x(), push_end_pose.translation().y() }, obj_traj->back().state);
+			push_dist = EuclideanDist(obj_traj->front().state, obj_traj->back().state) + 0.05;
 			push_at_angle = std::atan2(
 					obj_traj->back().state.at(1) - push_end_pose.translation().y(),
 					obj_traj->back().state.at(0) - push_end_pose.translation().x());
@@ -1648,15 +1664,19 @@ bool Robot::PlanPush(
 		// get push action trajectory via inverse velocity
 		trajectory_msgs::JointTrajectory push_action;
 		smpl::RobotState joint_vel(m_rm->jointVariableCount(), 0.0);
-		if (computePushAction(
-				push_traj.points.back().time_from_start.toSec(),
-				push_traj.points.back().positions,
-				joint_vel,
-				push_end_pose,
-				push_action, push_failure))
+		push_failure = computePushAction(
+							push_traj.points.back().time_from_start.toSec(),
+							push_traj.points.back().positions,
+							joint_vel,
+							push_end_pose,
+							push_action);
+
+		// compute obtainable push action end pose
+		push_end_pose = m_rm->computeFK(push_action.points.back().positions);
+
+		// collision check push action against pushed object
+		// ensure that it collides
 		{
-			// collision check push action against pushed object
-			// ensure that it collides
 			bool collides = false;
 			ProcessObstacles(pushed_obj, false, false);
 			for (size_t wp = 1; wp < push_action.points.size(); ++wp)
@@ -1669,6 +1689,7 @@ bool Robot::PlanPush(
 					break;
 				}
 			}
+
 			if (!collides)
 			{
 				ProcessObstacles(pushed_obj, true, false);
@@ -1678,19 +1699,19 @@ bool Robot::PlanPush(
 					push_end_pose.translation().x(),
 					push_end_pose.translation().y(),
 					4.0});
-				push_failure = 4;
+				push_failure = 6;
 				continue;
 			}
 			ProcessObstacles(pushed_obj, true, false);
 
 			++m_stats["push_actions_found"];
+			int push_debug = push_failure == 0 ? 5 : push_failure - 2;
 			m_push_debug_data.push_back({
 				push_start_pose.translation().x(),
 				push_start_pose.translation().y(),
 				push_end_pose.translation().x(),
 				push_end_pose.translation().y(),
-				5.0});
-			push_failure = 0;
+				(double)push_debug});
 
 			// append waypoints to retract to push start pose
 			auto push_action_copy = push_action;
@@ -1710,15 +1731,6 @@ bool Robot::PlanPush(
 			m_push_actions.push_back(std::move(push_action));
 			m_push_trajs.push_back(std::move(push_traj));
 			++i;
-		}
-		else
-		{
-			m_push_debug_data.push_back({
-				push_start_pose.translation().x(),
-				push_start_pose.translation().y(),
-				push_end_pose.translation().x(),
-				push_end_pose.translation().y(),
-				(double)push_failure});
 		}
 	}
 
@@ -1758,6 +1770,7 @@ bool Robot::PlanPush(
 
 	++m_stats["push_sim_successes"];
 	m_traj = m_push_trajs.at(pidx);
+	push_failure = -1;
 
 	Eigen::Affine3d pose = m_rm->computeFK(m_traj.points.back().positions);
 	m_push_debug_data.push_back({
@@ -1809,25 +1822,23 @@ void Robot::getPushStartPose(
 	Eigen::Affine3d& push_pose,
 	bool input)
 {
-	// sample robot link
-	int link = 1; // std::floor(m_distD(m_rng) * (m_robot_config.push_links.size() + 1));
-	UpdateKDLRobot(link);
+	UpdateKDLRobot(1); // set to r_gripper_tool_frame
 
-	// z is between 3 to 8cm above table height
+	// z is 3cm above table height
 	double z = m_table_z + 0.03;
 
-	// (x, y) is randomly sampled near push start location
+	// (x, y) is determined by push start location
 	double x = push[0];
 	double y = push[1];
 	if (!input)
 	{
-		x += std::cos(push[2] + M_PI) * 0.03;
-		y += std::sin(push[2] + M_PI) * 0.03;
+		x += std::cos(push[2] + M_PI) * 0.05;
+		y += std::sin(push[2] + M_PI) * 0.05;
 	}
 
 	push_pose = Eigen::Translation3d(x, y, z) *
 				Eigen::AngleAxisd(push[2], Eigen::Vector3d::UnitZ()) *
-				Eigen::AngleAxisd(0.0, Eigen::Vector3d::UnitY()) *
+				Eigen::AngleAxisd(M_PI/6.0, Eigen::Vector3d::UnitY()) *
 				Eigen::AngleAxisd(0.0, Eigen::Vector3d::UnitX());
 
 	SV_SHOW_INFO_NAMED("sampled_push_pose", smpl::visual::MakePoseMarkers(
@@ -3293,22 +3304,16 @@ void Robot::RunPushIKStudy(int N)
 						// get push action trajectory via inverse velocity
 						trajectory_msgs::JointTrajectory push_action;
 						smpl::RobotState joint_vel(m_rm->jointVariableCount(), 0.0);
-						int failure = 0;
-						if (computePushAction(
-								path.points.back().time_from_start.toSec(),
-								path.points.back().positions,
-								joint_vel,
-								goal,
-								push_action, failure))
-						{
-							DATA << x0 << ',' << y0 << ',' << yaw0 << ','
-								<< x1 << ',' << y1 << ',' << 4 << '\n';
-						}
-						else
-						{
-							DATA << x0 << ',' << y0 << ',' << yaw0 << ','
-								<< x1 << ',' << y1 << ',' << failure << '\n';
-						}
+						int failure = computePushAction(
+										path.points.back().time_from_start.toSec(),
+										path.points.back().positions,
+										joint_vel,
+										goal,
+										push_action);
+						failure -= 2;
+						if (failure == -2) { failure = 4; };
+						DATA << x0 << ',' << y0 << ',' << yaw0 << ','
+							<< x1 << ',' << y1 << ',' << failure << '\n';
 					}
 					else
 					{
@@ -3383,6 +3388,20 @@ bool Robot::SavePushData(int scene_id, bool reset)
 		m_stats["push_sim_time"] = 0.0;
 		m_stats["push_sim_successes"] = 0;
 	}
+}
+
+void Robot::createVirtualTable()
+{
+	auto obs = m_cc->GetObstacles();
+	Object virtual_table = obs->front();
+	virtual_table.desc.o_x -= virtual_table.desc.x_size + 0.12;
+	virtual_table.desc.x_size = 0.1;
+	virtual_table.desc.id = 999;
+
+	virtual_table.CreateCollisionObjects();
+	virtual_table.CreateSMPLCollisionObject();
+	virtual_table.GenerateCollisionModels();
+	ProcessObstacles({ &virtual_table });
 }
 
 } // namespace clutter
