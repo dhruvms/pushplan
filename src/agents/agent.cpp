@@ -152,6 +152,11 @@ void Agent::SetLocallyInvalidPushes(const std::vector<Coord>& invalids_L)
 	m_lattice->SetLocallyInvalidPushes(invalids_L);
 }
 
+const std::set<Coord, coord_compare>& Agent::GetInvalidPushes() const
+{
+	return m_lattice->GetInvalidPushes();
+}
+
 bool Agent::SatisfyPath(
 	HighLevelNode* ct_node,
 	Trajectory** sol_path,

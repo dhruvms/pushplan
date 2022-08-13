@@ -27,6 +27,7 @@ public:
 	void AvoidAgents(const std::unordered_set<int>& to_avoid);
 	void ResetInvalidPushes(const std::vector<std::pair<Coord, Coord> >* invalids_G);
 	void SetLocallyInvalidPushes(const std::vector<Coord>& invalids_L);
+	const std::set<Coord, coord_compare>& GetInvalidPushes() const;
 
 	bool IsGoal(int state_id);
 	void GetSuccs(

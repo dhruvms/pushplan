@@ -86,6 +86,11 @@ void AgentLattice::SetLocallyInvalidPushes(const std::vector<Coord>& invalids)
 	m_invalid_pushes.insert(invalids.begin(), invalids.end());
 }
 
+const std::set<Coord, coord_compare>& AgentLattice::GetInvalidPushes() const
+{
+	return m_invalid_pushes;
+}
+
 // As long as I am not allowed to be in this location at some later time,
 // I have not reached a valid goal state
 // Conversely, if I can remain in this location (per existing constraints),

@@ -56,6 +56,8 @@ public:
 
 	void ResetInvalidPushes(const std::vector<std::pair<Coord, Coord> >* invalids_G);
 	void SetLocallyInvalidPushes(const std::vector<Coord>& invalids);
+	const std::set<Coord, coord_compare>& GetInvalidPushes() const;
+
 	bool SatisfyPath(
 		HighLevelNode* ct_node,
 		Trajectory** sol_path,
