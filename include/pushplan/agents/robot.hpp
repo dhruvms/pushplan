@@ -55,7 +55,7 @@ public:
 	bool Init();
 	bool RandomiseStart();
 	bool PlanApproachOnly(const std::vector<Object*>& movable_obstacles);
-	bool PlanRetrieval(const std::vector<Object*>& movable_obstacles, bool finalise=false, smpl::RobotState start_state={});
+	bool PlanRetrieval(const std::vector<Object*>& movable_obstacles, bool finalise=false, smpl::RobotState* start_state=nullptr);
 	void UpdateNGR(bool vis=false);
 	bool SatisfyPath(HighLevelNode* ct_node, Trajectory** sol_path, int& expands, int& min_f);
 
@@ -358,7 +358,7 @@ private:
 		moveit_msgs::MotionPlanResponse& res,
 		const std::vector<Object*>& movable_obstacles,
 		bool finalise=false,
-		smpl::RobotState start_state={});
+		smpl::RobotState* start_state=nullptr);
 	bool planRetract(
 		const std::vector<std::vector<double> >& retract_cvecs,
 		moveit_msgs::MotionPlanResponse& res,

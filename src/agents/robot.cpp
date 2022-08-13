@@ -706,7 +706,7 @@ bool Robot::planApproach(
 	moveit_msgs::MotionPlanResponse& res,
 	const std::vector<Object*>& movable_obstacles,
 	bool finalise,
-	smpl::RobotState start_state)
+	smpl::RobotState* start_state)
 {
 	bool have_obs = !movable_obstacles.empty();
 
@@ -737,14 +737,14 @@ bool Robot::planApproach(
 
 	// set appropriate start state for approach plan to pregrasp state
 	moveit_msgs::RobotState orig_start = m_start_state;
-	if (!start_state.empty())
+	if (start_state != nullptr)
 	{
 		m_start_state.joint_state.position.erase(
 			m_start_state.joint_state.position.begin() + 1,
-			m_start_state.joint_state.position.begin() + 1 + start_state.size());
+			m_start_state.joint_state.position.begin() + 1 + start_state->size());
 		m_start_state.joint_state.position.insert(
 			m_start_state.joint_state.position.begin() + 1,
-			start_state.begin(), start_state.end());
+			start_state->begin(), start_state->end());
 	}
 	req.start_state = m_start_state;
 	// req.trajectory_constraints;
@@ -759,7 +759,7 @@ bool Robot::planApproach(
 	{
 		// ROS_ERROR("Failed to init planner!");
 
-		if (!start_state.empty()) {
+		if (start_state != nullptr) {
 			m_start_state = orig_start;
 		}
 		return false;
@@ -783,7 +783,7 @@ bool Robot::planApproach(
 			ProcessObstacles(movable_obstacles, true, false);
 		}
 
-		if (!start_state.empty()) {
+		if (start_state != nullptr) {
 			m_start_state = orig_start;
 		}
 		return false;
@@ -795,7 +795,7 @@ bool Robot::planApproach(
 		ProcessObstacles(movable_obstacles, true, false);
 	}
 
-	if (!start_state.empty()) {
+	if (start_state != nullptr) {
 		m_start_state = orig_start;
 	}
 
@@ -991,7 +991,7 @@ bool Robot::PlanApproachOnly(const std::vector<Object*>& movable_obstacles)
 	return true;
 }
 
-bool Robot::PlanRetrieval(const std::vector<Object*>& movable_obstacles, bool finalise, smpl::RobotState start_state)
+bool Robot::PlanRetrieval(const std::vector<Object*>& movable_obstacles, bool finalise, smpl::RobotState* start_state)
 {
 	///////////////////
 	// Plan approach //
