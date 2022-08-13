@@ -50,19 +50,17 @@ public:
 	bool RunRRT();
 	void RunStudy(int study);
 
-	const std::shared_ptr<Agent>& GetAgent(const int& id)
-	{
-		assert(id > 0); // 0 is robot
-		return m_agents.at(m_agent_map[id]);
-	}
-	const std::vector<std::shared_ptr<Agent> >& GetAllAgents()	{
-		return m_agents;
-	}
+	const std::shared_ptr<Agent>& GetAgent(const int& id);
+	const std::vector<std::shared_ptr<Agent> >& GetAllAgents();
 
-	bool Replan() { return m_replan; };
+	bool Replan();
+	const std::shared_ptr<CBS>& GetCBS() const;
+	const std::shared_ptr<CollisionChecker>& GetCC() const;
+	const std::shared_ptr<Robot>& GetRobot() const;
+	const std::vector<std::pair<Coord, Coord> >* GetGloballyInvalidPushes() const;
+	const std::unordered_map<int, std::vector<Coord> >* GetLocallyInvalidPushes(unsigned int state_id) const;
 
 	// For KPIECE/RRT
-	Robot* GetRobot() { return m_robot.get(); };
 	bool StateValidityChecker(const smpl::RobotState& state) {
 		return m_robot->IsStateValid(state);
 	};
@@ -121,6 +119,9 @@ private:
 	HighLevelNode* m_cbs_soln;
 	std::unordered_map<int, std::size_t> m_cbs_soln_map;
 	std::map<std::string, double> m_stats, m_cbs_stats;
+
+	std::vector<std::pair<Coord, Coord> > m_invalid_pushes_G;
+	std::unordered_map<unsigned int, std::unordered_map<int, std::vector<Coord> > > m_invalid_pushes_L;
 
 	std::random_device m_dev;
 	std::mt19937 m_rng;

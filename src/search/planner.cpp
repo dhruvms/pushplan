@@ -74,6 +74,7 @@ bool Planner::Init(const std::string& scene_file, int scene_id, bool ycb)
 
 	// create collision checker
 	m_cc = std::make_shared<CollisionChecker>(this, all_obstacles, m_robot);
+	m_cc->InitMovableCC(m_agents);
 
 	m_robot->SetCC(m_cc);
 	for (auto& a: m_agents) {
@@ -1124,6 +1125,60 @@ void Planner::RunStudy(int study)
 		m_ph.getParam("robot/push_ik_yaws", N);
 		m_robot->RunPushIKStudy(N);
 	}
+}
+
+///////////////
+// Utilities //
+///////////////
+
+const std::shared_ptr<Agent>& Planner::GetAgent(const int& id)
+{
+	assert(id > 0); // 0 is robot
+	return m_agents.at(m_agent_map[id]);
+}
+
+const std::vector<std::shared_ptr<Agent> >& Planner::GetAllAgents()
+{
+	return m_agents;
+}
+
+bool Planner::Replan()
+{
+	return m_replan;
+}
+
+const std::shared_ptr<CBS>& Planner::GetCBS() const
+{
+	return m_cbs;
+}
+
+const std::shared_ptr<CollisionChecker>& Planner::GetCC() const
+{
+	return m_cc;
+}
+
+const std::shared_ptr<Robot>& Planner::GetRobot() const
+{
+	return m_robot;
+}
+
+const std::vector<std::pair<Coord, Coord> >* Planner::GetGloballyInvalidPushes() const
+{
+	return &m_invalid_pushes_G;
+}
+
+const std::unordered_map<int, std::vector<Coord> >* Planner::GetLocallyInvalidPushes(unsigned int state_id) const
+{
+	if (m_invalid_pushes_L.empty()) {
+		return nullptr;
+	}
+
+	const auto it = m_invalid_pushes_L.find(state_id);
+	if (it != m_invalid_pushes_L.end()) {
+		return &(it->second);
+	}
+
+	return nullptr;
 }
 
 //////////////////////////
