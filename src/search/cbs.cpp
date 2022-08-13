@@ -30,7 +30,7 @@ m_ct_generated(0), m_ct_deadends(0), m_ct_expanded(0), m_ll_expanded(0), m_time_
 {
 	m_robot = r;
 	m_objs = objs;
-	m_num_agents = (int)m_objs.size() + 1;
+	m_num_agents = (int)m_objs.size();
 	m_paths.resize(m_num_agents, nullptr);
 	m_min_fs.resize(m_num_agents, 0);
 
@@ -40,6 +40,20 @@ m_ct_generated(0), m_ct_deadends(0), m_ct_expanded(0), m_ll_expanded(0), m_time_
 		m_obj_idx_to_id[i] = m_objs[i]->GetID();
 	}
 	m_solved = false;
+}
+
+void CBS::AddObjects(const std::vector<std::shared_ptr<Agent> >& objs)
+{
+	m_objs.insert(m_objs.end(), objs.begin(), objs.end());
+	m_num_agents = (int)m_objs.size();
+	m_paths.resize(m_num_agents, nullptr);
+	m_min_fs.resize(m_num_agents, 0);
+
+	for (size_t i = 0; i < m_objs.size(); ++i)
+	{
+		m_obj_id_to_idx[m_objs[i]->GetID()] = i;
+		m_obj_idx_to_id[i] = m_objs[i]->GetID();
+	}
 }
 
 bool CBS::Solve()
@@ -107,9 +121,13 @@ bool CBS::Solve()
 
 void CBS::Reset()
 {
+	m_num_agents = 0;
 	m_objs.clear();
 	m_obj_id_to_idx.clear();
 	m_obj_idx_to_id.clear();
+	for (auto& c: m_paths) {
+		c = nullptr;
+	}
 	m_paths.clear();
 	m_min_fs.clear();
 
@@ -132,6 +150,7 @@ void CBS::Reset()
 			delete node;
 		}
 	}
+	m_nodes.clear();
 }
 
 void CBS::growConstraintTree(HighLevelNode* parent)

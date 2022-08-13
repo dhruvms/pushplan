@@ -169,6 +169,15 @@ void DAG::traverse(const std::vector<int>& check, std::size_t i, std::vector<boo
 	order.push(check.at(i));
 }
 
+HighLevelNode::~HighLevelNode()
+{
+	m_parent = nullptr;
+	for (auto& c: m_children) {
+		c = nullptr;
+	}
+	m_children.clear();
+}
+
 void HighLevelNode::recalcFlowtime()
 {
 	m_flowtime = 0;

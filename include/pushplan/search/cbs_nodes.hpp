@@ -121,6 +121,8 @@ struct HighLevelNode
 	std::vector<HighLevelNode*> m_children;
 	int m_replanned;
 
+	~HighLevelNode();
+
 	void clear() {
 		m_conflicts.clear();
 		m_priorities.Clear();

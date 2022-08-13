@@ -25,9 +25,7 @@ public:
 
 	void SetRobot(const std::shared_ptr<Robot>& r) { m_robot = r; };
 	void AddObject(const std::shared_ptr<Agent>& o) { m_objs.push_back(o); };
-	void AddObjects(const std::vector<std::shared_ptr<Agent> >& objs) {
-		m_objs.insert(m_objs.end(), objs.begin(), objs.end());
-	};
+	void AddObjects(const std::vector<std::shared_ptr<Agent> >& objs);
 
 	virtual bool Solve();
 	void Reset();
