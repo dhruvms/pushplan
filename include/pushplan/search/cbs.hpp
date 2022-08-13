@@ -30,6 +30,7 @@ public:
 	};
 
 	virtual bool Solve();
+	void Reset();
 
 	void SaveStats();
 	bool UpdateStats(std::map<std::string, double>& stats);
@@ -53,9 +54,10 @@ protected:
 	int m_ct_generated, m_ct_deadends, m_ct_expanded, m_ll_expanded, m_soln_cost, m_scene_id, m_soln_lb, m_wf;
 	double m_search_time, m_time_limit, m_ll_time, m_conflict_time;
 	bool m_solved;
-	HighLevelNode* m_goal;
+	HighLevelNode* m_goal = nullptr;;
 	HighLevelNode* m_root = nullptr;
 
+	std::vector<HighLevelNode*> m_nodes;
 	boost::heap::fibonacci_heap<HighLevelNode*, boost::heap::compare<HighLevelNode::OPENCompare> > m_OPEN;
 	boost::heap::fibonacci_heap<HighLevelNode*, boost::heap::compare<HighLevelNode::FOCALCompare> > m_FOCAL;
 

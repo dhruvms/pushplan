@@ -21,7 +21,6 @@ m_ct_generated(0), m_ct_deadends(0), m_ct_expanded(0), m_ll_expanded(0), m_time_
 	m_num_agents = 0;
 	m_paths.clear();
 	m_min_fs.clear();
-	m_goal = nullptr;
 	m_solved = false;
 }
 
@@ -40,7 +39,6 @@ m_ct_generated(0), m_ct_deadends(0), m_ct_expanded(0), m_ll_expanded(0), m_time_
 		m_obj_id_to_idx[m_objs[i]->GetID()] = i;
 		m_obj_idx_to_id[i] = m_objs[i]->GetID();
 	}
-	m_goal = nullptr;
 	m_solved = false;
 }
 
@@ -105,6 +103,35 @@ bool CBS::Solve()
 
 	SMPL_ERROR("CBS high-level OPEN is empty");
 	return false;
+}
+
+void CBS::Reset()
+{
+	m_objs.clear();
+	m_obj_id_to_idx.clear();
+	m_obj_idx_to_id.clear();
+	m_paths.clear();
+	m_min_fs.clear();
+
+	m_ct_generated = 0;
+	m_ct_deadends = 0;
+	m_ct_expanded = 0;
+	m_ll_expanded = 0;
+	m_time_limit = 30.0;
+	m_soln_lb = 0;
+	m_wf = 1000;
+	m_solved = false;
+
+	m_goal = nullptr;
+
+	m_OPEN.clear();
+	m_FOCAL.clear();
+	for (auto& node: m_nodes)
+	{
+		if (node != nullptr) {
+			delete node;
+		}
+	}
 }
 
 void CBS::growConstraintTree(HighLevelNode* parent)
@@ -186,6 +213,7 @@ void CBS::pushNode(HighLevelNode* node)
 	if (node->m_flowtime <= m_wf * m_soln_lb) {
 		node->m_FOCAL_h = m_FOCAL.push(node);
 	}
+	m_nodes.push_back(node);
 }
 
 void CBS::findConflicts(HighLevelNode& node)
@@ -564,7 +592,6 @@ bool CBS::done(HighLevelNode* node)
 	if (m_search_time > m_time_limit)
 	{
 		m_solved = false;
-		m_goal = nullptr;
 		m_soln_cost = -1;
 		return true;
 	}
