@@ -134,7 +134,7 @@ private:
 	bool m_locked{false};
 	std::map<int, ob::StateSpacePtr> m_joint_to_subspace;
 
-	Robot* m_robot;
+	std::shared_ptr<Robot> m_robot;
 	std::vector<std::string> m_planning_joints;
 	smpl::PushingKDLRobotModel* m_rm;
 	smpl::collision::RobotCollisionModelConstPtr m_rcm;
@@ -168,13 +168,13 @@ public:
 	bool checkMotion(const ob::State *s1, const ob::State *s2) const override;
 	bool checkMotion(const ob::State *s1, const ob::State *s2, std::pair<ob::State *, double> &lastValid) const override;
 
-	void SetRobot(Robot* robot) {
+	void SetRobot(const std::shared_ptr<Robot>& robot) {
 		m_robot = robot;
 	};
 
 private:
 	PushplanStateSpace *m_state_space;
-	Robot* m_robot;
+	std::shared_ptr<Robot> m_robot;
 
 	void defaultSettings();
 };
@@ -208,7 +208,7 @@ public:
 		m_position_tolerance = position_tolerance;
 		m_orientation_tolerance = orientation_tolerance;
 	}
-	void SetRobot(Robot* robot) {
+	void SetRobot(const std::shared_ptr<Robot>& robot) {
 		m_robot = robot;
 	};
 
@@ -216,7 +216,7 @@ private:
 	Eigen::Affine3d m_pose;
 	Eigen::Vector3d m_position_tolerance;
 	Eigen::Vector3d m_orientation_tolerance;
-	Robot* m_robot;
+	std::shared_ptr<Robot> m_robot;
 };
 
 struct ProjectionEvaluatorFK : public ob::ProjectionEvaluator
