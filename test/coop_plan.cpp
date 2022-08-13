@@ -133,31 +133,13 @@ for (int i = 0; i < runs; ++i)
 
 			if (!replay)
 			{
-				bool rearrange = true;
-				do
+				bool done;
+				if (p.Plan(done))
 				{
-					bool done;
-					if (p.Plan(done))
-					{
-						if (done)
-						{
-							SMPL_INFO("Final plan found!");
-							break;
-						}
-
-						if (p.Alive()) {
-							rearrange = p.Rearrange();
-						}
-					}
-				}
-				while (rearrange && p.Alive());
-
-				if (p.Alive()) {
 					p.RunSim(SAVE);
-				}
-
-				if (SAVE) {
-					p.SaveData();
+					if (SAVE) {
+						p.SaveData();
+					}
 				}
 			}
 
