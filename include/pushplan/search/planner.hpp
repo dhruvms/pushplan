@@ -3,6 +3,7 @@
 
 #include <pushplan/agents/agent.hpp>
 #include <pushplan/agents/robot.hpp>
+#include <pushplan/search/mamo_search.hpp>
 #include <pushplan/utils/bullet_sim.hpp>
 #include <pushplan/utils/collision_checker.hpp>
 #include <pushplan/utils/types.hpp>
@@ -37,7 +38,10 @@ public:
 	bool SetupNGR();
 
 	bool Plan(bool& done);
-	bool FinalisePlan(bool add_movables=true);
+	bool FinalisePlan(
+		const std::vector<ObjectState>& objects,
+		std::vector<double>* start_state,
+		trajectory_msgs::JointTrajectory& solution);
 
 	bool Rearrange();
 
@@ -105,6 +109,7 @@ private:
 	std::shared_ptr<Robot> m_robot;
 	std::shared_ptr<BulletSim> m_sim;
 	std::shared_ptr<CBS> m_cbs;
+	std::unique_ptr<MAMOSearch> m_mamo_search;
 	std::shared_ptr<sampling::SamplingPlanner> m_sampling_planner;
 
 	std::vector<std::shared_ptr<Agent> > m_agents;
@@ -134,6 +139,7 @@ private:
 	std::uint32_t m_violation;
 
 	bool createCBS();
+	bool createMAMOSearch();
 	bool setupProblem();
 
 	bool rearrange();

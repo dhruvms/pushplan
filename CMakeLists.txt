@@ -2,11 +2,11 @@ cmake_minimum_required(VERSION 3.5.1)
 project(pushplan)
 
 if(NOT CMAKE_BUILD_TYPE)
-	# set(CMAKE_BUILD_TYPE Debug)
-	set(CMAKE_BUILD_TYPE Release)
+	set(CMAKE_BUILD_TYPE Debug)
+	# set(CMAKE_BUILD_TYPE Release)
 endif()
-# set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -std=c++14 -fmax-errors=5")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14 -fmax-errors=5")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -std=c++14 -fmax-errors=5")
+# set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14 -fmax-errors=5")
 
 
 find_package(Boost REQUIRED)
@@ -44,6 +44,8 @@ include_directories(include)
 add_library(
 	PUSHPLAN
 	src/search/planner.cpp
+	src/search/mamo_node.cpp
+	src/search/mamo_search.cpp
 	src/search/cbs_nodes.cpp
 	src/search/cbs.cpp
 	src/search/cbswp.cpp
@@ -62,8 +64,9 @@ add_library(
 	src/agents/robot.cpp
 	src/utils/bullet_sim.cpp
 	src/utils/collision_checker.cpp
+	src/utils/constants.cpp
 	src/utils/discretisation.cpp
-	src/utils/constants.cpp)
+	src/utils/hash_manager.cpp)
 target_link_libraries(PUSHPLAN ${catkin_LIBRARIES} smpl::smpl) # -lprofiler
 
 add_executable(coop_plan test/coop_plan.cpp)

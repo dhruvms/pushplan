@@ -147,6 +147,8 @@ bool Planner::Init(const std::string& scene_file, int scene_id, bool ycb)
 	m_distD = std::uniform_real_distribution<double>(0.0, 1.0);
 	m_ph.getParam("robot/pushing/input", m_push_input);
 
+	createMAMOSearch();
+
 	return true;
 }
 
@@ -200,94 +202,39 @@ bool Planner::SetupNGR()
 
 bool Planner::Plan(bool& done)
 {
-	done = false;
-	if (!m_replan) {
-		return true;
-	}
-
-	if (FinalisePlan())
-	{
-		done = true;
-		m_plan_success = true;
-		return true;
-	}
-
-	if (!setupProblem()) {
-		return false;
-	}
-
-	m_timer = GetTime();
-	if (!createCBS())
-	{
-		m_stats["mapf_time"] += GetTime() - m_timer;
-		return false;
-	}
-
-	SMPL_INFO("Replan MAPF");
-	bool result = m_cbs->Solve();
-	m_cbs->UpdateStats(m_cbs_stats);
-	m_stats["mapf_time"] += GetTime() - m_timer;
-
-	m_moved = 0;
-	m_cbs_soln_map.clear();
+	bool result = m_mamo_search->Solve();
 	if (result)
 	{
-		m_cbs->WriteLastSolution();
-		m_cbs_soln = m_cbs->GetSolution();
-		for (std::size_t i = 0; i < m_cbs_soln->m_solution.size(); ++i)
-		{
-			const auto& path = m_cbs_soln->m_solution[i];
-			if (path.first == 0 || path.second.front().coord == path.second.back().coord)
-			{
-				// either this is robot or the object did not move
-				continue;
-			}
-			m_cbs_soln_map[m_moved] = i;
-			++m_moved;
-		}
-
-		if (m_moved == 0) {
-			m_plan_success = true;
-		}
-		else {
-			m_distI = std::uniform_int_distribution<>(0, m_moved-1);
-		}
+		m_mamo_search->GetRearrangements(m_rearrangements, m_grasp_at);
+		done = true;
+		return true;
 	}
-
-	m_replan = !result;
-	return result;
 }
 
-bool Planner::FinalisePlan(bool add_movables)
+bool Planner::FinalisePlan(
+	const std::vector<ObjectState>& objects,
+	std::vector<double>* start_state,
+	trajectory_msgs::JointTrajectory& solution)
 {
 	m_timer = GetTime();
 
 	std::vector<Object*> movable_obstacles;
-	for (const auto& a: m_agents) {
-		movable_obstacles.push_back(a->GetObject());
+	for (const auto& pose: objects)
+	{
+		m_agents.at(m_agent_map[pose.id()])->SetObjectPose(pose.cont_pose());
+		movable_obstacles.push_back(m_agents.at(m_agent_map[pose.id()])->GetObject());
 	}
 
 	m_robot->ProcessObstacles({ m_ooi->GetObject() }, true);
-	// if (!m_robot->PlanApproachOnly(movable_obstacles)) {
-	smpl::RobotState start_state = {};
-	if (!m_rearrangements.empty()) {
-		start_state = m_rearrangements.back().points.back().positions;
-	}
-	if (!m_robot->PlanRetrieval(movable_obstacles, add_movables, start_state))
+	if (!m_robot->PlanRetrieval(movable_obstacles, true, start_state))
 	{
 		m_stats["robot_planner_time"] += GetTime() - m_timer;
 		return false;
 	}
 	m_robot->ProcessObstacles({ m_ooi->GetObject() });
-	m_exec = m_robot->GetLastPlanProfiled();
+	solution = m_robot->GetLastPlanProfiled();
 
 	m_stats["robot_planner_time"] += GetTime() - m_timer;
-
-	if (m_cbs)
-	{
-		m_cbs->WriteLastSolution();
-		m_cbs.reset();
-	}
 	return true;
 }
 
@@ -322,6 +269,16 @@ bool Planner::createCBS()
 	return true;
 }
 
+bool Planner::createMAMOSearch()
+{
+	if (!createCBS()) {
+		return false;
+	}
+
+	m_mamo_search = std::make_unique<MAMOSearch>(this);
+	m_mamo_search->CreateRoot();
+}
+
 bool Planner::setupProblem()
 {
 	// CBS TODO: assign starts and goals to agents
@@ -350,15 +307,6 @@ bool Planner::Rearrange()
 	{
 		SMPL_INFO("There were no conflicts to rearrange! WE ARE DONE!");
 		m_plan_success = true;
-
-		if (!FinalisePlan(false))
-		{
-			if (m_cbs)
-			{
-				m_cbs->WriteLastSolution();
-				m_cbs.reset();
-			}
-		}
 
 		return false;
 	}
@@ -525,32 +473,36 @@ bool Planner::runSim()
 {
 	setupSim(m_sim.get(), m_robot->GetStartState()->joint_state, armId(), m_ooi->GetID());
 
+	// if all executions succeeded, m_violation == 0
 	m_violation = 0x00000000;
 
 	comms::ObjectsPoses dummy;
-	for (const auto& traj: m_rearrangements)
+	for (size_t i = 0; i < m_rearrangements.size(); ++i)
 	{
-		if (traj.points.empty()) {
+		if (m_rearrangements.at(i).points.empty()) {
 			continue;
 		}
 
-		if (!m_sim->ExecTraj(traj, dummy))
+		if (i < m_rearrangements.size() - 1)
 		{
-			SMPL_ERROR("Failed to exec rearrangement!");
-			m_violation |= 0x00000001;
+			// if any rearrangement traj execuction failed, m_violation == 1
+			if (!m_sim->ExecTraj(m_rearrangements.at(i), dummy))
+			{
+				SMPL_ERROR("Failed to exec rearrangement!");
+				m_violation |= 0x00000001;
+			}
+		}
+		else
+		{
+			// if all rearrangements succeeded, but extraction failed, m_violation == 4
+			// if any rearrangement traj execuction failed, and extraction failed, m_violation == 5
+			if (!m_sim->ExecTraj(m_rearrangements.at(i), dummy, m_grasp_at, m_ooi->GetID()))
+			{
+				SMPL_ERROR("Failed to exec traj!");
+				m_violation |= 0x00000004;
+			}
 		}
 	}
-	// if any rearrangement traj execuction failed, m_violation == 1
-
-	int grasp_at = m_grasp_at > 0 ? m_grasp_at : m_robot->GraspAt();
-	if (!m_sim->ExecTraj(m_exec, dummy, grasp_at, m_ooi->GetID()))
-	{
-		SMPL_ERROR("Failed to exec traj!");
-		m_violation |= 0x00000004;
-	}
-	// if all rearrangements succeeded, but extraction failed, m_violation == 4
-	// if any rearrangement traj execuction failed, and extraction failed, m_violation == 5
-	// if all executions succeeded, m_violation == 0
 
 	m_sim->RemoveConstraint();
 	m_sim_success = m_violation == 0;
