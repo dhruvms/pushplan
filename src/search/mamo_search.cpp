@@ -153,13 +153,16 @@ void MAMOSearch::createSuccs(
 		succ->SetEdgeTo(succ_object_centric_actions->at(i).first, succ_object_centric_actions->at(i).second);
 
 		unsigned int old_id, old_g;
-		if (m_hashtable.Exists(succ)) {
+		MAMOSearchState *prev_search_state = nullptr;
+		if (m_hashtable.Exists(succ))
+		{
 			old_id = m_hashtable.GetStateID(succ);
+			prev_search_state = getSearchState(old_id);
+			old_g = prev_search_state->g;
 		}
 
 		unsigned int succ_g = parent_g + succ_trajs->at(i).points.size();
-		auto prev_search_state = getSearchState(old_id);
-		if (prev_search_state->g <= succ_g)
+		if (prev_search_state != nullptr && old_g <= succ_g)
 		{
 			delete succ;
 			continue;
@@ -173,14 +176,13 @@ void MAMOSearch::createSuccs(
 
 			succ->SetRobotTrajectory(succ_trajs->at(i));
 			succ->SetParent(parent_node);
-			if (m_hashtable.Exists(succ))
+			if (prev_search_state != nullptr)
 			{
 				auto old_succ = m_hashtable.GetState(old_id);
 				old_succ->parent()->RemoveChild(old_succ);
 
 				m_hashtable.UpdateState(succ);
 				prev_search_state->bp = parent_search_state;
-				old_g = prev_search_state->g;
 				prev_search_state->g = succ_g;
 				if (!prev_search_state->leaf)
 				{
