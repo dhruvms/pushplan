@@ -742,13 +742,17 @@ class BulletSim:
 					best_objs = self.getObjects(sim_id)
 
 		res = best_idx != -1
+		return_objs = []
+		for object in best_objs:
+			if sim_data['objs'][object.id]['movable']:
+				return_objs.append(object)
 
 		output = SimPushesResponse()
 		output.res = res
 		output.idx = best_idx
 		output.successes = successes
 		output.objects = ObjectsPoses()
-		output.objects.poses = best_objs
+		output.objects.poses = return_objs
 		return output
 
 	def RemoveConstraint(self, req):
@@ -984,7 +988,7 @@ class BulletSim:
 
 		objects = []
 		for obj_id in sim_data['objs']:
-			if (obj_id in table_id or not sim_data['objs'][obj_id]['movable']):
+			if (obj_id in table_id):
 				continue
 
 			xyz, quat = sim.getBasePositionAndOrientation(obj_id)
