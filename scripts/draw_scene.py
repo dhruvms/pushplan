@@ -211,18 +211,18 @@ def DrawScene(filepath, objs, trajs, invalids, ngr, goals, pushes, alpha=1.0):
 	# 		AX.text(GOALS[i, 1], GOALS[i, 2], str(int(oid)), color='violet', zorder=3)
 
 	if (pushes):
-		colours = {6: 'black', 5: 'green', 4: 'gold', 3: 'teal',  2: 'deepskyblue', 1: 'slategrey', 0: 'deeppink', -1: 'firebrick'}
+		cmap = cm.get_cmap('Dark2')
 		for p in pushes:
 			if (p[2] == -99 and p[3] == -99):
 				if (int(p[4]) == 4):
-					AX.scatter(p[0], p[1], c=colours[int(p[4])], zorder=24, marker='*', alpha=0.5)
+					AX.scatter(p[0], p[1], c=[cmap(int(p[4]) + 1)], zorder=24, marker='*', alpha=0.8)
 				else:
-					AX.scatter(p[0], p[1], c=colours[int(p[4])], zorder=21, marker='p', alpha=0.5)
+					AX.scatter(p[0], p[1], c=[cmap(int(p[4]) + 1)], zorder=21, marker='p', alpha=0.8)
 			else:
-				AX.plot([p[0], p[2]], [p[1], p[3]], c=colours[int(p[4])], ls='-.', zorder=22, alpha=0.5)
-				AX.scatter(p[0], p[1], c=colours[int(p[4])], zorder=23, marker='P', alpha=0.5)
-				AX.scatter(p[2], p[3], c=colours[int(p[4])], zorder=23, marker='X', alpha=0.5)
-				AX.text(p[2], p[3], str(int(p[4])), color=colours[int(p[4])], zorder=33)
+				AX.plot([p[0], p[2]], [p[1], p[3]], c=cmap(int(p[4]) + 1), ls='-.', zorder=22, alpha=0.8)
+				AX.scatter(p[0], p[1], c=[cmap(int(p[4]) + 1)], zorder=23, marker='P', alpha=0.8)
+				AX.scatter(p[2], p[3], c=[cmap(int(p[4]) + 1)], zorder=23, marker='X', alpha=0.8)
+				AX.text(p[2], p[3], str(int(p[4])), color=cmap(int(p[4]) + 1), zorder=33)
 
 	if (invalids):
 		cmap = cm.get_cmap('cool')
