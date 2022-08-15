@@ -28,16 +28,14 @@ public:
 	void AddObjects(const std::vector<std::shared_ptr<Agent> >& objs);
 
 	virtual bool Solve();
+	void WriteLastSolution(
+		unsigned int child_id=0,
+		unsigned int parent_id=0);
 	void Reset();
 
 	void SaveStats();
 	bool UpdateStats(std::map<std::string, double>& stats);
 	HighLevelNode* GetSolution() const { return m_goal; };
-	void WriteLastSolution() {
-		if (m_goal != nullptr) {
-			writeSolution(m_goal);
-		}
-	};
 
 protected:
 	std::shared_ptr<CollisionChecker> m_cc;
@@ -76,7 +74,8 @@ protected:
 		HighLevelNode* child1, HighLevelNode* child2) const;
 	virtual bool updateChild(HighLevelNode* parent, HighLevelNode* child);
 
-	void writeSolution(HighLevelNode* node);
+	void writeSolution(
+		HighLevelNode* node, unsigned int child_id=0, unsigned int parent_id=0);
 };
 
 } // namespace clutter

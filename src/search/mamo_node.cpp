@@ -32,7 +32,9 @@ std::vector<double>* MAMONode::GetCurrentStartState()
 	return m_parent->GetCurrentStartState();
 }
 
-bool MAMONode::RunMAPF(unsigned int my_state_id)
+bool MAMONode::RunMAPF(
+	unsigned int my_state_id,
+	unsigned int parent_id)
 {
 	for (size_t i = 0; i < m_agents.size(); ++i)
 	{
@@ -53,7 +55,7 @@ bool MAMONode::RunMAPF(unsigned int my_state_id)
 	bool result = m_cbs->Solve();
 	if (result)
 	{
-		m_cbs->WriteLastSolution();
+		m_cbs->WriteLastSolution(my_state_id, parent_id);
 		m_mapf_solution = m_cbs->GetSolution()->m_solution;
 		// identifyRelevantMovables();
 		for (size_t i = 0; i < m_agents.size(); ++i) {

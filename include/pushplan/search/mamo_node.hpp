@@ -34,7 +34,9 @@ public:
 		const std::vector<std::shared_ptr<Agent> >& agents,
 		const comms::ObjectsPoses& all_objects);
 	std::vector<double>* GetCurrentStartState();
-	bool RunMAPF(unsigned int my_state_id);
+	bool RunMAPF(
+		unsigned int my_state_id,
+		unsigned int parent_id);
 	void GetSuccs(
 		std::vector<std::pair<int, int> > *succ_object_centric_actions,
 		std::vector<comms::ObjectsPoses> *succ_objects,

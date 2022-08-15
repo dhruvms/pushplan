@@ -37,6 +37,8 @@ bool MAMOSearch::Solve()
 			SMPL_INFO("Final plan found!");
 
 			auto node = m_hashtable.GetState(next->state_id);
+			auto parent_id = next->bp == nullptr ? 0 : next->bp->state_id;
+			node->RunMAPF(next->state_id, parent_id);
 			next->g += node->robot_traj().points.size();
 
 			m_solved_node = node;
@@ -67,7 +69,8 @@ bool MAMOSearch::expand(MAMOSearchState *state)
 	auto node = m_hashtable.GetState(state->state_id);
 
 	// 1. run MAPF
-	bool mapf_solved = node->RunMAPF(state->state_id);
+	auto parent_id = state->bp == nullptr ? 0 : state->bp->state_id;
+	bool mapf_solved = node->RunMAPF(state->state_id, parent_id);
 	if (!mapf_solved)
 	{
 		m_OPEN.erase(state->m_OPEN_h);

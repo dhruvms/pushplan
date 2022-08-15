@@ -119,6 +119,15 @@ bool CBS::Solve()
 	return false;
 }
 
+void CBS::WriteLastSolution(
+	unsigned int child_id,
+	unsigned int parent_id)
+{
+	if (m_goal != nullptr) {
+		writeSolution(m_goal, child_id, parent_id);
+	}
+}
+
 void CBS::Reset()
 {
 	m_num_agents = 0;
@@ -619,10 +628,11 @@ bool CBS::done(HighLevelNode* node)
 	return false;
 }
 
-void CBS::writeSolution(HighLevelNode* node)
+void CBS::writeSolution(
+	HighLevelNode* node, unsigned int child_id,	unsigned int parent_id)
 {
 	int makespan = node->m_makespan;
-	for (int tidx = 0; tidx < 1; tidx += 1)
+	// for (int tidx = 0; tidx < 1; tidx += 1)
 	{
 		std::string filename(__FILE__);
 		auto found = filename.find_last_of("/\\");
@@ -637,10 +647,11 @@ void CBS::writeSolution(HighLevelNode* node)
 		// ss << "_";
 		ss << std::setw(6) << std::setfill('0') << m_scene_id;
 		ss << "_";
-		ss << std::setw(4) << std::setfill('0') << tidx;
-		// ss << std::setw(4) << std::setfill('0') << node->m_depth;
-
+		ss << std::setw(6) << std::setfill('0') << child_id;
 		ss << "_";
+		ss << std::setw(6) << std::setfill('0') << parent_id;
+		ss << "_";
+
 		auto t = std::time(nullptr);
 		auto tm = *std::localtime(&t);
 		ss << std::put_time(&tm, "%d-%m-%Y-%H-%M-%S");
