@@ -182,9 +182,17 @@ bool Robot::Setup()
 	// ROS_WARN("Start state re-init!");
 
 	m_planner_init = false;
-	m_pushes_per_object = -1;
 	m_ph.getParam("robot/grasping/tries", m_grasp_tries);
 	m_ph.getParam("robot/grasping/lift", m_grasp_lift);
+
+	m_ph.getParam("robot/pushing/num", m_pushes_per_object);
+	m_ph.getParam("robot/pushing/plan_time", m_plan_push_time);
+	m_ph.param<double>("robot/pushing/control/Kp", m_Kp, 1.0);
+	m_ph.param<double>("robot/pushing/control/Ki", m_Ki, 1.0);
+	m_ph.param<double>("robot/pushing/control/Kd", m_Kd, 1.0);
+	m_ph.param<double>("robot/pushing/control/dt", m_dt, 0.01);
+	m_ph.param<int>("robot/pushing/control/iters", m_invvel_iters, 1000);
+
 	m_vis_pub = m_nh.advertise<visualization_msgs::Marker>( "/visualization_marker", 10);
 	createVirtualTable();
 
@@ -1554,206 +1562,173 @@ bool Robot::PlanPush(
 	ProcessObstacles(pushed_obj, true, true);
 	ProcessObstacles(other_movables, true, true);
 
-	if (m_pushes_per_object == -1)
-	{
-		m_ph.getParam("robot/pushing/num", m_pushes_per_object);
-		m_ph.getParam("robot/pushing/plan_time", m_plan_push_time);
-
-		m_ph.param<double>("robot/pushing/control/Kp", m_Kp, 1.0);
-		m_ph.param<double>("robot/pushing/control/Ki", m_Ki, 1.0);
-		m_ph.param<double>("robot/pushing/control/Kd", m_Kd, 1.0);
-		m_ph.param<double>("robot/pushing/control/dt", m_dt, 0.01);
-		m_ph.param<int>("robot/pushing/control/iters", m_invvel_iters, 1000);
-	}
-
-	int i = 0;
+	bool push_found = false;
 	double start_time = GetTime();
-	bool added = false;
-	while((i < m_pushes_per_object) && (GetTime() - start_time < m_plan_push_time))
+	++m_stats["plan_push_calls"];
+
+	// add all movable objects as obstacles into immovable collision checker
+	// they should be at their latest positions
+	ProcessObstacles(pushed_obj, false, false);
+	ProcessObstacles(other_movables, false, false);
+
+	// get push start pose
+	Eigen::Affine3d push_start_pose, push_end_pose;
+	getPushStartPose(push, push_start_pose, input);
+	if (m_grid_i->getDistanceFromPoint(
+		push_start_pose.translation().x(),
+		push_start_pose.translation().y(),
+		push_start_pose.translation().z()) <= m_grid_i->resolution())
 	{
-		++m_stats["plan_push_calls"];
-
-		// add all movable objects as obstacles into immovable collision checker
-		// they should be at their latest positions
-		if (!added)
-		{
-			ProcessObstacles(pushed_obj, false, false);
-			ProcessObstacles(other_movables, false, false);
-			added = true;
-		}
-
-		// get push start pose
-		Eigen::Affine3d push_start_pose, push_end_pose;
-		getPushStartPose(push, push_start_pose, input);
-		if (m_grid_i->getDistanceFromPoint(
+		push_failure = 1;
+		m_push_debug_data.push_back({
 			push_start_pose.translation().x(),
 			push_start_pose.translation().y(),
-			push_start_pose.translation().z()) <= m_grid_i->resolution())
+			-99.0,
+			-99.0,
+			(double)push_failure});
+		return false;
+	}
+
+	// plan path to push start pose with all other objects as obstacles
+	trajectory_msgs::JointTrajectory push_traj;
+	moveit_msgs::RobotState push_start_state = m_start_state;
+	if (start_state != nullptr)
+	{
+		assert(start_state->size() == m_rm->jointVariableCount());
+
+		push_start_state.joint_state.position.erase(
+			push_start_state.joint_state.position.begin() + 1,
+			push_start_state.joint_state.position.begin() + 1 + start_state->size());
+		push_start_state.joint_state.position.insert(
+			push_start_state.joint_state.position.begin() + 1,
+			start_state->begin(), start_state->end());
+	}
+	if (!planToPoseGoal(push_start_state, push_start_pose, push_traj))
+	{
+		push_failure = 2;
+		m_push_debug_data.push_back({
+			push_start_pose.translation().x(),
+			push_start_pose.translation().y(),
+			-99.0,
+			-99.0,
+			(double)push_failure});
+		return false;
+	}
+	++m_stats["push_samples_found"];
+
+	// remove all movable objects from immovable collision space
+	ProcessObstacles(pushed_obj, true, false);
+	ProcessObstacles(other_movables, true, false);
+
+	// push action parameters
+	push_end_pose = m_rm->computeFK(push_traj.points.back().positions);
+
+	double push_dist, push_at_angle;
+	if (!input)
+	{
+		push_dist = EuclideanDist(obj_traj->front().state, obj_traj->back().state) + 0.05;
+		push_at_angle = std::atan2(
+				obj_traj->back().state.at(1) - push_end_pose.translation().y(),
+				obj_traj->back().state.at(0) - push_end_pose.translation().x());
+	}
+	else
+	{
+		std::vector<double> pstart = { push[0], push[1] }, pend = { push[3], push[4] };
+		push_dist = EuclideanDist(pstart, pend);
+		push_at_angle = std::atan2(
+				push[4] - push_end_pose.translation().y(),
+				push[3] - push_end_pose.translation().x());
+	}
+
+	// compute push action end pose
+	push_end_pose.translation().x() += std::cos(push_at_angle) * push_dist * push_frac;
+	push_end_pose.translation().y() += std::sin(push_at_angle) * push_dist * push_frac;
+	// SV_SHOW_INFO_NAMED("push_end_pose", smpl::visual::MakePoseMarkers(
+	// 	push_end_pose, m_grid_i->getReferenceFrame(), "push_end_pose"));
+
+	// get push action trajectory via inverse velocity
+	trajectory_msgs::JointTrajectory push_action;
+	smpl::RobotState joint_vel(m_rm->jointVariableCount(), 0.0);
+	push_failure = computePushAction(
+						push_traj.points.back().time_from_start.toSec(),
+						push_traj.points.back().positions,
+						joint_vel,
+						push_end_pose,
+						push_action);
+
+	// compute obtainable push action end pose
+	push_end_pose = m_rm->computeFK(push_action.points.back().positions);
+
+	// collision check push action against pushed object
+	// ensure that it collides
+	{
+		bool collides = false;
+		ProcessObstacles(pushed_obj, false, false);
+		for (size_t wp = 1; wp < push_action.points.size(); ++wp)
 		{
-			m_push_debug_data.push_back({
-				push_start_pose.translation().x(),
-				push_start_pose.translation().y(),
-				-99.0,
-				-99.0,
-				-1.0});
-			push_failure = 1;
-			continue;
-		}
-
-		// plan path to push start pose with all other objects as obstacles
-		trajectory_msgs::JointTrajectory push_traj;
-		moveit_msgs::RobotState push_start_state = m_start_state;
-		if (start_state != nullptr)
-		{
-			assert(start_state->size() == m_rm->jointVariableCount());
-
-			push_start_state.joint_state.position.erase(
-				push_start_state.joint_state.position.begin() + 1,
-				push_start_state.joint_state.position.begin() + 1 + start_state->size());
-			push_start_state.joint_state.position.insert(
-				push_start_state.joint_state.position.begin() + 1,
-				start_state->begin(), start_state->end());
-		}
-		if (!planToPoseGoal(push_start_state, push_start_pose, push_traj))
-		{
-			m_push_debug_data.push_back({
-				push_start_pose.translation().x(),
-				push_start_pose.translation().y(),
-				-99.0,
-				-99.0,
-				0.0});
-			push_failure = 2;
-			continue;
-		}
-		++m_stats["push_samples_found"];
-
-		if (added)
-		{
-			// remove all movable objects from immovable collision space
-			ProcessObstacles(pushed_obj, true, false);
-			ProcessObstacles(other_movables, true, false);
-			added = false;
-		}
-
-		// push action parameters
-		push_end_pose = m_rm->computeFK(push_traj.points.back().positions);
-
-		double push_dist, push_at_angle;
-		if (!input)
-		{
-			push_dist = EuclideanDist(obj_traj->front().state, obj_traj->back().state) + 0.05;
-			push_at_angle = std::atan2(
-					obj_traj->back().state.at(1) - push_end_pose.translation().y(),
-					obj_traj->back().state.at(0) - push_end_pose.translation().x());
-		}
-		else
-		{
-			std::vector<double> pstart = { push[0], push[1] }, pend = { push[3], push[4] };
-			push_dist = EuclideanDist(pstart, pend);
-			push_at_angle = std::atan2(
-					push[4] - push_end_pose.translation().y(),
-					push[3] - push_end_pose.translation().x());
-		}
-
-		// compute push action end pose
-		push_end_pose.translation().x() += std::cos(push_at_angle) * push_dist * push_frac;
-		push_end_pose.translation().y() += std::sin(push_at_angle) * push_dist * push_frac;
-		// SV_SHOW_INFO_NAMED("push_end_pose", smpl::visual::MakePoseMarkers(
-		// 	push_end_pose, m_grid_i->getReferenceFrame(), "push_end_pose"));
-
-		// get push action trajectory via inverse velocity
-		trajectory_msgs::JointTrajectory push_action;
-		smpl::RobotState joint_vel(m_rm->jointVariableCount(), 0.0);
-		push_failure = computePushAction(
-							push_traj.points.back().time_from_start.toSec(),
-							push_traj.points.back().positions,
-							joint_vel,
-							push_end_pose,
-							push_action);
-
-		// compute obtainable push action end pose
-		push_end_pose = m_rm->computeFK(push_action.points.back().positions);
-
-		// collision check push action against pushed object
-		// ensure that it collides
-		{
-			bool collides = false;
-			ProcessObstacles(pushed_obj, false, false);
-			for (size_t wp = 1; wp < push_action.points.size(); ++wp)
+			auto& prev_istate = push_action.points[wp - 1].positions;
+			auto& curr_istate = push_action.points[wp].positions;
+			if (!m_cc_i->isStateToStateValid(prev_istate, curr_istate))
 			{
-				auto& prev_istate = push_action.points[wp - 1].positions;
-				auto& curr_istate = push_action.points[wp].positions;
-				if (!m_cc_i->isStateToStateValid(prev_istate, curr_istate))
-				{
-					collides = true;
-					break;
-				}
+				collides = true;
+				break;
 			}
+		}
 
-			if (!collides)
-			{
-				ProcessObstacles(pushed_obj, true, false);
-				m_push_debug_data.push_back({
-					push_start_pose.translation().x(),
-					push_start_pose.translation().y(),
-					push_end_pose.translation().x(),
-					push_end_pose.translation().y(),
-					4.0});
-				push_failure = 6;
-				continue;
-			}
+		if (!collides)
+		{
 			ProcessObstacles(pushed_obj, true, false);
-
-			++m_stats["push_actions_found"];
-			int push_debug = push_failure == 0 ? 5 : push_failure - 2;
+			push_failure = 6;
 			m_push_debug_data.push_back({
 				push_start_pose.translation().x(),
 				push_start_pose.translation().y(),
 				push_end_pose.translation().x(),
 				push_end_pose.translation().y(),
-				(double)push_debug});
-
-			// append waypoints to retract to push start pose
-			auto push_action_copy = push_action;
-			auto t_reverse = push_action_copy.points.rbegin()->time_from_start;
-			for (auto itr = push_action_copy.points.rbegin() + 1; itr != push_action_copy.points.rend(); ++itr)
-			{
-				itr->time_from_start = t_reverse + ros::Duration(0.01);
-				push_action.points.push_back(*itr);
-				t_reverse = itr->time_from_start;
-			}
-
-			m_planner->ProfilePath(m_rm.get(), push_traj);
-			for (auto itr = push_action.points.begin() + 1; itr != push_action.points.end(); ++itr) {
-				push_traj.points.push_back(*itr);
-			}
-
-			m_push_actions.push_back(std::move(push_action));
-			m_push_trajs.push_back(std::move(push_traj));
-			++i;
+				(double)push_failure});
+			return false;
 		}
-	}
-
-	if (added)
-	{
-		// remove all movable objects from immovable collision space
 		ProcessObstacles(pushed_obj, true, false);
-		ProcessObstacles(other_movables, true, false);
-		added = false;
+
+		push_found = true;
+		++m_stats["push_actions_found"];
+		m_push_debug_data.push_back({
+			push_start_pose.translation().x(),
+			push_start_pose.translation().y(),
+			push_end_pose.translation().x(),
+			push_end_pose.translation().y(),
+			(double)push_failure});
+
+		// append waypoints to retract to push start pose
+		auto push_action_copy = push_action;
+		auto t_reverse = push_action_copy.points.rbegin()->time_from_start;
+		for (auto itr = push_action_copy.points.rbegin() + 1; itr != push_action_copy.points.rend(); ++itr)
+		{
+			itr->time_from_start = t_reverse + ros::Duration(0.01);
+			push_action.points.push_back(*itr);
+			t_reverse = itr->time_from_start;
+		}
+
+		m_planner->ProfilePath(m_rm.get(), push_traj);
+		for (auto itr = push_action.points.begin() + 1; itr != push_action.points.end(); ++itr) {
+			push_traj.points.push_back(*itr);
+		}
+
+		m_push_actions.push_back(std::move(push_action));
+		m_push_trajs.push_back(std::move(push_traj));
 	}
 
 	// reset robot model back to chain tip link
 	UpdateKDLRobot(0);
 
-	if (i == 0)
+	if (!push_found)
 	{
-		// SMPL_INFO("No pushes found! Do nothing!");
+		m_stats["push_plan_time"] += GetTime() - start_time;
 		return false;
 	}
 	m_stats["push_plan_time"] += GetTime() - start_time;
 
-	int pidx, successes;
 	start_time = GetTime();
+	int pidx, successes;
 	if (!input) {
 		m_sim->SimPushes(m_push_actions, object->GetID(), obj_traj->back().state.at(0), obj_traj->back().state.at(1), pidx, successes, rearranged, result);
 	}
@@ -1762,23 +1737,19 @@ bool Robot::PlanPush(
 	}
 	m_stats["push_sim_time"] += GetTime() - start_time;
 
-	if (pidx == -1)
-	{
-		// SMPL_WARN("Failed to find a good push for the object! Simulating took %f seconds.", time_spent);
+	push_failure = pidx != -1 ? -1 : 0;
+	m_push_debug_data.push_back({
+		push_start_pose.translation().x(),
+		push_start_pose.translation().y(),
+		push_end_pose.translation().x(),
+		push_end_pose.translation().y(),
+		(double)push_failure});
+	if (pidx == -1)	{
 		return false;
 	}
 
 	++m_stats["push_sim_successes"];
 	m_traj = m_push_trajs.at(pidx);
-	push_failure = -1;
-
-	Eigen::Affine3d pose = m_rm->computeFK(m_traj.points.back().positions);
-	m_push_debug_data.push_back({
-		pose.translation().x(),
-		pose.translation().y(),
-		-99.0,
-		-99.0,
-		6.0});
 	// SMPL_INFO("Found good push traj of length %d!", m_traj.points.size());
 	return true;
 }
