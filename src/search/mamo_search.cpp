@@ -111,8 +111,10 @@ void MAMOSearch::extractRearrangements()
 {
 	m_rearrangements.clear();
 	m_rearrangements.push_back(std::move(m_exec_traj));
+	ROS_WARN("Solution path state ids (from goal to start):");
 	for (MAMOSearchState *state = m_solved_search; state; state = state->bp)
 	{
+		ROS_WARN("\t%u", state->state_id);
 		auto node = m_hashtable.GetState(state->state_id);
 		if (node->has_traj()) {
 			m_rearrangements.push_back(node->krobot_traj());
