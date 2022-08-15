@@ -54,6 +54,7 @@ public:
 	void SetRobot(const std::shared_ptr<Robot>& robot);
 	void SetEdgeTo(int oidx, int aidx);
 	void AddChild(MAMONode* child);
+	void RemoveChild(MAMONode* child);
 
 	size_t num_objects() const;
 	const std::vector<ObjectState>& kobject_states() const;

@@ -18,9 +18,9 @@ void MAMOSearch::CreateRoot()
 	m_root_node->InitAgents(m_planner->GetAllAgents(), m_planner->GetStartObjects()); // inits required fields for hashing
 	m_root_node->SetEdgeTo(-1, -1);
 
-	m_search_nodes.push_back(m_root_node);
 	m_root_id = m_hashtable.GetStateIDForceful(m_root_node);
 	m_root_search = getSearchState(m_root_id);
+	m_search_nodes.push_back(m_root_node);
 }
 
 bool MAMOSearch::Solve()
@@ -138,33 +138,66 @@ void MAMOSearch::createSuccs(
 				parent_search_state->leaf = true;
 				parent_search_state->g += 1000; // TODO: better way to incur cost for calling MAPF again?
 				m_OPEN.update(parent_search_state->m_OPEN_h, parent_search_state);
-				SMPL_WARN("Update %d, g-value = %d", parent_search_state->state_id, parent_search_state->g);
+				SMPL_WARN("Update parent state %d, g-value = %d (previously %d)", parent_search_state->state_id, parent_search_state->g, parent_g);
 			}
 			continue;
 		}
 
 		auto succ = new MAMONode;
-		succ->SetPlanner(m_planner);
-		succ->SetCBS(m_planner->GetCBS());
-		succ->SetCC(m_planner->GetCC());
-		succ->SetRobot(m_planner->GetRobot());
-
 		succ->InitAgents(m_planner->GetAllAgents(), succ_objects->at(i)); // inits required fields for hashing
 		succ->SetEdgeTo(succ_object_centric_actions->at(i).first, succ_object_centric_actions->at(i).second);
-		succ->SetRobotTrajectory(succ_trajs->at(i));
-		succ->SetParent(parent_node);
 
-		m_search_nodes.push_back(succ);
-		parent_node->AddChild(succ);
+		unsigned int old_id, old_g;
+		if (m_hashtable.Exists(succ)) {
+			old_id = m_hashtable.GetStateID(succ);
+		}
 
-		unsigned int succ_id = m_hashtable.GetStateIDForceful(succ);
-		auto succ_search_state = getSearchState(succ_id);
+		unsigned int succ_g = parent_g + succ_trajs->at(i).points.size();
+		auto prev_search_state = getSearchState(old_id);
+		if (prev_search_state->g <= succ_g)
+		{
+			delete succ;
+			continue;
+		}
+		else
+		{
+			succ->SetPlanner(m_planner);
+			succ->SetCBS(m_planner->GetCBS());
+			succ->SetCC(m_planner->GetCC());
+			succ->SetRobot(m_planner->GetRobot());
 
-		succ_search_state->bp = parent_search_state;
-		succ_search_state->g = parent_g + succ->krobot_traj().points.size();
-		succ_search_state->leaf = true;
-		succ_search_state->m_OPEN_h = m_OPEN.push(succ_search_state);
-		SMPL_WARN("Generate %d, g-value = %d", succ_id, succ_search_state->g);
+			succ->SetRobotTrajectory(succ_trajs->at(i));
+			succ->SetParent(parent_node);
+			if (m_hashtable.Exists(succ))
+			{
+				auto old_succ = m_hashtable.GetState(old_id);
+				old_succ->parent()->RemoveChild(old_succ);
+
+				m_hashtable.UpdateState(succ);
+				prev_search_state->bp = parent_search_state;
+				old_g = prev_search_state->g;
+				prev_search_state->g = succ_g;
+				if (!prev_search_state->leaf)
+				{
+					prev_search_state->leaf = true;
+					prev_search_state->m_OPEN_h = m_OPEN.push(prev_search_state);
+				}
+				SMPL_WARN("Update existing successor %d, g-value = %d (previously %d)", old_id, prev_search_state->g, old_g);
+			}
+			else
+			{
+				unsigned int succ_id = m_hashtable.GetStateIDForceful(succ);
+				auto succ_search_state = getSearchState(succ_id);
+				succ_search_state->bp = parent_search_state;
+				succ_search_state->g = succ_g;
+				succ_search_state->leaf = true;
+				succ_search_state->m_OPEN_h = m_OPEN.push(succ_search_state);
+
+				SMPL_WARN("Generate %d, g-value = %d", succ_id, succ_search_state->g);
+			}
+			parent_node->AddChild(succ);
+			m_search_nodes.push_back(succ);
+		}
 	}
 }
 

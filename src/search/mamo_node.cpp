@@ -250,6 +250,11 @@ void MAMONode::AddChild(MAMONode* child)
 	m_children.push_back(child);
 }
 
+void MAMONode::RemoveChild(MAMONode* child)
+{
+	m_children.erase(std::remove(m_children.begin(), m_children.end(), child), m_children.end());
+}
+
 size_t MAMONode::num_objects() const
 {
 	if (m_agents.size() != m_object_states.size()) {
