@@ -22,18 +22,21 @@ void AgentLattice::init(Agent* agent)
 
 void AgentLattice::reset()
 {
-	// reset everything
-	for (LatticeState* s : m_states) {
-		if (s != nullptr) {
+	// reset everything for new CBS calls
+	for (LatticeState* s : m_states)
+	{
+		if (s != nullptr)
+		{
 			delete s;
 			s = nullptr;
 		}
 	}
+	m_states.clear();
+	m_closed.clear();
 
 	m_start_ids.clear();
 	m_goal_ids.clear();
 	m_state_to_id.clear();
-	m_states.clear();
 }
 
 int AgentLattice::PushStart(const LatticeState& s)
@@ -67,10 +70,13 @@ void AgentLattice::SetCTNode(HighLevelNode* ct_node)
 
 void AgentLattice::AvoidAgents(const std::unordered_set<int>& to_avoid)
 {
+	m_to_avoid.clear();
 	m_to_avoid = to_avoid;
 }
 
-void AgentLattice::ResetInvalidPushes(const std::vector<std::pair<Coord, Coord> >* invalids_G)
+void AgentLattice::ResetInvalidPushes(
+	const std::vector<std::pair<Coord, Coord> >* invalids_G,
+	const std::set<Coord, coord_compare>* invalids_L)
 {
 	m_invalid_pushes.clear();
 	for (size_t i = 0; i < invalids_G->size(); ++i)
@@ -79,11 +85,10 @@ void AgentLattice::ResetInvalidPushes(const std::vector<std::pair<Coord, Coord> 
 			m_invalid_pushes.insert(invalids_G->at(i).second);
 		}
 	}
-}
 
-void AgentLattice::SetLocallyInvalidPushes(const std::vector<Coord>& invalids)
-{
-	m_invalid_pushes.insert(invalids.begin(), invalids.end());
+	if (invalids_L != nullptr) {
+		m_invalid_pushes.insert(invalids_L->begin(), invalids_L->end());
+	}
 }
 
 const std::set<Coord, coord_compare>& AgentLattice::GetInvalidPushes() const

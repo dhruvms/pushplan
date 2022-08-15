@@ -54,8 +54,9 @@ public:
 		double ox, double oy, double oz,
 		double sx, double sy, double sz, bool vis=false);
 
-	void ResetInvalidPushes(const std::vector<std::pair<Coord, Coord> >* invalids_G);
-	void SetLocallyInvalidPushes(const std::vector<Coord>& invalids);
+	void ResetInvalidPushes(
+		const std::vector<std::pair<Coord, Coord> >* invalids_G,
+		const std::set<Coord, coord_compare>* invalids_L);
 	const std::set<Coord, coord_compare>& GetInvalidPushes() const;
 
 	bool SatisfyPath(

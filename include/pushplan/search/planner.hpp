@@ -62,7 +62,8 @@ public:
 	const std::shared_ptr<CollisionChecker>& GetCC() const;
 	const std::shared_ptr<Robot>& GetRobot() const;
 	const std::vector<std::pair<Coord, Coord> >* GetGloballyInvalidPushes() const;
-	const std::unordered_map<int, std::vector<Coord> >* GetLocallyInvalidPushes(unsigned int state_id) const;
+	const std::set<Coord, coord_compare>* GetLocallyInvalidPushes(
+		unsigned int state_id, int agent_id) const;
 
 	// For KPIECE/RRT
 	bool StateValidityChecker(const smpl::RobotState& state) {
@@ -126,7 +127,7 @@ private:
 	std::map<std::string, double> m_stats, m_cbs_stats;
 
 	std::vector<std::pair<Coord, Coord> > m_invalid_pushes_G;
-	std::unordered_map<unsigned int, std::unordered_map<int, std::vector<Coord> > > m_invalid_pushes_L;
+	std::unordered_map<unsigned int, std::unordered_map<int, std::set<Coord, coord_compare> > > m_invalid_pushes_L;
 
 	std::random_device m_dev;
 	std::mt19937 m_rng;

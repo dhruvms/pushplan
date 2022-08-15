@@ -253,7 +253,7 @@ void Planner::AddLocallyInvalidPush(
 			it1->second[agent_id] = { bad_goal };
 		}
 		else {
-			it1->second[agent_id].push_back(bad_goal);
+			it2->second.insert(bad_goal);
 		}
 	}
 }
@@ -1028,15 +1028,20 @@ const std::vector<std::pair<Coord, Coord> >* Planner::GetGloballyInvalidPushes()
 	return &m_invalid_pushes_G;
 }
 
-const std::unordered_map<int, std::vector<Coord> >* Planner::GetLocallyInvalidPushes(unsigned int state_id) const
+const std::set<Coord, coord_compare>* Planner::GetLocallyInvalidPushes(
+	unsigned int state_id, int agent_id) const
 {
 	if (m_invalid_pushes_L.empty()) {
 		return nullptr;
 	}
 
-	const auto it = m_invalid_pushes_L.find(state_id);
-	if (it != m_invalid_pushes_L.end()) {
-		return &(it->second);
+	const auto it1 = m_invalid_pushes_L.find(state_id);
+	if (it1 != m_invalid_pushes_L.end())
+	{
+		const auto it2 = it1->second.find(agent_id);
+		if (it2 != it1->second.end()) {
+			return &(it2->second);
+		}
 	}
 
 	return nullptr;

@@ -34,21 +34,15 @@ std::vector<double>* MAMONode::GetCurrentStartState()
 
 bool MAMONode::RunMAPF(unsigned int my_state_id)
 {
-	auto locally_invalid_pushes = m_planner->GetLocallyInvalidPushes(this->GetConstraintHash());
 	for (size_t i = 0; i < m_agents.size(); ++i)
 	{
 		assert(m_agents.at(i)->GetID() == m_object_states.at(i).id());
 		m_agents.at(i)->SetObjectPose(m_object_states.at(i).cont_pose());
 		m_agents.at(i)->Init();
 
-		m_agents.at(i)->ResetInvalidPushes(m_planner->GetGloballyInvalidPushes());
-		if (locally_invalid_pushes != nullptr)
-		{
-			const auto it = locally_invalid_pushes->find(m_agents.at(i)->GetID());
-			if (it != locally_invalid_pushes->end()) {
-				m_agents.at(i)->SetLocallyInvalidPushes(it->second);
-			}
-		}
+		m_agents.at(i)->ResetInvalidPushes(
+			m_planner->GetGloballyInvalidPushes(),
+			m_planner->GetLocallyInvalidPushes(this->GetConstraintHash(), m_agents.at(i)->GetID()));
 	}
 
 	// set/update/init necessary components

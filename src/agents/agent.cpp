@@ -142,14 +142,11 @@ void Agent::ComputeNGRComplement(
 	}
 }
 
-void Agent::ResetInvalidPushes(const std::vector<std::pair<Coord, Coord> >* invalids_G)
+void Agent::ResetInvalidPushes(
+	const std::vector<std::pair<Coord, Coord> >* invalids_G,
+	const std::set<Coord, coord_compare>* invalids_L)
 {
-	m_lattice->ResetInvalidPushes(invalids_G);
-}
-
-void Agent::SetLocallyInvalidPushes(const std::vector<Coord>& invalids_L)
-{
-	m_lattice->SetLocallyInvalidPushes(invalids_L);
+	m_lattice->ResetInvalidPushes(invalids_G, invalids_L);
 }
 
 const std::set<Coord, coord_compare>& Agent::GetInvalidPushes() const
@@ -549,12 +546,21 @@ bool Agent::computeGoal()
 
 bool Agent::createLatticeAndSearch()
 {
-	m_lattice = std::make_unique<AgentLattice>();
-	m_lattice->init(this);
-	m_lattice->reset();
+	if (m_lattice) {
+		m_lattice->reset();
+	}
+	else
+	{
+		m_lattice = std::make_unique<AgentLattice>();
+		m_lattice->init(this);
+	}
 
-	m_search = std::make_unique<Focal>(m_lattice.get(), 100.0);
-	m_search->reset();
+	if (m_search) {
+		m_search->reset();
+	}
+	else {
+		m_search = std::make_unique<Focal>(m_lattice.get(), 100.0);
+	}
 	m_search->push_start(m_lattice->PushStart(m_init));
 	m_search->push_goal(m_lattice->PushGoal(m_goal));
 
