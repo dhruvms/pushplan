@@ -2,11 +2,11 @@ cmake_minimum_required(VERSION 3.5.1)
 project(pushplan)
 
 if(NOT CMAKE_BUILD_TYPE)
-	set(CMAKE_BUILD_TYPE Debug)
-	# set(CMAKE_BUILD_TYPE Release)
+	# set(CMAKE_BUILD_TYPE Debug)
+	set(CMAKE_BUILD_TYPE Release)
 endif()
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -std=c++14 -fmax-errors=5")
-# set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14 -fmax-errors=5")
+# set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -std=c++14 -fmax-errors=5")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14 -fmax-errors=5")
 
 
 find_package(Boost REQUIRED)
