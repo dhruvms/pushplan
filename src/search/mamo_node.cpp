@@ -112,24 +112,30 @@ void MAMONode::GetSuccs(
 		}
 		else
 		{
-			// SMPL_INFO("Tried pushing object %d.", moved.first);
-			// switch (push_failure)
-			// {
-			// 	case 1: SMPL_ERROR("Push start inside object."); break;
-			// 	case 2: SMPL_ERROR("Failed to reach push start."); break;
-			// 	case 3: SMPL_ERROR("Inverse dynamics failed to reach push end."); break;
-			// 	case 4: SMPL_ERROR("Inverse kinematics/dynamics failed (joint limits likely)."); break;
-			// 	case 5: SMPL_ERROR("Inverse kinematics hit static obstacle."); break;
-			// 	case 6: SMPL_ERROR("Push action did not collide with intended object."); break;
-			// 	case 0: SMPL_ERROR("Valid push computed! Failed in simulation."); break;
-			// 	case -1: SMPL_INFO("Push succeeded in simulation!"); break;
-			// 	default: SMPL_WARN("Unknown push failure cause.");
-			// }
-
-			m_planner->AddLocallyInvalidPush(
-				this->GetConstraintHash(),
-				moved.first,
-				moved.second.back().coord);
+			SMPL_INFO("Tried pushing object %d. Return value = %d", moved.first, push_failure);
+			switch (push_failure)
+			{
+				case 3: // SMPL_ERROR("Inverse dynamics failed to reach push end."); break;
+				case 4: // SMPL_ERROR("Inverse kinematics/dynamics failed (joint limits likely)."); break;
+				case 5: // SMPL_ERROR("Inverse kinematics hit static obstacle."); break;
+				{
+					m_planner->AddGloballyInvalidPush(std::make_pair(moved.second.front().coord, moved.second.back().coord));
+					break;
+				}
+				case 1: // SMPL_ERROR("Push start inside object."); break;
+				case 2: // SMPL_ERROR("Failed to reach push start."); break;
+				case 6: // SMPL_ERROR("Push action did not collide with intended object."); break;
+				case 0: // SMPL_ERROR("Valid push computed! Failed in simulation."); break;
+				{
+					m_planner->AddLocallyInvalidPush(
+						this->GetConstraintHash(),
+						moved.first,
+						moved.second.back().coord);
+					break;
+				}
+				// case -1: SMPL_INFO("Push succeeded in simulation!"); break;
+				default: SMPL_WARN("Unknown push failure cause.");
+			}
 
 			trajectory_msgs::JointTrajectory dummy_traj;
 			succ_object_centric_actions->emplace_back(-1, -1);

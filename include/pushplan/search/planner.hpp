@@ -42,6 +42,8 @@ public:
 		const std::vector<ObjectState>& objects,
 		std::vector<double>* start_state,
 		trajectory_msgs::JointTrajectory& solution);
+	void AddGloballyInvalidPush(
+		const std::pair<Coord, Coord>& bad_start_goal);
 	void AddLocallyInvalidPush(
 		unsigned int state_id, int agent_id, Coord bad_goal);
 

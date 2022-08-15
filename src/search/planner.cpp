@@ -238,6 +238,12 @@ bool Planner::FinalisePlan(
 	return true;
 }
 
+void Planner::AddGloballyInvalidPush(
+	const std::pair<Coord, Coord>& bad_start_goal)
+{
+	m_invalid_pushes_G.push_back(std::move(bad_start_goal));
+}
+
 void Planner::AddLocallyInvalidPush(
 	unsigned int state_id, int agent_id, Coord bad_goal)
 {
