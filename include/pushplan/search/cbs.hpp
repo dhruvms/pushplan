@@ -29,8 +29,8 @@ public:
 
 	virtual bool Solve();
 	void WriteLastSolution(
-		unsigned int child_id=0,
-		unsigned int parent_id=0);
+		std::tuple<State, State, int>* debug_push,
+		unsigned int child_id=0, unsigned int parent_id=0);
 	void Reset();
 
 	void SaveStats();
@@ -75,7 +75,8 @@ protected:
 	virtual bool updateChild(HighLevelNode* parent, HighLevelNode* child);
 
 	void writeSolution(
-		HighLevelNode* node, unsigned int child_id=0, unsigned int parent_id=0);
+		HighLevelNode* node, std::tuple<State, State, int>* debug_push=nullptr,
+		unsigned int child_id=0, unsigned int parent_id=0);
 };
 
 } // namespace clutter

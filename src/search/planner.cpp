@@ -169,16 +169,7 @@ bool Planner::Alive()
 	// 	3. time taken to sample, plan, simulate pushes
 	// 	4. time taken to solve mapf problem
 	double total_time = m_stats["robot_planner_time"] + m_stats["push_planner_time"] + m_stats["mapf_time"];
-	if (total_time > m_total_budget) {
-		if (m_cbs)
-		{
-			m_cbs->WriteLastSolution();
-			m_cbs.reset();
-		}
-		return false;
-	}
-
-	return true;
+	return total_time < m_total_budget;
 }
 
 bool Planner::SetupNGR()

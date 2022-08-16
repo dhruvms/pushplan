@@ -55,7 +55,8 @@ bool MAMONode::RunMAPF(
 	bool result = m_cbs->Solve();
 	if (result)
 	{
-		m_cbs->WriteLastSolution(my_state_id, parent_id);
+		auto debug_push_ptr = m_parent == nullptr ? nullptr : &m_debug_push;
+		m_cbs->WriteLastSolution(debug_push_ptr, my_state_id, parent_id);
 		m_mapf_solution = m_cbs->GetSolution()->m_solution;
 		// identifyRelevantMovables();
 		for (size_t i = 0; i < m_agents.size(); ++i) {
@@ -69,7 +70,8 @@ bool MAMONode::RunMAPF(
 void MAMONode::GetSuccs(
 	std::vector<std::pair<int, int> > *succ_object_centric_actions,
 	std::vector<comms::ObjectsPoses> *succ_objects,
-	std::vector<trajectory_msgs::JointTrajectory> *succ_trajs)
+	std::vector<trajectory_msgs::JointTrajectory> *succ_trajs,
+	std::vector<std::tuple<State, State, int> > *debug_pushes)
 {
 	for (size_t i = 0; i < m_mapf_solution.size(); ++i)
 	{
@@ -103,7 +105,8 @@ void MAMONode::GetSuccs(
 		// change KDL chain during the process
 		comms::ObjectsPoses result;
 		int push_failure;
-		if (m_robot->PlanPush(this->GetCurrentStartState(), m_agents.at(m_agent_map[moved.first]).get(), push, movable_obstacles, m_all_objects, result, push_failure, 1.0))
+		std::tuple<State, State, int> debug_push;
+		if (m_robot->PlanPush(this->GetCurrentStartState(), m_agents.at(m_agent_map[moved.first]).get(), push, movable_obstacles, m_all_objects, result, push_failure, debug_push, 1.0))
 		{
 			// valid push found!
 			succ_object_centric_actions->emplace_back(moved.first, 0); // TODO: currently only one aidx
@@ -142,6 +145,7 @@ void MAMONode::GetSuccs(
 			succ_objects->push_back(m_all_objects);
 			succ_trajs->push_back(dummy_traj);
 		}
+		debug_pushes->push_back(debug_push);
 	}
 }
 
@@ -219,6 +223,11 @@ void MAMONode::SetParent(MAMONode *parent)
 void MAMONode::SetRobotTrajectory(const trajectory_msgs::JointTrajectory& robot_traj)
 {
 	m_robot_traj = robot_traj;
+}
+
+void MAMONode::SetDebugPush(const std::tuple<State, State, int>& debug_push)
+{
+	m_debug_push = debug_push;
 }
 
 void MAMONode::SetPlanner(Planner *planner)

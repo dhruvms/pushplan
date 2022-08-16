@@ -81,14 +81,16 @@ bool MAMOSearch::expand(MAMOSearchState *state)
 	std::vector<std::pair<int, int> > succ_object_centric_actions;
 	std::vector<comms::ObjectsPoses> succ_objects;
 	std::vector<trajectory_msgs::JointTrajectory> succ_trajs;
-	node->GetSuccs(&succ_object_centric_actions, &succ_objects, &succ_trajs);
+	std::vector<std::tuple<State, State, int> > debug_pushes;
+	node->GetSuccs(&succ_object_centric_actions, &succ_objects, &succ_trajs, &debug_pushes);
 
 	assert(succ_object_centric_actions.size() == succ_objects.size());
 	assert(succ_objects.size() == succ_trajs.size());
-	assert(succ_trajs.size() == succ_object_centric_actions.size());
+	assert(succ_trajs.size() == debug_pushes.size());
+	assert(debug_pushes.size() == succ_object_centric_actions.size());
 
 	state->leaf = false;
-	createSuccs(node, state, &succ_object_centric_actions, &succ_objects, &succ_trajs);
+	createSuccs(node, state, &succ_object_centric_actions, &succ_objects, &succ_trajs, &debug_pushes);
 	if (!state->leaf) {
 		m_OPEN.erase(state->m_OPEN_h);
 	}
@@ -129,7 +131,8 @@ void MAMOSearch::createSuccs(
 	MAMOSearchState *parent_search_state,
 	std::vector<std::pair<int, int> > *succ_object_centric_actions,
 	std::vector<comms::ObjectsPoses> *succ_objects,
-	std::vector<trajectory_msgs::JointTrajectory> *succ_trajs)
+	std::vector<trajectory_msgs::JointTrajectory> *succ_trajs,
+	std::vector<std::tuple<State, State, int> > *debug_pushes)
 {
 	size_t num_succs = succ_object_centric_actions->size();
 
@@ -176,6 +179,7 @@ void MAMOSearch::createSuccs(
 
 			succ->SetRobotTrajectory(succ_trajs->at(i));
 			succ->SetParent(parent_node);
+			succ->SetDebugPush(debug_pushes->at(i));
 			if (prev_search_state != nullptr)
 			{
 				auto old_succ = m_hashtable.GetState(old_id);

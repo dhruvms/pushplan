@@ -83,6 +83,7 @@ public:
 		const comms::ObjectsPoses& rearranged,
 		comms::ObjectsPoses& result,
 		int& push_failure,
+		std::tuple<State, State, int>& debug_push,
 		const double& push_frac,
 		bool input=false);
 	void IdentifyReachableMovables(
@@ -146,13 +147,6 @@ public:
 
 	auto TrajVoxels() const -> const std::vector<std::vector<Eigen::Vector3d>>* {
 		return &m_traj_voxels;
-	}
-
-	auto PushDebugData() const -> const std::vector<std::vector<double> >& {
-		return m_push_debug_data;
-	}
-	void ClearPushDebugData() {
-		m_push_debug_data.clear();
 	}
 
 	smpl::PushingKDLRobotModel* RobotModel() {
@@ -366,8 +360,6 @@ private:
 		bool finalise=false);
 	void voxeliseTrajectory();
 	void createVirtualTable();
-
-	std::vector<std::vector<double> > m_push_debug_data;
 };
 
 } // namespace clutter

@@ -48,7 +48,8 @@ private:
 		MAMOSearchState *parent_search_state,
 		std::vector<std::pair<int, int> > *succ_object_centric_actions,
 		std::vector<comms::ObjectsPoses> *succ_objects,
-		std::vector<trajectory_msgs::JointTrajectory> *succ_trajs);
+		std::vector<trajectory_msgs::JointTrajectory> *succ_trajs,
+		std::vector<std::tuple<State, State, int> > *debug_pushes);
 
 	MAMOSearchState *getSearchState(unsigned int state_id);
 	MAMOSearchState *createSearchState(unsigned int state_id);

@@ -1548,6 +1548,7 @@ bool Robot::PlanPush(
 	const std::vector<Object*>& other_movables,	const comms::ObjectsPoses& rearranged,
 	comms::ObjectsPoses& result,
 	int& push_failure,
+	std::tuple<State, State, int>& debug_push,
 	const double& push_frac,
 	bool input)
 {
@@ -1573,19 +1574,18 @@ bool Robot::PlanPush(
 
 	// get push start pose
 	Eigen::Affine3d push_start_pose, push_end_pose;
+	State debug_push_start, debug_push_end;
 	getPushStartPose(push, push_start_pose, input);
+	debug_push_start = { push_start_pose.translation().x(), push_start_pose.translation().y() };
+
 	if (m_grid_i->getDistanceFromPoint(
 		push_start_pose.translation().x(),
 		push_start_pose.translation().y(),
 		push_start_pose.translation().z()) <= m_grid_i->resolution())
 	{
 		push_failure = 1;
-		m_push_debug_data.push_back({
-			push_start_pose.translation().x(),
-			push_start_pose.translation().y(),
-			-99.0,
-			-99.0,
-			(double)push_failure});
+		debug_push_end = { -99.0, -99.0 };
+		debug_push = std::make_tuple(debug_push_start, debug_push_end, push_failure);
 		return false;
 	}
 
@@ -1606,12 +1606,8 @@ bool Robot::PlanPush(
 	if (!planToPoseGoal(push_start_state, push_start_pose, push_traj))
 	{
 		push_failure = 2;
-		m_push_debug_data.push_back({
-			push_start_pose.translation().x(),
-			push_start_pose.translation().y(),
-			-99.0,
-			-99.0,
-			(double)push_failure});
+		debug_push_end = { -99.0, -99.0 };
+		debug_push = std::make_tuple(debug_push_start, debug_push_end, push_failure);
 		return false;
 	}
 	++m_stats["push_samples_found"];
@@ -1643,6 +1639,7 @@ bool Robot::PlanPush(
 	// compute push action end pose
 	push_end_pose.translation().x() += std::cos(push_at_angle) * push_dist * push_frac;
 	push_end_pose.translation().y() += std::sin(push_at_angle) * push_dist * push_frac;
+	debug_push_end = { push_end_pose.translation().x(), push_end_pose.translation().y() };
 	// SV_SHOW_INFO_NAMED("push_end_pose", smpl::visual::MakePoseMarkers(
 	// 	push_end_pose, m_grid_i->getReferenceFrame(), "push_end_pose"));
 
@@ -1658,12 +1655,7 @@ bool Robot::PlanPush(
 
 	if (push_action.points.empty())
 	{
-		m_push_debug_data.push_back({
-			push_start_pose.translation().x(),
-			push_start_pose.translation().y(),
-			push_end_pose.translation().x(),
-			push_end_pose.translation().y(),
-			(double)push_failure});
+		debug_push = std::make_tuple(debug_push_start, debug_push_end, push_failure);
 		return false;
 	}
 
@@ -1690,24 +1682,14 @@ bool Robot::PlanPush(
 		{
 			ProcessObstacles(pushed_obj, true, false);
 			push_failure = 6;
-			m_push_debug_data.push_back({
-				push_start_pose.translation().x(),
-				push_start_pose.translation().y(),
-				push_end_pose.translation().x(),
-				push_end_pose.translation().y(),
-				(double)push_failure});
+			debug_push = std::make_tuple(debug_push_start, debug_push_end, push_failure);
 			return false;
 		}
 		ProcessObstacles(pushed_obj, true, false);
 
 		push_found = true;
 		++m_stats["push_actions_found"];
-		m_push_debug_data.push_back({
-			push_start_pose.translation().x(),
-			push_start_pose.translation().y(),
-			push_end_pose.translation().x(),
-			push_end_pose.translation().y(),
-			(double)push_failure});
+		debug_push = std::make_tuple(debug_push_start, debug_push_end, push_failure);
 
 		// append waypoints to retract to push start pose
 		auto push_action_copy = push_action;
@@ -1749,12 +1731,7 @@ bool Robot::PlanPush(
 	m_stats["push_sim_time"] += GetTime() - start_time;
 
 	push_failure = pidx != -1 ? -1 : 0;
-	m_push_debug_data.push_back({
-		push_start_pose.translation().x(),
-		push_start_pose.translation().y(),
-		push_end_pose.translation().x(),
-		push_end_pose.translation().y(),
-		(double)push_failure});
+	debug_push = std::make_tuple(debug_push_start, debug_push_end, push_failure);
 	if (pidx == -1)	{
 		return false;
 	}

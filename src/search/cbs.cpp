@@ -120,11 +120,11 @@ bool CBS::Solve()
 }
 
 void CBS::WriteLastSolution(
-	unsigned int child_id,
-	unsigned int parent_id)
+	std::tuple<State, State, int>* debug_push,
+	unsigned int child_id, unsigned int parent_id)
 {
 	if (m_goal != nullptr) {
-		writeSolution(m_goal, child_id, parent_id);
+		writeSolution(m_goal, debug_push, child_id, parent_id);
 	}
 }
 
@@ -629,7 +629,8 @@ bool CBS::done(HighLevelNode* node)
 }
 
 void CBS::writeSolution(
-	HighLevelNode* node, unsigned int child_id,	unsigned int parent_id)
+	HighLevelNode* node, std::tuple<State, State, int>* debug_push,
+	unsigned int child_id,	unsigned int parent_id)
 {
 	int makespan = node->m_makespan;
 	// for (int tidx = 0; tidx < 1; tidx += 1)
@@ -857,15 +858,17 @@ void CBS::writeSolution(
 					<< p.at(1) << '\n';
 		}
 
-		auto push_debug_data = m_robot->PushDebugData();
-		DATA << "PUSHES" << '\n';
-		DATA << push_debug_data.size() << '\n';
-		for (const auto& push: push_debug_data) {
-			DATA 	<< push.at(0) << ','
-					<< push.at(1) << ','
-					<< push.at(2) << ','
-					<< push.at(3) << ','
-					<< push.at(4) << '\n';
+		if (debug_push != nullptr)
+		{
+			State push_start, push_end;
+			int push_result;
+			std::tie(push_start, push_end, push_result) = *debug_push;
+			DATA << "PUSHES" << '\n';
+			DATA 	<< push_start.at(0) << ','
+					<< push_start.at(1) << ','
+					<< push_end.at(0) << ','
+					<< push_end.at(1) << ','
+					<< push_result << '\n';
 		}
 
 		// write invalid goals
@@ -887,7 +890,6 @@ void CBS::writeSolution(
 		}
 
 		DATA.close();
-		m_robot->ClearPushDebugData();
 	}
 }
 
