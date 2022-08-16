@@ -1656,6 +1656,17 @@ bool Robot::PlanPush(
 						push_end_pose,
 						push_action);
 
+	if (push_action.points.empty())
+	{
+		m_push_debug_data.push_back({
+			push_start_pose.translation().x(),
+			push_start_pose.translation().y(),
+			push_end_pose.translation().x(),
+			push_end_pose.translation().y(),
+			(double)push_failure});
+		return false;
+	}
+
 	// compute obtainable push action end pose
 	push_end_pose = m_rm->computeFK(push_action.points.back().positions);
 
