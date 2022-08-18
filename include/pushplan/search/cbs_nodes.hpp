@@ -66,12 +66,12 @@ struct HighLevelNode
 			{
 				if (p->m_d == q->m_d)
 				{
-					if (p->m_flowtime == q->m_flowtime)
+					if (p->m_flowtime + p->m_c == q->m_flowtime + q->m_c)
 					{
 						return p->m_h >= q->m_h;
 					}
 
-					return p->m_flowtime >= q->m_flowtime;
+					return p->m_flowtime + p->m_c >= q->m_flowtime + q->m_c;
 				}
 
 				return p->m_d >= q->m_d;
@@ -89,12 +89,12 @@ struct HighLevelNode
 			{
 				if (p->fval() == q->fval())
 				{
-					if (p->m_flowtime == q->m_flowtime)
+					if (p->m_flowtime + p->m_c == q->m_flowtime + q->m_c)
 					{
 						return p->m_h >= q->m_h;
 					}
 
-					return p->m_flowtime >= q->m_flowtime;
+					return p->m_flowtime + p->m_c >= q->m_flowtime + q->m_c;
 				}
 
 				return p->fval() >= q->fval();
@@ -105,19 +105,19 @@ struct HighLevelNode
 	};
 
 	std::list<std::shared_ptr<Constraint> > m_constraints; // constraints to be satisfied (parent + 1)
-	std::list<std::shared_ptr<Conflict> > m_conflicts; // conflicts at this node
+	std::list<std::shared_ptr<Conflict> > m_conflicts, m_all_conflicts; // conflicts at this node
 	std::shared_ptr<Conflict> m_conflict; // selected conflict
 	std::vector<std::pair<int, Trajectory> > m_solution; // agent solutions
 	DAG m_priorities;
 
-	int m_g, m_flowtime, m_makespan, m_depth, m_generate, m_expand;
-	int m_h, m_d;
-	bool m_h_computed;
+	int m_flowtime = 0, m_makespan = 0, m_depth = 0, m_generate = 0, m_expand = 0;
+	unsigned int m_g = 0, m_h = 0, m_d = 0, m_c = 0;
+	bool m_h_computed = false;
 
 	boost::heap::fibonacci_heap<HighLevelNode*, boost::heap::compare<HighLevelNode::OPENCompare> >::handle_type m_OPEN_h;
 	boost::heap::fibonacci_heap<HighLevelNode*, boost::heap::compare<HighLevelNode::FOCALCompare> >::handle_type m_FOCAL_h;
 
-	HighLevelNode* m_parent;
+	HighLevelNode* m_parent = nullptr;
 	std::vector<HighLevelNode*> m_children;
 	int m_replanned;
 
@@ -127,12 +127,14 @@ struct HighLevelNode
 		m_conflicts.clear();
 		m_priorities.Clear();
 	};
-	int fval() const { return this->m_g + (ECBS_MULT * this->m_h); };
+	unsigned int fval() const { return this->m_g + this->m_h; };
+	unsigned int fhatval() const { return this->m_flowtime + this->m_c; };
 
 	void recalcFlowtime();
 	void recalcMakespan();
 	void recalcG(const std::vector<unsigned int>& min_fs);
 	void updateDistanceToGo();
+	void updateCostToGo();
 	void computeH();
 };
 
@@ -140,9 +142,9 @@ struct LowLevelNode
 {
 	int call_number;
 	int state_id;
-	unsigned int g, h, f, h_c;
-	LowLevelNode* bp;
-	bool closed;
+	unsigned int g = 0, h = 0, f = 0, h_c = 0;
+	LowLevelNode* bp = nullptr;
+	bool closed = false;
 
 	struct OPENCompare
 	{

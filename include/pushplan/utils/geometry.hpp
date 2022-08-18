@@ -194,6 +194,18 @@ double EuclideanDist(const std::vector<T>& p1, const std::vector<T>& p2)
 	return std::sqrt(val);
 }
 
+template<typename T>
+inline
+double ManhattanDist(const std::vector<T>& p1, const std::vector<T>& p2)
+{
+	// assert(p1.size() == p2.size());
+	double val = 0.0;
+	for (size_t i = 0; i < p1.size(); ++i) {
+		val += std::abs(p1.at(i) - p2.at(i));
+	}
+	return val;
+}
+
 inline
 double PtDistFromLine(
 	const State& p,

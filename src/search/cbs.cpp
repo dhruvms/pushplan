@@ -89,15 +89,16 @@ bool CBS::Solve()
 		m_FOCAL.pop();
 		m_OPEN.erase(next->m_OPEN_h);
 
-		selectConflict(next);
-		if (done(next)) {
+		if (done(next))
+		{
 			m_search_time += GetTime() - start_time;
 			// writeSolution(next);
 			return m_solved;
 		}
 		// writeSolution(next);
 
-		if (!next->m_h_computed) {
+		if (!next->m_h_computed)
+		{
 			next->computeH();
 			// reinsert into OPEN because lowerbound changed?
 			if (next->m_flowtime > m_wf * m_soln_lb)
@@ -110,6 +111,7 @@ bool CBS::Solve()
 		++m_ct_expanded;
 		next->m_expand = m_ct_expanded;
 
+		selectConflict(next);
 		growConstraintTree(next);
 
 		m_search_time += GetTime() - start_time;
@@ -319,7 +321,7 @@ void CBS::findConflictsRobot(HighLevelNode& curr, size_t oid)
 		{
 			std::shared_ptr<Conflict> conflict(new Conflict());
 			conflict->InitConflict(m_robot->GetID(), m_obj_idx_to_id[oid], t, r_traj->at(t), a_traj->at(t), true);
-			curr.m_conflicts.push_back(conflict);
+			curr.m_all_conflicts.push_back(conflict);
 		}
 	}
 
@@ -347,7 +349,7 @@ void CBS::findConflictsRobot(HighLevelNode& curr, size_t oid)
 				{
 					std::shared_ptr<Conflict> conflict(new Conflict());
 					conflict->InitConflict(m_robot->GetID(), m_obj_idx_to_id[oid], t, shorter->back(), longer->at(t), true);
-					curr.m_conflicts.push_back(conflict);
+					curr.m_all_conflicts.push_back(conflict);
 				}
 			}
 			else
@@ -357,7 +359,7 @@ void CBS::findConflictsRobot(HighLevelNode& curr, size_t oid)
 				{
 					std::shared_ptr<Conflict> conflict(new Conflict());
 					conflict->InitConflict(m_robot->GetID(), m_obj_idx_to_id[oid], t, longer->at(t), shorter->back(), true);
-					curr.m_conflicts.push_back(conflict);
+					curr.m_all_conflicts.push_back(conflict);
 				}
 			}
 		}
@@ -410,7 +412,7 @@ void CBS::findConflictsObjects(HighLevelNode& curr, size_t o1, size_t o2)
 		{
 			std::shared_ptr<Conflict> conflict(new Conflict());
 			conflict->InitConflict(m_obj_idx_to_id[o1], m_obj_idx_to_id[o2], t, a1_traj->at(t), a2_traj->at(t), false);
-			curr.m_conflicts.push_back(conflict);
+			curr.m_all_conflicts.push_back(conflict);
 			// SMPL_INFO("Conflict between objects %d (ID %d) and %d (ID %d)", o1, m_obj_idx_to_id[o1], o2, m_obj_idx_to_id[o2]);
 		}
 	}
@@ -436,7 +438,7 @@ void CBS::findConflictsObjects(HighLevelNode& curr, size_t o1, size_t o2)
 			{
 				std::shared_ptr<Conflict> conflict(new Conflict());
 				conflict->InitConflict(shorter->GetID(), longer->GetID(), t, shorter_traj->back(), longer_traj->at(t), false);
-				curr.m_conflicts.push_back(conflict);
+				curr.m_all_conflicts.push_back(conflict);
 				// SMPL_INFO("Conflict between objects %d (ID %d) and %d (ID %d)", o1, m_obj_idx_to_id[o1], o2, m_obj_idx_to_id[o2]);
 			}
 		}
@@ -452,13 +454,88 @@ void CBS::copyRelevantConflicts(HighLevelNode& node) const
 		}
 		node.m_conflicts.push_back(conflict);
 	}
+
+	for (auto& conflict : node.m_parent->m_all_conflicts)
+	{
+		if (conflict->m_a1 == node.m_replanned || conflict->m_a2 == node.m_replanned) {
+			continue;
+		}
+		node.m_all_conflicts.push_back(conflict);
+	}
 }
 
-void CBS::selectConflict(HighLevelNode* node) const
+bool CBS::selectConflict(HighLevelNode* node) const
 {
+	if (node->m_all_conflicts.empty())
+	{
+		SMPL_ERROR("Trying to expand CT node with no conflicts.");
+		return false;
+	}
+
+	while (!node->m_all_conflicts.empty())
+	{
+		auto conflict = node->m_all_conflicts.front();
+		node->m_all_conflicts.pop_front();
+		conflict->SetPriority(node);
+		node->m_conflicts.push_back(conflict);
+	}
+
 	if (!node->m_conflicts.empty())
 	{
-		node->m_conflict = node->m_conflicts.front();
+		std::unordered_map<int, std::shared_ptr<Conflict> > to_keep;
+		std::list<std::shared_ptr<Conflict> > to_delete;
+		for (const auto& conflict : node->m_conflicts)
+		{
+			int a1 = std::min(conflict->m_a1, conflict->m_a2), a2 = std::max(conflict->m_a1, conflict->m_a2);
+			int key = a1 * m_num_agents + a2;
+			auto p = to_keep.find(key);
+			if (p == to_keep.end()) {
+				to_keep[key] = conflict;
+			}
+			else if (*(p->second) < *conflict)
+			{
+				to_delete.push_back(p->second);
+				to_keep[key] = conflict;
+			}
+			else {
+				to_delete.push_back(conflict);
+			}
+		}
+
+		for (const auto& conflict : to_delete) {
+			node->m_conflicts.remove(conflict);
+		}
+	}
+
+	std::shared_ptr<Conflict> selected;
+	if (node->m_conflicts.empty() && node->m_all_conflicts.empty())
+	{
+		SMPL_WARN("CT node has no conflicts. What happens now?");
+	}
+	else if (!node->m_conflicts.empty())
+	{
+		selected = node->m_conflicts.back();
+		for (const auto& conflict : node->m_conflicts)
+		{
+			if (*selected < *conflict) {
+				selected = conflict;
+			}
+		}
+	}
+	else
+	{
+		selected = node->m_all_conflicts.back();
+		for (const auto& conflict : node->m_all_conflicts)
+		{
+			if (*selected < *conflict) {
+				selected = conflict;
+			}
+		}
+	}
+
+	if (selected)
+	{
+		node->m_conflict = selected;
 		node->m_conflict->m_on = true;
 	}
 	else
@@ -466,6 +543,8 @@ void CBS::selectConflict(HighLevelNode* node) const
 		node->m_conflict = std::make_shared<Conflict>();
 		node->m_conflict->m_on = false;
 	}
+
+	return true;
 }
 
 void CBS::addConstraints(const HighLevelNode* curr, HighLevelNode* child1, HighLevelNode* child2) const
@@ -554,6 +633,7 @@ bool CBS::updateChild(HighLevelNode* parent, HighLevelNode* child)
 			}
 			m_ll_time += GetTime() - start_time;
 			m_ll_expanded += expands;
+			m_min_fs[i] = min_f;
 
 			// update solution in CT node
 			for (auto& solution : child->m_solution)
@@ -564,9 +644,8 @@ bool CBS::updateChild(HighLevelNode* parent, HighLevelNode* child)
 				}
 			}
 
-			child->m_g += min_f;
+			child->m_g += m_min_fs[i];
 			child->m_flowtime += m_paths[i]->size() - 1;
-			m_min_fs[i] = min_f;
 			if (recalc_makespan) {
 				child->recalcMakespan();
 			}
@@ -580,9 +659,10 @@ bool CBS::updateChild(HighLevelNode* parent, HighLevelNode* child)
 
 	findConflicts(*child);
 
-	child->m_h = std::max(0, parent->m_g + (COST_MULT * parent->m_h) - child->m_g);
+	child->m_h = std::max(0u, parent->fval() - child->m_g);
 	child->m_h_computed = false;
 	child->updateDistanceToGo();
+	child->updateCostToGo();
 
 	pushNode(child);
 	return true;
@@ -590,8 +670,9 @@ bool CBS::updateChild(HighLevelNode* parent, HighLevelNode* child)
 
 bool CBS::done(HighLevelNode* node)
 {
-	if (!node->m_conflict->m_on)
+	if (node->m_conflicts.empty() && node->m_all_conflicts.empty())
 	{
+		ROS_WARN("CBS solved! HL Nodes expanded = %d", m_ct_expanded);
 		m_solved = true;
 		m_goal = node;
 		m_soln_cost = m_goal->m_flowtime;
@@ -619,6 +700,7 @@ bool CBS::done(HighLevelNode* node)
 
 	if (m_search_time > m_time_limit)
 	{
+		ROS_WARN("CBS search time exceeded! HL Nodes expanded = %d", m_ct_expanded);
 		m_solved = false;
 		m_soln_cost = -1;
 		return true;

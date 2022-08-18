@@ -202,20 +202,27 @@ void HighLevelNode::recalcG(const std::vector<unsigned int>& min_fs)
 void HighLevelNode::updateDistanceToGo()
 {
 	std::set<std::pair<int, int> > conflict_pairs;
-	for (auto& conflict : m_conflicts)
+	for (auto& conflict : m_all_conflicts)
 	{
 		auto pair = std::make_pair(std::min(conflict->m_a1, conflict->m_a2), std::max(conflict->m_a1, conflict->m_a2));
 		if (conflict_pairs.find(pair) == conflict_pairs.end()) {
 			conflict_pairs.insert(pair);
 		}
 	}
-	m_d = (int)(m_conflicts.size() + conflict_pairs.size());
+	m_d = m_conflicts.size() + conflict_pairs.size();
+}
+
+void HighLevelNode::updateCostToGo()
+{
+	if (fval() > fhatval()) {
+		m_c += fval() - fhatval();
+	}
 }
 
 void HighLevelNode::computeH()
 {
 	m_h_computed = true;
-	int h = -1;
+	unsigned int h = 0;
 	switch (HLHC)
 	{
 		case HighLevelConflictHeuristic::ZERO:
@@ -225,13 +232,13 @@ void HighLevelNode::computeH()
 		}
 		case HighLevelConflictHeuristic::CONFLICT_COUNT:
 		{
-			h = (int)m_conflicts.size();
+			h = m_conflicts.size();
 			break;
 		}
 		case HighLevelConflictHeuristic::AGENT_COUNT:
 		{
 			std::set<int> conflict_agents;
-			for (auto& conflict : m_conflicts)
+			for (auto& conflict : m_all_conflicts)
 			{
 				if (conflict_agents.find(conflict->m_a1) == conflict_agents.end()) {
 					conflict_agents.insert(conflict->m_a1);
@@ -240,12 +247,12 @@ void HighLevelNode::computeH()
 					conflict_agents.insert(conflict->m_a2);
 				}
 			}
-			h = (int)conflict_agents.size();
+			h = conflict_agents.size();
 			break;
 		}
 		case HighLevelConflictHeuristic::AGENT_PAIRS:
 		{
-			h = m_d - (int)m_conflicts.size();
+			h = m_d - m_conflicts.size();
 			break;
 		}
 	}

@@ -23,6 +23,13 @@ enum class HighLevelConflictHeuristic
 	AGENT_PAIRS,
 	HLHC_TYPES
 };
+enum class ConflictPrioritisation
+{
+	RANDOM,
+	EARLIEST,
+	CONFLICTS,
+	CP_TYPES
+};
 enum class MAPFAlgo
 {
 	WHCA,
@@ -38,7 +45,6 @@ extern bool FRIDGE;
 
 extern double MAPF_PLANNING_TIME;
 extern double RES;
-extern int COST_MULT;
 extern double GOAL_THRESH;
 
 extern int WINDOW;
@@ -53,9 +59,9 @@ extern bool CC_3D;
 
 extern double DF_RES;
 
-extern int ECBS_MULT;
 extern LowLevelConflictHeuristic LLHC;
 extern HighLevelConflictHeuristic HLHC;
+extern ConflictPrioritisation CP;
 extern MAPFAlgo ALGO;
 
 extern const std::vector<int> YCB_OBJECTS;

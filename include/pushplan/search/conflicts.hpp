@@ -16,48 +16,21 @@ struct Constraint
 	LatticeState m_q;
 };
 
+class HighLevelNode;
+
 struct Conflict
 {
-	int m_a1, m_a2;
-	int m_t;
+	int m_a1, m_a2, m_t, m_priority;
 	bool m_on;
 	LatticeState m_q1, m_q2;
 	std::shared_ptr<Constraint> m_c1, m_c2;
 
-	void InitConflict(int a1, int a2, int t, LatticeState q1, LatticeState q2, bool robot=false)
-	{
-		m_a1 = a1;
-		m_a2 = a2;
-		m_t = t;
-		m_q1 = q1;
-		m_q2 = q2;
-
-		m_c1 = std::make_shared<Constraint>();
-		m_c1->m_me = m_a1;
-		m_c1->m_other = m_a2;
-		m_c1->m_time = m_t;
-		m_c1->m_q = q2;
-
-		m_c2 = std::make_shared<Constraint>();
-		m_c2->m_me = m_a2;
-		m_c2->m_other = robot ? m_a2 : m_a1;
-		m_c2->m_time = m_t;
-		m_c2->m_q = robot ? q2 : q1;
-	}
-
-	int at(std::size_t i) const {
-        if (i == 0) {
-        	return m_a1;
-        }
-        else if (i == 1) {
-        	return m_a2;
-        }
-        else {
-        	assert(false);
-        	return -1;
-        }
-    }
+	void InitConflict(int a1, int a2, int t, LatticeState q1, LatticeState q2, bool robot=false);
+	void SetPriority(HighLevelNode* node);
+	int at(std::size_t i) const;
 };
+
+bool operator<(const Conflict& a, const Conflict& b);
 
 inline
 void VecConstraint(const Constraint& constraint, std::vector<double>& c_vec)

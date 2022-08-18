@@ -30,7 +30,7 @@ public:
 		m_time_limit = max_planning_time_ms * 1e-3;
 	};
 	int get_n_expands() const override;
-	int get_min_f() const override;
+	unsigned int get_min_f() const override;
 	void reset() override;
 
 	int replan(

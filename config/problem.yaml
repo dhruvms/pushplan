@@ -57,17 +57,16 @@ robot:
 
 mapf:
   res: 0.01
-  cost_mult: 1000
   planning_time: 300.0
   goal_thresh: 0.02
   whca:
     window: 4
     grid: 4
   cbs:
+    llhc: 1
+    hlhc: 1
+    cp: 1
     algo: 1 # 0: WHCA, 1: CBS, 2: ECBS, 3: CBSw/P, 4: PBS, 5: ours
-    llhc: 0
-    hlhc: 0
-    ecbs_mult: 10
 
 objects:
   min_size: 0.03

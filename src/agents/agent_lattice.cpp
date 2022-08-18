@@ -137,20 +137,21 @@ bool AgentLattice::IsGoal(int state_id)
 			}
 		}
 
-		if (!constrained)
-		{
-			bool conflict = goalConflict(*s);
+		return !constrained;
+		// if (!constrained)
+		// {
+		// 	bool conflict = goalConflict(*s);
 
-			// for forward search goal must valid for all future time
-			// if (!conflict) {
-			// 	m_agent->VisualiseState(*s, "valid_goal", 147);
-			// 	SMPL_WARN("Goal visualised!");
-			// }
-			return !conflict;
-		}
+		// 	// for forward search goal must valid for all future time
+		// 	// if (!conflict) {
+		// 	// 	m_agent->VisualiseState(*s, "valid_goal", 147);
+		// 	// 	SMPL_WARN("Goal visualised!");
+		// 	// }
+		// 	return !conflict;
+		// }
 
-		// for forward search goal must not be constrained
-		return false;
+		// // for forward search goal must not be constrained
+		// return false;
 	}
 
 	// for forward search goal must be outside NGR
@@ -206,8 +207,7 @@ unsigned int AgentLattice::GetGoalHeuristic(int state_id)
 	LatticeState* s = getHashEntry(state_id);
 	assert(s);
 
-	double dist = EuclideanDist(s->coord, m_agent->Goal());
-	return (dist * COST_MULT);
+	return ManhattanDist(s->coord, m_agent->Goal());
 }
 
 unsigned int AgentLattice::GetConflictHeuristic(int state_id)
@@ -216,7 +216,7 @@ unsigned int AgentLattice::GetConflictHeuristic(int state_id)
 	LatticeState* s = getHashEntry(state_id);
 	assert(s);
 
-	return (s->hc * COST_MULT);
+	return s->hc;
 }
 
 unsigned int AgentLattice::GetGoalHeuristic(const LatticeState& s)
@@ -226,8 +226,7 @@ unsigned int AgentLattice::GetGoalHeuristic(const LatticeState& s)
 		return 0;
 	}
 	// TODO: RRA* informed backwards Dijkstra's heuristic
-	double dist = EuclideanDist(s.coord, m_agent->Goal());
-	return (dist * COST_MULT);
+	return ManhattanDist(s.coord, m_agent->Goal());
 }
 
 int AgentLattice::generateSuccessor(
@@ -373,13 +372,12 @@ unsigned int AgentLattice::cost(
 	const LatticeState* s1,
 	const LatticeState* s2)
 {
-	double dist = EuclideanDist(s1->coord, s2->coord);
+	double dist = ManhattanDist(s1->coord, s2->coord);
 	dist = dist == 0.0 ? 1.0 : dist;
 
 	double obs_cost = m_agent->ObsDist(s2->state[0], s2->state[1]);
 	obs_cost = std::pow(2, 1 - (obs_cost/0.15));
-	double cost = (dist + obs_cost) * COST_MULT;
-	return cost;
+	return dist + obs_cost;
 }
 
 unsigned int AgentLattice::costPP(
@@ -387,8 +385,7 @@ unsigned int AgentLattice::costPP(
 	bool s1_outside_ngr,
 	const LatticeState* s2)
 {
-	double dist = std::max(1.0, EuclideanDist(s1->coord, s2->coord));
-	return (dist * COST_MULT);
+	return std::max(1.0, ManhattanDist(s1->coord, s2->coord));
 }
 
 int AgentLattice::conflictHeuristic(const LatticeState& state)

@@ -69,7 +69,7 @@ int WAStar::get_n_expands() const
 	return m_expands[0];
 }
 
-int WAStar::get_min_f() const
+unsigned int WAStar::get_min_f() const
 {
 	return m_min_f;
 }
@@ -191,7 +191,7 @@ int WAStar::replan(
 		start_state->g = 0;
 		start_state->od[0].f = compute_key(start_state, 0);
 		insert_or_update(start_state, 0);
-		m_min_f = std::min(m_min_f, (int)start_state->od[0].f);
+		m_min_f = std::min(m_min_f, start_state->od[0].f);
 	}
 
 	m_search_time = 0.0;

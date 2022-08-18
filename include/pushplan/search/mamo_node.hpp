@@ -78,6 +78,7 @@ private:
 	int m_oidx, m_aidx; // object-to-move id, action-to-use id
 	trajectory_msgs::JointTrajectory m_robot_traj; // robot trajectory from parent to this node
 	std::tuple<State, State, int> m_debug_push; // push start and end for viz purposes
+	bool m_have_debug_push = false;
 
 	MAMONode *m_parent; // parent node in tree
 	std::vector<MAMONode*> m_children; // children nodes in tree

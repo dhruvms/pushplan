@@ -4,7 +4,6 @@ bool clutter::FRIDGE;
 
 double clutter::MAPF_PLANNING_TIME;
 double clutter::RES;
-int clutter::COST_MULT;
 double clutter::GOAL_THRESH;
 
 int clutter::WINDOW;
@@ -19,9 +18,9 @@ bool clutter::CC_3D;
 
 double clutter::DF_RES;
 
-int clutter::ECBS_MULT;
 clutter::LowLevelConflictHeuristic clutter::LLHC;
 clutter::HighLevelConflictHeuristic clutter::HLHC;
+clutter::ConflictPrioritisation clutter::CP;
 clutter::MAPFAlgo clutter::ALGO;
 
 const std::vector<int> clutter::YCB_OBJECTS = {2,3,4,5,6,8,9,10,19,21,25,36}; // 7,11,24,35

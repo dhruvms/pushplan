@@ -49,6 +49,7 @@ add_library(
 	src/search/cbs_nodes.cpp
 	src/search/cbs.cpp
 	src/search/cbswp.cpp
+	src/search/conflicts.cpp
 	src/search/pbs.cpp
 	src/search/wastar.cpp
 	src/search/focal.cpp

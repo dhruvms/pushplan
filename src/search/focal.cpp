@@ -25,7 +25,7 @@ m_wf(wf), m_wo(wo)
 	m_time_limit = 30.0; // seconds
 
 	m_expands = new int[1];
-	m_min_f = std::numeric_limits<int>::max();
+	m_min_f = std::numeric_limits<unsigned int>::max();
 }
 
 Focal::~Focal()
@@ -68,7 +68,7 @@ int Focal::get_n_expands() const
 	return m_expands[0];
 }
 
-int Focal::get_min_f() const
+unsigned int Focal::get_min_f() const
 {
 	return m_min_f;
 }
@@ -93,7 +93,7 @@ void Focal::reset()
 	m_states.clear();
 	// m_states.shrink_to_fit();
 
-	m_min_f = std::numeric_limits<int>::max();
+	m_min_f = std::numeric_limits<unsigned int>::max();
 
 	m_start_ids.clear();
 	m_goal_ids.clear();
@@ -165,7 +165,7 @@ int Focal::replan(
 		start_state->h_c = 0;
 		start_state->m_OPEN_h = m_OPEN.push(start_state);
 		start_state->m_FOCAL_h = m_FOCAL.push(start_state);
-		m_min_f = std::min(m_min_f, (int)start_state->f);
+		m_min_f = std::min(m_min_f, start_state->f);
 	}
 
 	m_search_time = 0.0;
@@ -228,6 +228,8 @@ void Focal::expand(LowLevelNode* s)
 			continue;
 		}
 
+		// unsigned int new_f = new_g + succ_state->h;
+		// if (new_f < succ_state->f || (new_f == succ_state->f && new_hc < succ_state->h_c))
 		if (new_g < succ_state->g || (new_g == succ_state->g && new_hc < succ_state->h_c))
 		{
 			succ_state->g = new_g;

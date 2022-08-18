@@ -55,7 +55,7 @@ bool MAMONode::RunMAPF(
 	bool result = m_cbs->Solve();
 	if (result)
 	{
-		auto debug_push_ptr = m_parent == nullptr ? nullptr : &m_debug_push;
+		auto debug_push_ptr = m_have_debug_push ? &m_debug_push : nullptr;
 		m_cbs->WriteLastSolution(debug_push_ptr, my_state_id, parent_id);
 		m_mapf_solution = m_cbs->GetSolution()->m_solution;
 		// identifyRelevantMovables();
@@ -228,6 +228,7 @@ void MAMONode::SetRobotTrajectory(const trajectory_msgs::JointTrajectory& robot_
 void MAMONode::SetDebugPush(const std::tuple<State, State, int>& debug_push)
 {
 	m_debug_push = debug_push;
+	m_have_debug_push = true;
 }
 
 void MAMONode::SetPlanner(Planner *planner)

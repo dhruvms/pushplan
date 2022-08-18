@@ -32,7 +32,6 @@ void setupGlobals(const ros::NodeHandle& ph)
 	ph.getParam("/fridge", FRIDGE);
 	ph.getParam("mapf/planning_time", MAPF_PLANNING_TIME);
 	ph.getParam("mapf/res", RES);
-	ph.getParam("mapf/cost_mult", COST_MULT);
 	ph.getParam("mapf/goal_thresh", GOAL_THRESH);
 	ph.getParam("mapf/whca/window", WINDOW);
 	ph.getParam("mapf/whca/grid", GRID);
@@ -43,14 +42,15 @@ void setupGlobals(const ros::NodeHandle& ph)
 	ph.getParam("goal/cc_3d", CC_3D);
 	ph.getParam("occupancy_grid/res", DF_RES);
 
-	int llhc, hlhc, algo;
-	ph.getParam("mapf/cbs/algo", algo);
+	int llhc, hlhc, cp, algo;
 	ph.getParam("mapf/cbs/llhc", llhc);
 	ph.getParam("mapf/cbs/hlhc", hlhc);
-	ph.getParam("mapf/cbs/ecbs_mult", ECBS_MULT);
-	ALGO = static_cast<MAPFAlgo>(algo);
+	ph.getParam("mapf/cbs/cp", cp);
+	ph.getParam("mapf/cbs/algo", algo);
 	LLHC = static_cast<LowLevelConflictHeuristic>(llhc);
 	HLHC = static_cast<HighLevelConflictHeuristic>(hlhc);
+	CP = static_cast<ConflictPrioritisation>(cp);
+	ALGO = static_cast<MAPFAlgo>(algo);
 }
 
 int main(int argc, char** argv)
