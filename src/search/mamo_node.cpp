@@ -168,17 +168,18 @@ size_t MAMONode::GetConstraintHash() const
 	for (const auto &object_state : kobject_states())
 	{
 		const auto &disc_pose = object_state.disc_pose();
-		hash_val ^= std::hash<int>()(disc_pose.x()) ^ std::hash<int>()(disc_pose.y());
+		boost::hash_combine(hash_val, disc_pose.x());
+		boost::hash_combine(hash_val, disc_pose.y());
 
 		bool p = disc_pose.pitch() != 0, r = disc_pose.roll() != 0;
 		if (!object_state.symmetric() || p || r)
 		{
-			hash_val ^= std::hash<int>()(disc_pose.yaw());
+			boost::hash_combine(hash_val, disc_pose.yaw());
 			if (p) {
-				hash_val ^= std::hash<int>()(disc_pose.pitch());
+				boost::hash_combine(hash_val, disc_pose.pitch());
 			}
 			if (r) {
-				hash_val ^= std::hash<int>()(disc_pose.roll());
+				boost::hash_combine(hash_val, disc_pose.roll());
 			}
 		}
 	}
