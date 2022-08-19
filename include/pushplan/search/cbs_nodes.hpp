@@ -154,7 +154,7 @@ struct LowLevelNode
 			{
 				if (p->h == q->h)
 				{
-					return rand() % 2 == 0;
+					return rand() % 2;
 				}
 
 				return p->h >= q->h;
@@ -174,7 +174,7 @@ struct LowLevelNode
 				{
 					if (p->h == q->h)
 					{
-						return rand() % 2 == 0;
+						return rand() % 2;
 					}
 
 					return p->h >= q->h;
