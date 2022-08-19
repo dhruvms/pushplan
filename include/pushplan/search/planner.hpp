@@ -66,6 +66,9 @@ public:
 	const std::vector<std::pair<Coord, Coord> >* GetGloballyInvalidPushes() const;
 	const std::set<Coord, coord_compare>* GetLocallyInvalidPushes(
 		unsigned int state_id, int agent_id) const;
+	const int& GetSceneID() const;
+	const int& GetOoIID() const;
+	const std::set<Coord, coord_compare>& GetNGR() const;
 
 	// For KPIECE/RRT
 	bool StateValidityChecker(const smpl::RobotState& state) {
@@ -130,6 +133,7 @@ private:
 
 	std::vector<std::pair<Coord, Coord> > m_invalid_pushes_G;
 	std::unordered_map<unsigned int, std::unordered_map<int, std::set<Coord, coord_compare> > > m_invalid_pushes_L;
+	std::set<Coord, coord_compare> m_ngr;
 
 	std::random_device m_dev;
 	std::mt19937 m_rng;
@@ -158,7 +162,7 @@ private:
 	// For PP
 	std::vector<size_t> m_priorities;
 	void prioritise();
-	void writeState(const std::string& prefix, std::set<Coord, coord_compare> ngr={});
+	void writeState(const std::string& prefix);
 };
 
 } // namespace clutter

@@ -27,6 +27,10 @@ bool MAMOSearch::CreateRoot()
 	m_root_id = m_hashtable.GetStateIDForceful(m_root_node);
 	m_root_search = getSearchState(m_root_id);
 	m_search_nodes.push_back(m_root_node);
+
+	m_root_node->SaveNode(m_root_id, 0);
+
+	return true;
 }
 
 bool MAMOSearch::Solve()

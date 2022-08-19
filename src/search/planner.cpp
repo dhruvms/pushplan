@@ -107,28 +107,7 @@ bool Planner::Init(const std::string& scene_file, int scene_id, bool ycb)
 		{
 			if (m_robot->ComputeGrasps(m_goal))
 			{
-				if (SetupNGR())
-				{
-					m_robot->UpdateNGR();
-					m_exec = m_robot->GetLastPlanProfiled();
-
-					double ox, oy, oz, sx, sy, sz;
-					m_sim->GetShelfParams(ox, oy, oz, sx, sy, sz);
-
-					for (auto& a: m_agents)
-					{
-						a->SetObstacleGrid(m_robot->ObsGrid());
-						a->SetNGRGrid(m_robot->NGRGrid());
-						a->ResetSolution();
-						if (ALGO == MAPFAlgo::OURS) {
-							a->ComputeNGRComplement(ox, oy, oz, sx, sy, sz);
-						}
-					}
-
-					// m_ooi->SetObstacleGrid(m_robot->Grid());
-					// if (ALGO == MAPFAlgo::OURS) {
-					// 	m_ooi->ComputeNGRComplement(ox, oy, oz, sx, sy, sz);
-					// }
+				if (SetupNGR()) {
 					break;
 				}
 			}
@@ -187,6 +166,39 @@ bool Planner::SetupNGR()
 	}
 	m_stats["robot_planner_time"] = GetTime() - m_timer;
 	m_robot->ProcessObstacles({ m_ooi->GetObject() });
+
+	m_robot->UpdateNGR();
+	m_exec = m_robot->GetLastPlanProfiled();
+
+	double ox, oy, oz, sx, sy, sz;
+	m_sim->GetShelfParams(ox, oy, oz, sx, sy, sz);
+
+	for (auto& a: m_agents)
+	{
+		a->SetObstacleGrid(m_robot->ObsGrid());
+		a->SetNGRGrid(m_robot->NGRGrid());
+		a->ResetSolution();
+		// if (ALGO == MAPFAlgo::OURS) {
+		// 	a->ComputeNGRComplement(ox, oy, oz, sx, sy, sz);
+		// }
+	}
+
+	// m_ooi->SetObstacleGrid(m_robot->Grid());
+	// if (ALGO == MAPFAlgo::OURS) {
+	// 	m_ooi->ComputeNGRComplement(ox, oy, oz, sx, sy, sz);
+	// }
+
+	auto ngr_voxels = m_robot->TrajVoxels();
+	for (auto itr_list = ngr_voxels->begin(); itr_list != ngr_voxels->end(); ++itr_list)
+	{
+		for (auto itr = itr_list->begin(); itr != itr_list->end(); ++itr)
+		{
+			Coord c;
+			c.push_back(DiscretisationManager::ContXToDiscX(itr->x()));
+			c.push_back(DiscretisationManager::ContYToDiscY(itr->y()));
+			m_ngr.insert(c);
+		}
+	}
 
 	return true;
 }
@@ -1044,24 +1056,27 @@ const std::set<Coord, coord_compare>* Planner::GetLocallyInvalidPushes(
 	return nullptr;
 }
 
+const int& Planner::GetSceneID() const
+{
+	return m_scene_id;
+}
+
+const int& Planner::GetOoIID() const
+{
+	return m_ooi->GetID();
+}
+
+const std::set<Coord, coord_compare>& Planner::GetNGR() const
+{
+	return m_ngr;
+}
+
 //////////////////////////
 // Prioritised Planning //
 //////////////////////////
 
 bool Planner::RunPP()
 {
-	std::set<Coord, coord_compare> ngr;
-	auto ngr_voxels = m_robot->TrajVoxels();
-	for (auto itr_list = ngr_voxels->begin(); itr_list != ngr_voxels->end(); ++itr_list)
-	{
-		for (auto itr = itr_list->begin(); itr != itr_list->end(); ++itr)
-		{
-			Coord c;
-			c.push_back(DiscretisationManager::ContXToDiscX(itr->x()));
-			c.push_back(DiscretisationManager::ContYToDiscY(itr->y()));
-			ngr.insert(c);
-		}
-	}
 	m_ooi->InitPP();
 	for (auto& a: m_agents) {
 		a->InitPP();
@@ -1113,7 +1128,7 @@ bool Planner::RunPP()
 				makespan = move_length;
 			}
 		}
-		writeState("PP", ngr);
+		writeState("PP");
 	}
 
 	std::string filename(__FILE__);
@@ -1157,7 +1172,7 @@ void Planner::prioritise()
 		[&dists](size_t i1, size_t i2) { return dists[i1] < dists[i2]; });
 }
 
-void Planner::writeState(const std::string& prefix, std::set<Coord, coord_compare> ngr)
+void Planner::writeState(const std::string& prefix)
 {
 	std::string filename(__FILE__);
 	auto found = filename.find_last_of("/\\");
@@ -1240,11 +1255,11 @@ void Planner::writeState(const std::string& prefix, std::set<Coord, coord_compar
 		}
 	}
 
-	if (!ngr.empty())
+	if (!m_ngr.empty())
 	{
 		DATA << "NGR" << '\n';
-		DATA << ngr.size() << '\n';
-		for (const auto& p: ngr) {
+		DATA << m_ngr.size() << '\n';
+		for (const auto& p: m_ngr) {
 			DATA 	<< p.at(0) << ','
 					<< p.at(1) << '\n';
 		}

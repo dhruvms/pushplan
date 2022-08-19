@@ -83,7 +83,7 @@ public:
 	}
 
 	bool GetSE2Push(std::vector<double>& push, bool input=false);
-	int GetID() { return m_obj.desc.id; };
+	const int& GetID() const { return m_obj.desc.id; };
 
 	Object* GetObject() { return &m_obj; };
 	fcl::CollisionObject* GetFCLObject() { return m_obj.GetFCLObject(); };

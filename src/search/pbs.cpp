@@ -49,10 +49,8 @@ bool PBS::Solve()
 		if (done(next)) {
 			m_search_time += GetTime() - start_time;
 			SMPL_WARN("YAYAYAY! We did it!");
-			CBS::writeSolution(next);
 			return m_solved;
 		}
-		// writeSolution(next);
 
 		++m_ct_expanded;
 		next->m_expand = m_ct_expanded;

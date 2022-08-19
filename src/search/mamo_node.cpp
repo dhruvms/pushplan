@@ -1,5 +1,6 @@
 #include <pushplan/search/mamo_node.hpp>
 #include <pushplan/search/planner.hpp>
+#include <pushplan/utils/discretisation.hpp>
 
 #include <algorithm>
 
@@ -237,10 +238,10 @@ void MAMONode::SetRobotTrajectory(const trajectory_msgs::JointTrajectory& robot_
 	m_robot_traj = robot_traj;
 }
 
-void MAMONode::SetDebugPush(const std::tuple<State, State, int>& debug_push)
+void MAMONode::AddDebugPush(const std::tuple<State, State, int>& debug_push)
 {
-	m_debug_push = debug_push;
-	m_have_debug_push = true;
+	m_debug_pushes.push_back(debug_push);
+	m_have_debug_pushes = true;
 }
 
 void MAMONode::SetPlanner(Planner *planner)
@@ -358,6 +359,172 @@ void MAMONode::resetAgents()
 {
 	m_agents.clear();
 	m_object_states.clear();
+}
+
+void MAMONode::SaveNode(unsigned int my_id,	unsigned int parent_id)
+{
+	// for (int tidx = 0; tidx < 1; tidx += 1)
+	{
+		std::string filename(__FILE__);
+		auto found = filename.find_last_of("/\\");
+		filename = filename.substr(0, found + 1) + "../../dat/txt/";
+
+		std::stringstream ss;
+		// ss << std::setw(4) << std::setfill('0') << node->m_expand;
+		// ss << "_";
+		// ss << std::setw(4) << std::setfill('0') << node->m_depth;
+		// ss << "_";
+		// ss << std::setw(4) << std::setfill('0') << node->m_replanned;
+		// ss << "_";
+		ss << std::setw(6) << std::setfill('0') << m_planner->GetSceneID();
+		ss << "_";
+		ss << std::setw(6) << std::setfill('0') << my_id;
+		ss << "_";
+		ss << std::setw(6) << std::setfill('0') << parent_id;
+		ss << "_";
+
+		auto t = std::time(nullptr);
+		auto tm = *std::localtime(&t);
+		ss << std::put_time(&tm, "%d-%m-%Y-%H-%M-%S");
+
+		std::string s = ss.str();
+
+		filename += s;
+		filename += ".txt";
+
+		std::ofstream DATA;
+		DATA.open(filename, std::ofstream::out);
+
+		DATA << 'O' << '\n';
+		int o = m_cc->NumObstacles() + m_agents.size();
+		DATA << o << '\n';
+
+		std::string movable;
+		auto obstacles = m_cc->GetObstacles();
+		int ooi_id = m_planner->GetOoIID();
+		for (const auto& obs: *obstacles)
+		{
+			movable = obs.desc.movable ? "True" : "False";
+			int oid = obs.desc.id == ooi_id ? 999 : obs.desc.id;
+			DATA << oid << ','
+					<< obs.Shape() << ','
+					<< obs.desc.type << ','
+					<< obs.desc.o_x << ','
+					<< obs.desc.o_y << ','
+					<< obs.desc.o_z << ','
+					<< obs.desc.o_roll << ','
+					<< obs.desc.o_pitch << ','
+					<< obs.desc.o_yaw << ','
+					<< obs.desc.x_size << ','
+					<< obs.desc.y_size << ','
+					<< obs.desc.z_size << ','
+					<< obs.desc.mass << ','
+					<< obs.desc.mu << ','
+					<< movable << '\n';
+		}
+
+		State loc;
+		movable = "True";
+		for (size_t oidx = 0; oidx < m_agents.size(); ++oidx)
+		{
+			auto agent_obs = m_agents[oidx]->GetObject();
+			auto agent_pose = m_all_objects.poses.at(oidx);
+			DATA << agent_obs->desc.id << ','
+				<< agent_obs->Shape() << ','
+				<< agent_obs->desc.type << ','
+				<< agent_pose.xyz[0] << ','
+				<< agent_pose.xyz[1] << ','
+				<< agent_pose.xyz[2] << ','
+				<< agent_pose.rpy[0] << ','
+				<< agent_pose.rpy[1] << ','
+				<< agent_pose.rpy[2] << ','
+				<< agent_obs->desc.x_size << ','
+				<< agent_obs->desc.y_size << ','
+				<< agent_obs->desc.z_size << ','
+				<< agent_obs->desc.mass << ','
+				<< agent_obs->desc.mu << ','
+				<< movable << '\n';
+		}
+
+		// write solution trajs
+		DATA << 'T' << '\n';
+		o = m_mapf_solution.size();
+		DATA << o << '\n';
+		for (size_t oidx = 0; oidx < m_mapf_solution.size(); ++oidx)
+		{
+			auto moved = m_mapf_solution.at(oidx);
+			DATA << moved.first << '\n';
+			DATA << moved.second.size() << '\n';
+			for (const auto& wp: moved.second) {
+				DATA << wp.state.at(0) << ',' << wp.state.at(1) << '\n';
+			}
+		}
+
+		if (!m_debug_pushes.empty())
+		{
+			DATA << "PUSHES" << '\n';
+			DATA << m_debug_pushes.size() << '\n';
+
+			State push_start, push_end;
+			int push_result;
+			for (const auto& debug_push: m_debug_pushes)
+			{
+				std::tie(push_start, push_end, push_result) = debug_push;
+				DATA 	<< push_start.at(0) << ','
+						<< push_start.at(1) << ','
+						<< push_end.at(0) << ','
+						<< push_end.at(1) << ','
+						<< push_result << '\n';
+			}
+		}
+
+		// write invalid goals
+		auto invalid_g = m_planner->GetGloballyInvalidPushes();
+		DATA << "INVALID_G" << '\n';
+		DATA << invalid_g->size() << '\n';
+		for (size_t i = 0; i < invalid_g->size(); ++i)
+		{
+			State f, t;
+			f.push_back(DiscretisationManager::DiscXToContX(invalid_g->at(i).first.at(0)));
+			f.push_back(DiscretisationManager::DiscYToContY(invalid_g->at(i).first.at(1)));
+			t.push_back(DiscretisationManager::DiscXToContX(invalid_g->at(i).second.at(0)));
+			t.push_back(DiscretisationManager::DiscYToContY(invalid_g->at(i).second.at(1)));
+			DATA << f.at(0) << ',' << f.at(1) << ','
+					<< t.at(0) << ',' << t.at(1) << '\n';
+		}
+
+		DATA << "INVALID_L" << '\n';
+		DATA << m_agents.size() << '\n';
+		for (size_t oidx = 0; oidx < m_agents.size(); ++oidx)
+		{
+			auto invalid_l = m_planner->GetLocallyInvalidPushes(this->GetConstraintHash(), m_agents.at(oidx)->GetID());
+			DATA << m_agents.at(oidx)->GetID() << '\n';
+			if (invalid_l != nullptr)
+			{
+				DATA << invalid_l->size() << '\n';
+				for (const auto& c: *invalid_l)
+				{
+					State s;
+					s.push_back(DiscretisationManager::DiscXToContX(c.at(0)));
+					s.push_back(DiscretisationManager::DiscYToContY(c.at(1)));
+					DATA << s.at(0) << ',' << s.at(1) << '\n';
+				}
+			}
+			else {
+				DATA << 0 << '\n';
+			}
+		}
+
+		const auto& ngr = m_planner->GetNGR();
+		DATA << "NGR" << '\n';
+		DATA << ngr.size() << '\n';
+		for (const auto& p: ngr) {
+			DATA 	<< p.at(0) << ','
+					<< p.at(1) << '\n';
+		}
+
+		DATA.close();
+	}
 }
 
 } // namespace clutter

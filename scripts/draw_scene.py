@@ -80,10 +80,13 @@ def ParseFile(filepath, saving=True):
 
 			if line == 'PUSHES':
 				line = f.readline()[:-1]
-				push = [float(val) for val in line.split(',')]
-				pushes.append(push)
+				num_pushes = int(line)
+				for i in range(num_pushes):
+					line = f.readline()[:-1]
+					push = [float(val) for val in line.split(',')]
+					pushes.append(push)
 
-			if line == 'INVALID':
+			if line == 'INVALID_L':
 				line = f.readline()[:-1]
 				num_objs = int(line)
 				for i in range(num_objs):

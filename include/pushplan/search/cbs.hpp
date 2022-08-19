@@ -28,9 +28,6 @@ public:
 	void AddObjects(const std::vector<std::shared_ptr<Agent> >& objs);
 
 	virtual bool Solve();
-	void WriteLastSolution(
-		std::tuple<State, State, int>* debug_push,
-		unsigned int child_id=0, unsigned int parent_id=0);
 	void Reset();
 
 	void SaveStats();
@@ -74,10 +71,6 @@ protected:
 		const HighLevelNode* curr,
 		HighLevelNode* child1, HighLevelNode* child2) const;
 	virtual bool updateChild(HighLevelNode* parent, HighLevelNode* child);
-
-	void writeSolution(
-		HighLevelNode* node, std::tuple<State, State, int>* debug_push=nullptr,
-		unsigned int child_id=0, unsigned int parent_id=0);
 };
 
 } // namespace clutter
