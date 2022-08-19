@@ -34,9 +34,7 @@ public:
 		const std::vector<std::shared_ptr<Agent> >& agents,
 		const comms::ObjectsPoses& all_objects);
 	std::vector<double>* GetCurrentStartState();
-	bool RunMAPF(
-		unsigned int my_state_id,
-		unsigned int parent_id);
+	bool RunMAPF();
 	void GetSuccs(
 		std::vector<std::pair<int, int> > *succ_object_centric_actions,
 		std::vector<comms::ObjectsPoses> *succ_objects,
@@ -68,6 +66,7 @@ public:
 	MAMONode* parent();
 	const std::vector<MAMONode*>& kchildren() const;
 	std::pair<int, int> object_centric_action() const;
+	const std::vector<std::pair<int, Trajectory> >& kmapf_soln() const;
 	bool has_traj() const;
 
 private:
@@ -102,26 +101,6 @@ private:
 	void resetAgents();
 };
 
-struct MAMOSearchState
-{
-	unsigned int state_id;
-	unsigned int g; // h, f?
-	bool leaf;
-	MAMOSearchState *bp;
-
-	struct OPENCompare
-	{
-		bool operator()(const MAMOSearchState *p, const MAMOSearchState *q) const
-		{
-			if (p->g == q->g) {
-				return rand() % 2 == 0;
-			}
-			return p->g > q->g;
-		}
-	};
-	boost::heap::fibonacci_heap<MAMOSearchState*, boost::heap::compare<MAMOSearchState::OPENCompare> >::handle_type m_OPEN_h;
-};
-
 ////////////////////////
 // Equality operators //
 ////////////////////////
@@ -146,7 +125,7 @@ struct EqualsSearch
 		if (!checkObjects(a, b)) {
 			return false;
 		}
-		return a->object_centric_action() == b->object_centric_action();
+		return a->kmapf_soln() == b->kmapf_soln();
 	}
 };
 

@@ -67,7 +67,8 @@ add_library(
 	src/utils/collision_checker.cpp
 	src/utils/constants.cpp
 	src/utils/discretisation.cpp
-	src/utils/hash_manager.cpp)
+	src/utils/hash_manager.cpp
+	src/utils/types.cpp)
 target_link_libraries(PUSHPLAN ${catkin_LIBRARIES} smpl::smpl) # -lprofiler
 
 add_executable(coop_plan test/coop_plan.cpp)

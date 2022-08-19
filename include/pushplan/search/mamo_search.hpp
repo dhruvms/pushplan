@@ -12,6 +12,26 @@
 namespace clutter
 {
 
+struct MAMOSearchState
+{
+	unsigned int state_id;
+	unsigned int g; // h, f?
+	bool closed;
+	MAMOSearchState *bp;
+
+	struct OPENCompare
+	{
+		bool operator()(const MAMOSearchState *p, const MAMOSearchState *q) const
+		{
+			if (p->g == q->g) {
+				return rand() % 2;
+			}
+			return p->g > q->g;
+		}
+	};
+	boost::heap::fibonacci_heap<MAMOSearchState*, boost::heap::compare<MAMOSearchState::OPENCompare> >::handle_type m_OPEN_h;
+};
+
 class Planner;
 
 class MAMOSearch
@@ -20,7 +40,7 @@ public:
 	MAMOSearch() = default;
 	MAMOSearch(Planner *planner) : m_planner(planner) {};
 
-	void CreateRoot();
+	bool CreateRoot();
 	bool Solve();
 	void GetRearrangements(std::vector<trajectory_msgs::JointTrajectory>& rearrangements, int& grasp_at);
 

@@ -32,9 +32,7 @@ std::vector<double>* MAMONode::GetCurrentStartState()
 	return m_parent->GetCurrentStartState();
 }
 
-bool MAMONode::RunMAPF(
-	unsigned int my_state_id,
-	unsigned int parent_id)
+bool MAMONode::RunMAPF()
 {
 	for (size_t i = 0; i < m_agents.size(); ++i)
 	{
@@ -55,8 +53,6 @@ bool MAMONode::RunMAPF(
 	bool result = m_cbs->Solve();
 	if (result)
 	{
-		auto debug_push_ptr = m_have_debug_push ? &m_debug_push : nullptr;
-		m_cbs->WriteLastSolution(debug_push_ptr, my_state_id, parent_id);
 		m_mapf_solution = m_cbs->GetSolution()->m_solution;
 		// identifyRelevantMovables();
 		for (size_t i = 0; i < m_agents.size(); ++i) {
@@ -73,6 +69,8 @@ void MAMONode::GetSuccs(
 	std::vector<trajectory_msgs::JointTrajectory> *succ_trajs,
 	std::vector<std::tuple<State, State, int> > *debug_pushes)
 {
+	bool duplicate_successor = false;
+	std::vector<std::tuple<State, State, int> > duplicate_successor_debug_pushes;
 	for (size_t i = 0; i < m_mapf_solution.size(); ++i)
 	{
 		const auto& moved = m_mapf_solution.at(i);
@@ -112,6 +110,7 @@ void MAMONode::GetSuccs(
 			succ_object_centric_actions->emplace_back(moved.first, 0); // TODO: currently only one aidx
 			succ_objects->push_back(std::move(result));
 			succ_trajs->push_back(m_robot->GetLastPlan());
+			debug_pushes->push_back(debug_push);
 		}
 		else
 		{
@@ -139,13 +138,21 @@ void MAMONode::GetSuccs(
 				// case -1: SMPL_INFO("Push succeeded in simulation!"); break;
 				default: SMPL_WARN("Unknown push failure cause.");
 			}
-
-			trajectory_msgs::JointTrajectory dummy_traj;
-			succ_object_centric_actions->emplace_back(-1, -1);
-			succ_objects->push_back(m_all_objects);
-			succ_trajs->push_back(dummy_traj);
+			duplicate_successor_debug_pushes.push_back(debug_push);
+			if (!duplicate_successor) {
+				duplicate_successor = true;
+			}
 		}
-		debug_pushes->push_back(debug_push);
+	}
+
+	if (duplicate_successor)
+	{
+		trajectory_msgs::JointTrajectory dummy_traj;
+		succ_object_centric_actions->emplace_back(-1, -1);
+		succ_objects->push_back(m_all_objects);
+		succ_trajs->push_back(dummy_traj);
+		debug_pushes->insert(debug_pushes->end(),
+					duplicate_successor_debug_pushes.begin(), duplicate_successor_debug_pushes.end());
 	}
 }
 
@@ -185,8 +192,13 @@ size_t MAMONode::GetSearchHash() const
 	}
 
 	size_t hash_val = GetConstraintHash();
-	hash_val ^= std::hash<int>()(m_oidx);
-	hash_val ^= std::hash<int>()(m_aidx);
+	for (const auto &movable : m_mapf_solution)
+	{
+		hash_val ^= std::hash<int>()(movable.first);
+		for (const auto &wp : movable.second) {
+			boost::hash_combine(hash_val, boost::hash_range(wp.coord.begin(), wp.coord.begin() + 2));
+		}
+	}
 
 	return hash_val;
 }
@@ -308,6 +320,11 @@ const std::vector<MAMONode*>& MAMONode::kchildren() const
 std::pair<int, int> MAMONode::object_centric_action() const
 {
 	return std::make_pair(m_oidx, m_aidx);
+}
+
+const std::vector<std::pair<int, Trajectory> >& MAMONode::kmapf_soln() const
+{
+	return m_mapf_solution;
 }
 
 bool MAMONode::has_traj() const

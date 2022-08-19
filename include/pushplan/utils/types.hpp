@@ -34,14 +34,14 @@ struct LatticeState
 typedef std::vector<LatticeState> Trajectory;
 typedef std::vector<LatticeState*> STATES;
 
-inline
-bool operator==(const LatticeState& a, const LatticeState& b)
-{
-	return (
-		a.coord == b.coord &&
-		a.t == b.t
-	);
-}
+bool operator==(const LatticeState& a, const LatticeState& b);
+bool operator!=(const LatticeState& a, const LatticeState& b);
+bool operator==(
+	const std::vector<std::pair<int, Trajectory> >& a,
+	const std::vector<std::pair<int, Trajectory> >& b);
+bool operator!=(
+	const std::vector<std::pair<int, Trajectory> >& a,
+	const std::vector<std::pair<int, Trajectory> >& b);
 
 } // namespace clutter
 
