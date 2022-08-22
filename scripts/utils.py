@@ -11,8 +11,8 @@ STATIC_COLOUR = [0.698, 0.133, 0.133]
 MOVEABLE_COLOUR = [0.0, 0.0, 1.0]
 OOI_COLOUR = [1.0, 0.843, 0.0]
 
-FALL_POS_THRESH = 0.436332 # float('inf')
-FALL_VEL_THRESH = 2.0 # float('inf')
+FALL_POS_THRESH = 0.35 # float('inf')
+FALL_VEL_THRESH = 1.0 # float('inf')
 CONTACT_THRESH = 1e-9
 
 YCB_OBJECTS = {

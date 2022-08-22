@@ -126,9 +126,10 @@ void MAMOSearch::extractRearrangements()
 	ROS_WARN("Solution path state ids (from goal to start):");
 	for (MAMOSearchState *state = m_solved_search; state; state = state->bp)
 	{
-		ROS_WARN("\t%u", state->state_id);
 		auto node = m_hashtable.GetState(state->state_id);
-		if (node->has_traj() && !node->krobot_traj().points.empty()) {
+		if (node->has_traj())
+		{
+			ROS_WARN("\t%u", state->state_id);
 			m_rearrangements.push_back(node->krobot_traj());
 		}
 	}
@@ -203,8 +204,7 @@ void MAMOSearch::createSuccs(
 			{
 				// update search state in open list
 				auto old_succ = m_hashtable.GetState(old_id);
-				assert(parent_node == old_succ->parent());
-				parent_node->RemoveChild(old_succ);
+				old_succ->parent()->RemoveChild(old_succ);
 
 				m_hashtable.UpdateState(succ);
 				prev_search_state->bp = parent_search_state;

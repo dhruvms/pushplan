@@ -904,8 +904,8 @@ class BulletSim:
 
 			start_rpy = sim_data['objs'][obj_id]['rpy']
 			curr_xyz, curr_rpy = self.sims[sim_id].getBasePositionAndOrientation(obj_id)
-			if(shortest_angle_dist(curr_rpy[0], start_rpy[0]) > FALL_POS_THRESH or
-				shortest_angle_dist(curr_rpy[1], start_rpy[1]) > FALL_POS_THRESH or
+			if(shortest_angle_dist(curr_rpy[0], start_rpy[0]) > 0.95 * FALL_POS_THRESH or
+				shortest_angle_dist(curr_rpy[1], start_rpy[1]) > 0.95 * FALL_POS_THRESH or
 				curr_xyz[2] < 0.5): # off the table/refrigerator
 				return True
 		return False
@@ -927,7 +927,7 @@ class BulletSim:
 				continue
 
 			vel_xyz, vel_rpy = self.sims[sim_id].getBaseVelocity(obj_id)
-			if(abs(vel_rpy[0]) > FALL_VEL_THRESH or abs(vel_rpy[1]) > FALL_VEL_THRESH):
+			if(abs(vel_rpy[0]) > 0.95 * FALL_VEL_THRESH or abs(vel_rpy[1]) > 0.95 * FALL_VEL_THRESH):
 				return True
 		return False
 

@@ -91,12 +91,13 @@ void MAMONode::GetSuccs(
 
 		// other movables to be considered as obstacles
 		std::vector<Object*> movable_obstacles;
-		for (const auto& a: m_agents)
+		for (size_t i = 0; i < m_agents.size(); ++i)
 		{
-			if (a->GetID() == moved.first) {
+			m_agents.at(i)->SetObjectPose(m_object_states.at(i).cont_pose());
+			if (m_agents.at(i)->GetID() == moved.first) {
 				continue; // selected object cannot be obstacle
 			}
-			movable_obstacles.push_back(a->GetObject());
+			movable_obstacles.push_back(m_agents.at(i)->GetObject());
 		}
 
 		// plan to push location
@@ -111,7 +112,7 @@ void MAMONode::GetSuccs(
 			succ_object_centric_actions->emplace_back(moved.first, 0); // TODO: currently only one aidx
 			succ_objects->push_back(std::move(result));
 			succ_trajs->push_back(m_robot->GetLastPlan());
-			debug_pushes->push_back(debug_push);
+			debug_pushes->push_back(std::move(debug_push));
 		}
 		else
 		{
@@ -139,7 +140,7 @@ void MAMONode::GetSuccs(
 				// case -1: SMPL_INFO("Push succeeded in simulation!"); break;
 				default: SMPL_WARN("Unknown push failure cause.");
 			}
-			duplicate_successor_debug_pushes.push_back(debug_push);
+			duplicate_successor_debug_pushes.push_back(std::move(debug_push));
 			if (!duplicate_successor) {
 				duplicate_successor = true;
 			}
