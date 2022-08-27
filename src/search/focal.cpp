@@ -45,7 +45,7 @@ int Focal::set_goal(int goal_id)
 {
 	m_goal_ids.clear();
 	m_goal_ids.push_back(goal_id);
-	get_state(m_goal_ids.back(), m_b);
+	// get_state(m_goal_ids.back(), m_b);
 	return m_goal_ids.back();
 }
 
@@ -59,7 +59,7 @@ std::size_t Focal::push_start(int start_id)
 std::size_t Focal::push_goal(int goal_id)
 {
 	m_goal_ids.push_back(goal_id);
-	get_state(m_goal_ids.back(), m_b);
+	// get_state(m_goal_ids.back(), m_b);
 	return m_goal_ids.size();
 }
 
@@ -107,9 +107,21 @@ LowLevelNode* Focal::get_state(int state_id, bool& alloc)
 
 	if (m_states.size() <= state_id)
 	{
+		m_states.resize(state_id + 1, nullptr);
+
 		LowLevelNode* s = new LowLevelNode();
 		init_state(s, state_id);
-		m_states.push_back(s);
+		m_states.at(state_id) = s;
+		alloc = true;
+
+		return s;
+	}
+
+	if (m_states[state_id] == nullptr)
+	{
+		LowLevelNode* s = new LowLevelNode();
+		init_state(s, state_id);
+		m_states.at(state_id) = s;
 		alloc = true;
 
 		return s;
@@ -149,12 +161,12 @@ int Focal::replan(
 	m_OPEN.clear();
 	m_FOCAL.clear();
 
-	for (const auto& goal_id : m_goal_ids)
-	{
-		auto goal_state = get_state(goal_id, m_b);
-		assert(!m_b);
-		reinit_state(goal_state);
-	}
+	// for (const auto& goal_id : m_goal_ids)
+	// {
+	// 	auto goal_state = get_state(goal_id, m_b);
+	// 	assert(!m_b);
+	// 	reinit_state(goal_state);
+	// }
 	for (const auto& start_id : m_start_ids)
 	{
 		auto start_state = get_state(start_id, m_b);
@@ -179,7 +191,7 @@ int Focal::replan(
 		m_FOCAL.pop();
 		m_OPEN.erase(s->m_OPEN_h);
 
-		if (is_goal(s->state_id))
+		if (s->state_id == m_goal_ids.back())
 		{
 			extract_path(s, *solution_path, *solution_cost);
 			m_search_time += GetTime() - expand_time;
@@ -203,7 +215,12 @@ void Focal::expand(LowLevelNode* s)
 
 	std::vector<int> succ_ids;
 	std::vector<unsigned int> costs;
-	m_agent->GetSuccs(s->state_id, &succ_ids, &costs);
+	if (!m_agent->CheckGoalCost(s->state_id, &succ_ids, &costs))
+	{
+		succ_ids.clear();
+		costs.clear();
+		m_agent->GetSuccs(s->state_id, &succ_ids, &costs);
+	}
 
 	for (size_t sidx = 0; sidx < succ_ids.size(); ++sidx)
 	{
@@ -327,7 +344,7 @@ void Focal::extract_path(
 	solution.clear();
 
 	// s->state_id == m_goal_id == 0 should be true
-	for (LowLevelNode* state = s; state; state = state->bp) {
+	for (LowLevelNode* state = s->bp; state; state = state->bp) {
 		solution.push_back(state->state_id);
 	}
 	std::reverse(solution.begin(), solution.end());

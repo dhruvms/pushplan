@@ -116,7 +116,7 @@ void MAMONode::GetSuccs(
 		}
 		else
 		{
-			SMPL_INFO("Tried pushing object %d. Return value = %d", moved.first, push_failure);
+			// SMPL_INFO("Tried pushing object %d. Return value = %d", moved.first, push_failure);
 			switch (push_failure)
 			{
 				case 3: // SMPL_ERROR("Inverse dynamics failed to reach push end."); break;

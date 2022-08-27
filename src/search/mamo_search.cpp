@@ -70,7 +70,7 @@ void MAMOSearch::GetRearrangements(std::vector<trajectory_msgs::JointTrajectory>
 
 bool MAMOSearch::expand(MAMOSearchState *state)
 {
-	SMPL_WARN("Expand %d, g-value = %d", state->state_id, state->g);
+	// SMPL_WARN("Expand %d, g-value = %d", state->state_id, state->g);
 	auto node = m_hashtable.GetState(state->state_id);
 
 	// 2. generate appropriate successor states
@@ -210,7 +210,7 @@ void MAMOSearch::createSuccs(
 				prev_search_state->bp = parent_search_state;
 				prev_search_state->g = succ_g;
 				m_OPEN.update(prev_search_state->m_OPEN_h);
-				SMPL_WARN("Update existing successor %d, g-value = %d (previously %d)", old_id, prev_search_state->g, old_g);
+				// SMPL_WARN("Update existing successor %d, g-value = %d (previously %d)", old_id, prev_search_state->g, old_g);
 			}
 			else
 			{
@@ -221,7 +221,7 @@ void MAMOSearch::createSuccs(
 				succ_search_state->g = succ_g;
 				succ_search_state->m_OPEN_h = m_OPEN.push(succ_search_state);
 
-				SMPL_WARN("Generate %d, g-value = %d", succ_id, succ_search_state->g);
+				// SMPL_WARN("Generate %d, g-value = %d", succ_id, succ_search_state->g);
 				succ->SaveNode(succ_id, parent_search_state->state_id);
 			}
 			parent_node->AddChild(succ);

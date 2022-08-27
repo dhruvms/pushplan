@@ -149,10 +149,10 @@ void Agent::ResetInvalidPushes(
 	m_lattice->ResetInvalidPushes(invalids_G, invalids_L);
 }
 
-const std::set<Coord, coord_compare>& Agent::GetInvalidPushes() const
-{
-	return m_lattice->GetInvalidPushes();
-}
+// const bgi::rtree<value, bgi::quadratic<8> >& Agent::GetInvalidPushes() const
+// {
+// 	return m_lattice->GetInvalidPushes();
+// }
 
 bool Agent::SatisfyPath(
 	HighLevelNode* ct_node,
@@ -181,7 +181,6 @@ bool Agent::SatisfyPath(
 		*sol_path = &(this->m_solve);
 		expands = m_search->get_n_expands();
 		min_f = m_search->get_min_f();
-
 		// SV_SHOW_INFO_NAMED("movable_trajectory", makePathVisualization());
 	}
 

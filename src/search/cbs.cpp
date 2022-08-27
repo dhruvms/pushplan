@@ -134,9 +134,7 @@ void CBS::Reset()
 	m_ct_deadends = 0;
 	m_ct_expanded = 0;
 	m_ll_expanded = 0;
-	m_time_limit = 30.0;
 	m_soln_lb = 0;
-	m_wf = 1000;
 	m_solved = false;
 
 	m_goal = nullptr;

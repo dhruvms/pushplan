@@ -57,7 +57,7 @@ public:
 	void ResetInvalidPushes(
 		const std::vector<std::pair<Coord, Coord> >* invalids_G,
 		const std::set<Coord, coord_compare>* invalids_L);
-	const std::set<Coord, coord_compare>& GetInvalidPushes() const;
+	// const bgi::rtree<value, bgi::quadratic<8> >& GetInvalidPushes() const;
 
 	bool SatisfyPath(
 		HighLevelNode* ct_node,

@@ -63,9 +63,9 @@ mapf:
     window: 4
     grid: 4
   cbs:
-    llhc: 1
-    hlhc: 1
-    cp: 1
+    llhc: 0
+    hlhc: 0
+    cp: 0
     algo: 1 # 0: WHCA, 1: CBS, 2: ECBS, 3: CBSw/P, 4: PBS, 5: ours
 
 objects:

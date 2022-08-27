@@ -5,8 +5,14 @@
 #include <pushplan/utils/types.hpp>
 
 #include <smpl/types.h>
+#include <boost/geometry.hpp>
+#include <boost/geometry/geometries/point.hpp>
+#include <boost/geometry/index/rtree.hpp>
 
 #include <vector>
+
+namespace bg = boost::geometry;
+namespace bgi = boost::geometry::index;
 
 namespace clutter
 {
@@ -28,13 +34,17 @@ public:
 	void ResetInvalidPushes(
 		const std::vector<std::pair<Coord, Coord> >* invalids_G,
 		const std::set<Coord, coord_compare>* invalids_L);
-	const std::set<Coord, coord_compare>& GetInvalidPushes() const;
+	// const bgi::rtree<value, bgi::quadratic<8> >& GetInvalidPushes() const;
 
-	bool IsGoal(int state_id);
 	void GetSuccs(
 		int state_id,
 		std::vector<int>* succ_ids,
 		std::vector<unsigned int>* costs);
+	bool CheckGoalCost(
+		int state_id,
+		std::vector<int>* succ_ids,
+		std::vector<unsigned int>* costs);
+	bool IsGoal(int state_id);
 
 	unsigned int GetGoalHeuristic(int state_id);
 	unsigned int GetConflictHeuristic(int state_id);
@@ -53,7 +63,11 @@ private:
 	std::vector<std::pair<int, Trajectory> >* m_cbs_solution; // all agent trajectories
 	int m_cbs_id, m_max_time;
 	std::unordered_set<int> m_to_avoid;
-	std::set<Coord, coord_compare> m_invalid_pushes;
+
+	// std::set<Coord, coord_compare> m_invalid_pushes;
+	typedef bg::model::point<int, 2, bg::cs::cartesian> point;
+	typedef std::pair<point, int> value;
+	bgi::rtree<value, bgi::quadratic<8> > m_invalid_pushes;
 
 	// maps from coords to stateID
 	typedef LatticeState StateKey;

@@ -50,6 +50,10 @@ int AgentLattice::PushGoal(const Coord& p)
 {
 	int goal_id = getOrCreateState(p);
 	m_goal_ids.push_back(goal_id);
+
+	Coord pseudogoal = { -99, -99 };
+	goal_id = getOrCreateState(pseudogoal);
+	m_goal_ids.push_back(goal_id);
 	return goal_id;
 }
 
@@ -79,21 +83,116 @@ void AgentLattice::ResetInvalidPushes(
 	const std::set<Coord, coord_compare>* invalids_L)
 {
 	m_invalid_pushes.clear();
+	point p;
 	for (size_t i = 0; i < invalids_G->size(); ++i)
 	{
-		if (invalids_G->at(i).first == m_agent->InitState().coord) {
-			m_invalid_pushes.insert(invalids_G->at(i).second);
+		if (invalids_G->at(i).first == m_agent->InitState().coord)
+		{
+			bg::set<0>(p, invalids_G->at(i).second.at(0));
+			bg::set<1>(p, invalids_G->at(i).second.at(1));
+			m_invalid_pushes.insert(std::make_pair(p, 0));
+			// m_invalid_pushes.insert(invalids_G->at(i).second);
 		}
 	}
 
-	if (invalids_L != nullptr) {
-		m_invalid_pushes.insert(invalids_L->begin(), invalids_L->end());
+	if (invalids_L != nullptr)
+	{
+		for (auto it = invalids_L->cbegin(); it != invalids_L->cend(); ++it)
+		{
+			bg::set<0>(p, it->at(0));
+			bg::set<1>(p, it->at(1));
+			m_invalid_pushes.insert(std::make_pair(p, 1));
+		}
+		// m_invalid_pushes.insert(invalids_L->begin(), invalids_L->end());
 	}
 }
 
-const std::set<Coord, coord_compare>& AgentLattice::GetInvalidPushes() const
+// const bgi::rtree<value, bgi::quadratic<8> >& AgentLattice::GetInvalidPushes() const
+// {
+// 	return m_invalid_pushes;
+// }
+
+void AgentLattice::GetSuccs(
+	int state_id,
+	std::vector<int>* succ_ids,
+	std::vector<unsigned int>* costs)
 {
-	return m_invalid_pushes;
+	assert(state_id >= 0);
+	succ_ids->clear();
+	costs->clear();
+
+	LatticeState* parent = getHashEntry(state_id);
+	assert(parent);
+	m_closed.push_back(parent);
+
+	// if (IsGoal(state_id)) {
+	// 	SMPL_WARN("We are expanding the goal state (???)");
+	// 	return;
+	// }
+
+	for (int dx = -1; dx <= 1; ++dx)
+	{
+		for (int dy = -1; dy <= 1; ++dy)
+		{
+			// ignore ordinal directions for 4-connected grid
+			if (GRID == 4 && std::abs(dx * dy) == 1) {
+				continue;
+			}
+
+			if (m_agent->PP()) {
+				generateSuccessorPP(parent, dx, dy, succ_ids, costs);
+			}
+			else {
+				generateSuccessor(parent, dx, dy, succ_ids, costs);
+			}
+		}
+	}
+}
+
+bool AgentLattice::CheckGoalCost(
+	int state_id,
+	std::vector<int>* succ_ids,
+	std::vector<unsigned int>* costs)
+{
+	if (!this->IsGoal(state_id)) {
+		return false;
+	}
+
+	if (m_invalid_pushes.empty()) // state is a valid goal, and there are no invalid goals
+	{
+		succ_ids->push_back(m_goal_ids.back()); // pseudogoal
+		costs->push_back(1);
+	}
+	else
+	{
+		// need to compute pseudo-edge cost for valid goal state
+		LatticeState* s = getHashEntry(state_id);
+
+		std::vector<value> nn;
+		point query_g;
+		bg::set<0>(query_g, s->coord.at(0));
+		bg::set<1>(query_g, s->coord.at(1));
+		m_invalid_pushes.query(bgi::nearest(query_g, 1), std::back_inserter(nn));
+
+		if (nn.empty()) {
+			SMPL_WARN("Invalid pushes rtree is not empty, but no NNs found.");
+		}
+
+		auto dist = bg::distance(nn.back().first, query_g);
+		if (dist < 1) {
+			return false; // this is actually a known invalid goal
+		}
+
+		// // exponential between (1, 10) and (5, 1)
+		// double cost = 12.915 * std::exp(-0.256 * dist);
+		// exponential between (1, 20) and (5, 2)
+		double cost = 25.831 * std::exp(-0.256 * dist);
+		cost = std::max(std::min(20.0, cost), 2.0);
+		succ_ids->push_back(m_goal_ids.back()); // pseudogoal
+		costs->push_back(cost);
+	}
+
+	return true;
 }
 
 // As long as I am not allowed to be in this location at some later time,
@@ -107,12 +206,12 @@ bool AgentLattice::IsGoal(int state_id)
 	LatticeState* s = getHashEntry(state_id);
 	assert(s);
 
-	if (!m_invalid_pushes.empty())
-	{
-		if (std::find(m_invalid_pushes.begin(), m_invalid_pushes.end(), s->coord) != m_invalid_pushes.end()) {
-			return false;
-		}
-	}
+	// if (!m_invalid_pushes.empty())
+	// {
+	// 	if (std::find(m_invalid_pushes.begin(), m_invalid_pushes.end(), s->coord) != m_invalid_pushes.end()) {
+	// 		return false;
+	// 	}
+	// }
 
 	bool constrained = false, conflict = false, ngr = false;
 	ngr = m_agent->OutsideNGR(*s);
@@ -158,43 +257,6 @@ bool AgentLattice::IsGoal(int state_id)
 	return false;
 }
 
-void AgentLattice::GetSuccs(
-	int state_id,
-	std::vector<int>* succ_ids,
-	std::vector<unsigned int>* costs)
-{
-	assert(state_id >= 0);
-	succ_ids->clear();
-	costs->clear();
-
-	LatticeState* parent = getHashEntry(state_id);
-	assert(parent);
-	m_closed.push_back(parent);
-
-	if (IsGoal(state_id)) {
-		SMPL_WARN("We are expanding the goal state (???)");
-		return;
-	}
-
-	for (int dx = -1; dx <= 1; ++dx)
-	{
-		for (int dy = -1; dy <= 1; ++dy)
-		{
-			// ignore ordinal directions for 4-connected grid
-			if (GRID == 4 && std::abs(dx * dy) == 1) {
-				continue;
-			}
-
-			if (m_agent->PP()) {
-				generateSuccessorPP(parent, dx, dy, succ_ids, costs);
-			}
-			else {
-				generateSuccessor(parent, dx, dy, succ_ids, costs);
-			}
-		}
-	}
-}
-
 unsigned int AgentLattice::GetGoalHeuristic(int state_id)
 {
 	return 0;
@@ -213,9 +275,12 @@ unsigned int AgentLattice::GetGoalHeuristic(int state_id)
 unsigned int AgentLattice::GetConflictHeuristic(int state_id)
 {
 	assert(state_id >= 0);
+	if (state_id == m_goal_ids.back()) {
+		return 0;
+	}
+
 	LatticeState* s = getHashEntry(state_id);
 	assert(s);
-
 	return s->hc;
 }
 
@@ -644,55 +709,22 @@ bool AgentLattice::ConvertPath(
 		return true;
 	}
 
-	if (idpath[0] == m_goal_ids.back())
+	if (std::find(m_goal_ids.begin(), m_goal_ids.end(), idpath[0]) != m_goal_ids.end())
 	{
 		SMPL_ERROR("Cannot extract a non-trivial path starting from the goal state");
 		return false;
 	}
 
 	LatticeState state;
-
-	// attempt to handle paths of length 1...do any of the sbpl planners still
-	// return a single-point path in some cases?
-	if (idpath.size() == 1)
+	// grab the first point
+	auto* entry = getHashEntry(idpath[0]);
+	if (!entry)
 	{
-		auto state_id = idpath[0];
-
-		if (state_id == m_goal_ids.back())
-		{
-			auto* entry = getHashEntry(state_id);
-			if (!entry)
-			{
-				SMPL_ERROR("Failed to get state entry for state %d", state_id);
-				return false;
-			}
-			state = *entry;
-			opath->push_back(state);
-		}
-		else
-		{
-			auto* entry = getHashEntry(state_id);
-			if (!entry)
-			{
-				SMPL_ERROR("Failed to get state entry for state %d", state_id);
-				return false;
-			}
-			state = *entry;
-			opath->push_back(state);
-		}
+		SMPL_ERROR("Failed to get state entry for state %d", idpath[0]);
+		return false;
 	}
-	else
-	{
-		// grab the first point
-		auto* entry = getHashEntry(idpath[0]);
-		if (!entry)
-		{
-			SMPL_ERROR("Failed to get state entry for state %d", idpath[0]);
-			return false;
-		}
-		state = *entry;
-		opath->push_back(state);
-	}
+	state = *entry;
+	opath->push_back(state);
 
 	// grab the rest of the points
 	for (size_t i = 1; i < idpath.size(); ++i)
