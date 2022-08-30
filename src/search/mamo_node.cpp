@@ -87,6 +87,7 @@ void MAMONode::GetSuccs(
 
 		// get push location
 		std::vector<double> push;
+		m_agents.at(m_agent_map[moved.first])->SetSolveTraj(moved.second);
 		m_agents.at(m_agent_map[moved.first])->GetSE2Push(push);
 
 		// other movables to be considered as obstacles
