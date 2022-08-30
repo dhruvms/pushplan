@@ -87,9 +87,12 @@ bool CBS::Solve()
 		auto next = m_FOCAL.top();
 		m_FOCAL.pop();
 		m_OPEN.erase(next->m_OPEN_h);
+		// SMPL_INFO("SELECT");
+		// next->PrintDebug();
 
 		if (done(next))
 		{
+			// SMPL_INFO("CBS DONE!");
 			m_search_time += GetTime() - start_time;
 			return m_solved;
 		}
@@ -109,6 +112,8 @@ bool CBS::Solve()
 		next->m_expand = m_ct_expanded;
 
 		selectConflict(next);
+		// SMPL_INFO("EXPAND");
+		// next->PrintDebug();
 		growConstraintTree(next);
 
 		m_search_time += GetTime() - start_time;
@@ -218,6 +223,9 @@ bool CBS::initialiseRoot()
 
 	pushNode(root);
 	m_root = root;
+	// SMPL_INFO("GENERATE");
+	// root->PrintDebug();
+
 	return true;
 }
 
@@ -645,12 +653,14 @@ bool CBS::updateChild(HighLevelNode* parent, HighLevelNode* child)
 
 	findConflicts(*child);
 
-	child->m_h = std::max(0u, parent->fval() - child->m_g);
+	child->m_h = std::max(0, int(parent->fval() - child->m_g)); // booooo
 	child->m_h_computed = false;
 	child->updateDistanceToGo();
 	child->updateCostToGo();
 
 	pushNode(child);
+	// SMPL_INFO("GENERATE");
+	// child->PrintDebug();
 	return true;
 }
 

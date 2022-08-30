@@ -136,6 +136,12 @@ struct HighLevelNode
 	void updateDistanceToGo();
 	void updateCostToGo();
 	void computeH();
+
+	void PrintDebug() {
+		SMPL_INFO("\tg = %u, h = %u, d = %u, c = %u", m_g, m_h, m_d, m_c);
+		SMPL_INFO("\t\tflowtime = %d, makespan = %d, depth = %d, generated = %d, expanded = %d", m_flowtime, m_makespan, m_depth, m_generate, m_expand);
+		SMPL_INFO("\t\t\tall_conflicts = %d, conflicts = %d", m_all_conflicts.size(), m_conflicts.size());
+	}
 };
 
 struct LowLevelNode
