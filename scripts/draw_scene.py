@@ -244,7 +244,7 @@ def main():
 	datafolder = os.path.dirname(os.path.abspath(__file__)) + '/../dat/txt/'
 	for (dirpath, dirnames, filenames) in os.walk(datafolder):
 		for filename in filenames:
-			if '.txt' not in filename:
+			if '.txt' not in filename or 'SOLUTION' in filename:
 				continue
 
 			# if int(filename.split('.')[0]) % 10 != 0:
