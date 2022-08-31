@@ -159,6 +159,35 @@ void MAMONode::GetSuccs(
 	}
 }
 
+unsigned int MAMONode::ComputeMAMOHeuristic()
+{
+	unsigned int h = 0;
+
+	const auto& ngr = m_planner->GetNGR();
+	std::set<Coord, coord_compare> agent_voxels;
+	std::vector<Coord> intersection;
+	for (size_t i = 0; i < m_mapf_solution.size(); ++i)
+	{
+		const auto& moved = m_mapf_solution.at(i);
+		if (moved.second.size() == 1 || moved.second.front().coord == moved.second.back().coord) {
+			continue;
+		}
+
+		m_agents.at(m_agent_map[moved.first])->GetVoxels(
+					m_object_states.at(m_agent_map[moved.first]).cont_pose(),
+					agent_voxels);
+
+		intersection.clear();
+		std::set_intersection(
+				ngr.begin(), ngr.end(),
+				agent_voxels.begin(), agent_voxels.end(),
+				std::back_inserter(intersection));
+		h += intersection.size();
+	}
+
+	return h;
+}
+
 size_t MAMONode::GetConstraintHash() const
 {
 	if (m_hash_set_C) {

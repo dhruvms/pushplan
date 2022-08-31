@@ -40,6 +40,7 @@ public:
 		std::vector<comms::ObjectsPoses> *succ_objects,
 		std::vector<trajectory_msgs::JointTrajectory> *succ_trajs,
 		std::vector<std::tuple<State, State, int> > *debug_pushes);
+	unsigned int ComputeMAMOHeuristic();
 	void SaveNode(unsigned int my_id,	unsigned int parent_id);
 
 	size_t GetConstraintHash() const;

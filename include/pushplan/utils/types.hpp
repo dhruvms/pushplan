@@ -20,7 +20,17 @@ struct coord_compare
 {
 	bool operator()(const Coord& u, const Coord& v) const
 	{
-		return std::tie(u.at(0), u.at(1)) < std::tie(v.at(0), v.at(1));
+		if (u.size() != v.size())
+		{
+			assert(false);
+			return u.size() < v.size();
+		}
+		else if (u.size() == 2) {
+			return std::tie(u.at(0), u.at(1)) < std::tie(v.at(0), v.at(1));
+		}
+		else if (u.size() == 3) {
+			return std::tie(u.at(0), u.at(1), u.at(2)) < std::tie(v.at(0), v.at(1), v.at(2));
+		}
 	}
 };
 

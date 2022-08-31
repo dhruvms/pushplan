@@ -36,12 +36,14 @@ bool MAMOSearch::CreateRoot()
 bool MAMOSearch::Solve()
 {
 	m_root_search->g = 0;
+	m_root_search->h = m_root_node->ComputeMAMOHeuristic();
+	m_root_search->f = m_root_search->g + m_root_search->h;
 	m_root_search->m_OPEN_h = m_OPEN.push(m_root_search);
 
 	while (!m_OPEN.empty())
 	{
 		auto next = m_OPEN.top();
-		SMPL_WARN("Select %d, g-value = %d", next->state_id, next->g);
+		SMPL_WARN("Select %d, g = %u, h = %u", next->state_id, next->g, next->h);
 		if (done(next))
 		{
 			SMPL_INFO("Final plan found!");
@@ -71,7 +73,7 @@ void MAMOSearch::GetRearrangements(std::vector<trajectory_msgs::JointTrajectory>
 
 bool MAMOSearch::expand(MAMOSearchState *state)
 {
-	SMPL_WARN("Expand %d, g-value = %d", state->state_id, state->g);
+	SMPL_WARN("Expand %d, g = %u, h = %u", state->state_id, state->g, state->h);
 	auto node = m_hashtable.GetState(state->state_id);
 
 	// 2. generate appropriate successor states
@@ -179,7 +181,7 @@ void MAMOSearch::createSuccs(
 			old_g = prev_search_state->g;
 		}
 
-		unsigned int succ_cost = (duplicate_successor && i == num_succs - 1) ? 1000 : succ_trajs->at(i).points.size();
+		unsigned int succ_cost = (duplicate_successor && i == num_succs - 1) ? prev_search_state->h : succ_trajs->at(i).points.size();
 		unsigned int succ_g = parent_g + succ_cost;
 		if (prev_search_state != nullptr && (prev_search_state->closed || old_g <= succ_g))
 		{
@@ -211,7 +213,7 @@ void MAMOSearch::createSuccs(
 				prev_search_state->bp = parent_search_state;
 				prev_search_state->g = succ_g;
 				m_OPEN.update(prev_search_state->m_OPEN_h);
-				SMPL_WARN("Update %d, g-value = %d (previously %d)", old_id, prev_search_state->g, old_g);
+				SMPL_WARN("Update %d, g = %u (previously %u), h = %u", old_id, prev_search_state->g, old_g, prev_search_state->h);
 			}
 			else
 			{
@@ -220,9 +222,11 @@ void MAMOSearch::createSuccs(
 				auto succ_search_state = getSearchState(succ_id);
 				succ_search_state->bp = parent_search_state;
 				succ_search_state->g = succ_g;
+				succ_search_state->h = succ->ComputeMAMOHeuristic();
+				succ_search_state->f = succ_search_state->g + succ_search_state->h;
 				succ_search_state->m_OPEN_h = m_OPEN.push(succ_search_state);
 
-				SMPL_WARN("Generate %d, g-value = %d", succ_id, succ_search_state->g);
+				SMPL_WARN("Generate %d, g = %u, h = %u", succ_id, succ_search_state->g, succ_search_state->h);
 				succ->SaveNode(succ_id, parent_search_state->state_id);
 			}
 			parent_node->AddChild(succ);

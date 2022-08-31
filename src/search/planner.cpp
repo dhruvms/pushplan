@@ -196,6 +196,7 @@ bool Planner::SetupNGR()
 			Coord c;
 			c.push_back(DiscretisationManager::ContXToDiscX(itr->x()));
 			c.push_back(DiscretisationManager::ContYToDiscY(itr->y()));
+			c.push_back(DiscretisationManager::ContYToDiscY(itr->z()));
 			m_ngr.insert(c);
 		}
 	}

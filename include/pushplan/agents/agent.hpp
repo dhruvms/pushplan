@@ -83,6 +83,7 @@ public:
 	}
 
 	bool GetSE2Push(std::vector<double>& push, bool input=false);
+	void GetVoxels(const ContPose& pose, std::set<Coord, coord_compare>& voxels);
 	const int& GetID() const { return m_obj.desc.id; };
 
 	Object* GetObject() { return &m_obj; };

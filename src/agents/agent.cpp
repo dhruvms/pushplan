@@ -466,6 +466,22 @@ bool Agent::GetSE2Push(std::vector<double>& push, bool input)
 	return true;
 }
 
+void Agent::GetVoxels(const ContPose& pose, std::set<Coord, coord_compare>& voxels)
+{
+	m_obj.updateVoxelsState(pose.GetTransform());
+	auto voxels_state = m_obj.VoxelsState();
+
+	voxels.clear();
+	for (const Eigen::Vector3d& v : voxels_state->voxels)
+	{
+		Coord c;
+		c.push_back(DiscretisationManager::ContXToDiscX(v[0]));
+		c.push_back(DiscretisationManager::ContYToDiscY(v[1]));
+		c.push_back(DiscretisationManager::ContYToDiscY(v[2]));
+		voxels.insert(c);
+	}
+}
+
 // find best NGR complement cell
 // 1. if object is fully outside NGR, this is the initial location
 // 2. if object is partially inside NGR, this is the "farthest" object cell
@@ -558,7 +574,7 @@ bool Agent::createLatticeAndSearch()
 		m_search->reset();
 	}
 	else {
-		m_search = std::make_unique<Focal>(m_lattice.get(), 100.0);
+		m_search = std::make_unique<Focal>(m_lattice.get(), 2.0);
 	}
 	m_search->push_start(m_lattice->PushStart(m_init));
 	m_search->push_goal(m_lattice->PushGoal(m_goal));

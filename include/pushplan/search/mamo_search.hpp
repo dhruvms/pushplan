@@ -15,7 +15,7 @@ namespace clutter
 struct MAMOSearchState
 {
 	unsigned int state_id;
-	unsigned int g; // h, f?
+	unsigned int g, h, f;
 	bool closed;
 	MAMOSearchState *bp;
 
@@ -23,10 +23,10 @@ struct MAMOSearchState
 	{
 		bool operator()(const MAMOSearchState *p, const MAMOSearchState *q) const
 		{
-			if (p->g == q->g) {
+			if (p->f == q->f) {
 				return rand() % 2;
 			}
-			return p->g > q->g;
+			return p->f > q->f;
 		}
 	};
 	boost::heap::fibonacci_heap<MAMOSearchState*, boost::heap::compare<MAMOSearchState::OPENCompare> >::handle_type m_OPEN_h;
