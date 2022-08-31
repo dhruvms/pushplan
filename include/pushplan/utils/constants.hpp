@@ -13,6 +13,7 @@ enum class LowLevelConflictHeuristic
 	ZERO,
 	BINARY,
 	COUNT,
+	OURS,
 	LLHC_TYPES
 };
 enum class HighLevelConflictHeuristic

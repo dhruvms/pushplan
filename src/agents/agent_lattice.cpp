@@ -439,10 +439,7 @@ unsigned int AgentLattice::cost(
 {
 	double dist = ManhattanDist(s1->coord, s2->coord);
 	dist = dist == 0.0 ? 1.0 : dist;
-
-	double obs_cost = m_agent->ObsDist(s2->state[0], s2->state[1]);
-	obs_cost = std::pow(2, 1 - (obs_cost/0.15));
-	return dist + obs_cost;
+	return dist;
 }
 
 unsigned int AgentLattice::costPP(
@@ -534,6 +531,11 @@ int AgentLattice::conflictHeuristic(const LatticeState& state)
 			// if (m_cc->RobotObjectCollision(this, state, other_pose, state.t)) {
 			// 	++hc;
 			// }
+			break;
+		}
+		case LowLevelConflictHeuristic::OURS:
+		{
+			hc = (int)std::pow(10, 1 - (m_agent->ObsDist(state.state[0], state.state[1])/0.15));
 			break;
 		}
 		default:

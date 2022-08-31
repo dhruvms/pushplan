@@ -669,8 +669,8 @@ class BulletSim:
 
 					interactions, contacts = self.checkInteractions(sim_id, objs_curr)
 					action_interactions += interactions
-					robot_contacts += contacts
 					action_interactions = list(np.unique(np.array(action_interactions)))
+					robot_contacts += contacts
 					robot_contacts = list(np.unique(np.array(robot_contacts)))
 
 					topple = self.checkPoseConstraints(sim_id)
@@ -705,8 +705,8 @@ class BulletSim:
 
 				interactions, contacts = self.checkInteractions(sim_id, objs_curr)
 				action_interactions += interactions
-				robot_contacts += contacts
 				action_interactions = list(np.unique(np.array(action_interactions)))
+				robot_contacts += contacts
 				robot_contacts = list(np.unique(np.array(robot_contacts)))
 
 				topple = self.checkPoseConstraints(sim_id)
