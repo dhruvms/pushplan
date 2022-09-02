@@ -168,28 +168,24 @@ bool AgentLattice::CheckGoalCost(
 		// need to compute pseudo-edge cost for valid goal state
 		LatticeState* s = getHashEntry(state_id);
 
-		std::vector<value> nn;
-		point query_g;
-		bg::set<0>(query_g, s->coord.at(0));
-		bg::set<1>(query_g, s->coord.at(1));
-		m_invalid_pushes.query(bgi::nearest(query_g, 1), std::back_inserter(nn));
+		double dist = 0.0;
+		if (getNNDist(s->coord, dist))
+		{
+			if (dist < 1) {
+				return false; // this is actually a known invalid goal
+			}
 
-		if (nn.empty()) {
-			SMPL_WARN("Invalid pushes rtree is not empty, but no NNs found.");
+			// // exponential between (1, 10) and (5, 1)
+			// double cost = 12.915 * std::exp(-0.256 * dist);
+			// exponential between (1, 20) and (5, 2)
+			double cost = 25.831 * std::exp(-0.256 * dist);
+			cost = std::max(std::min(20.0, cost), 2.0);
+			succ_ids->push_back(m_goal_ids.back()); // pseudogoal
+			costs->push_back(cost);
 		}
-
-		auto dist = bg::distance(nn.back().first, query_g);
-		if (dist < 1) {
-			return false; // this is actually a known invalid goal
+		else {
+			return false;
 		}
-
-		// // exponential between (1, 10) and (5, 1)
-		// double cost = 12.915 * std::exp(-0.256 * dist);
-		// exponential between (1, 20) and (5, 2)
-		double cost = 25.831 * std::exp(-0.256 * dist);
-		cost = std::max(std::min(20.0, cost), 2.0);
-		succ_ids->push_back(m_goal_ids.back()); // pseudogoal
-		costs->push_back(cost);
 	}
 
 	return true;
@@ -611,6 +607,25 @@ bool AgentLattice::goalConflict(const LatticeState& state)
 	// }
 
 	return false;
+}
+
+bool AgentLattice::getNNDist(const Coord& c, double& d)
+{
+	std::vector<value> nn;
+	point query_g;
+	bg::set<0>(query_g, c.at(0));
+	bg::set<1>(query_g, c.at(1));
+	m_invalid_pushes.query(bgi::nearest(query_g, 1), std::back_inserter(nn));
+
+	if (nn.empty())
+	{
+		// why did we end here?
+		SMPL_WARN("Invalid pushes rtree is not empty, but no NNs found.");
+		return false;
+	}
+
+	d = bg::distance(nn.back().first, query_g);
+	return true;
 }
 
 // Return a pointer to the data for the input the state id

@@ -97,6 +97,7 @@ private:
 
 	int conflictHeuristic(const LatticeState& state);
 	bool goalConflict(const LatticeState& state);
+	bool getNNDist(const Coord& c, double& d);
 
 	LatticeState* getHashEntry(int state_id) const;
 	int getHashEntry(
