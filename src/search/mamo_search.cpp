@@ -244,7 +244,7 @@ void MAMOSearch::createSuccs(
 			old_g = prev_search_state->g;
 		}
 
-		unsigned int succ_cost = (duplicate_successor && i == num_succs - 1) ? prev_search_state->h : succ_trajs->at(i).points.size();
+		unsigned int succ_cost = (duplicate_successor && i == num_succs - 1) ? parent_search_state->h : succ_trajs->at(i).points.size();
 		unsigned int succ_g = parent_g + succ_cost;
 		if (prev_search_state != nullptr && (prev_search_state->closed || old_g <= succ_g))
 		{

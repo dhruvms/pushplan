@@ -242,6 +242,7 @@ void CBS::pushNode(HighLevelNode* node)
 
 void CBS::findConflicts(HighLevelNode& node)
 {
+	// SMPL_INFO("findConflicts");
 	double start_time = GetTime();
 	if (node.m_parent == nullptr) // root node
 	{
@@ -407,7 +408,7 @@ void CBS::findConflictsObjects(HighLevelNode& curr, size_t o1, size_t o2)
 			std::shared_ptr<Conflict> conflict(new Conflict());
 			conflict->InitConflict(m_obj_idx_to_id[o1], m_obj_idx_to_id[o2], t, a1_traj->at(t), a2_traj->at(t), false);
 			curr.m_all_conflicts.push_back(conflict);
-			// SMPL_INFO("Conflict between objects %d (ID %d) and %d (ID %d)", o1, m_obj_idx_to_id[o1], o2, m_obj_idx_to_id[o2]);
+			// SMPL_INFO("Conflict between %d (traj size %d) and %d (traj size %d) at time %d", m_obj_idx_to_id[o1], a1_traj->size(), m_obj_idx_to_id[o2], a2_traj->size(), t);
 		}
 	}
 
@@ -433,7 +434,7 @@ void CBS::findConflictsObjects(HighLevelNode& curr, size_t o1, size_t o2)
 				std::shared_ptr<Conflict> conflict(new Conflict());
 				conflict->InitConflict(shorter->GetID(), longer->GetID(), t, shorter_traj->back(), longer_traj->at(t), false);
 				curr.m_all_conflicts.push_back(conflict);
-				// SMPL_INFO("Conflict between objects %d (ID %d) and %d (ID %d)", o1, m_obj_idx_to_id[o1], o2, m_obj_idx_to_id[o2]);
+				// SMPL_INFO("Conflict between %d (traj size %d) and %d (traj size %d) at time %d", shorter->GetID(), shorter_traj->size(), longer->GetID(), longer_traj->size(), t);
 			}
 		}
 	}
@@ -460,7 +461,7 @@ void CBS::copyRelevantConflicts(HighLevelNode& node) const
 
 bool CBS::selectConflict(HighLevelNode* node) const
 {
-	if (node->m_all_conflicts.empty())
+	if (node->m_conflicts.empty() && node->m_all_conflicts.empty())
 	{
 		SMPL_ERROR("Trying to expand CT node with no conflicts.");
 		return false;

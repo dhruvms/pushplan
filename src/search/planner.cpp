@@ -126,9 +126,7 @@ bool Planner::Init(const std::string& scene_file, int scene_id, bool ycb)
 	m_distD = std::uniform_real_distribution<double>(0.0, 1.0);
 	m_ph.getParam("robot/pushing/input", m_push_input);
 
-	createMAMOSearch();
-
-	return true;
+	return createMAMOSearch();
 }
 
 bool Planner::Alive()
@@ -207,6 +205,7 @@ bool Planner::SetupNGR()
 bool Planner::Plan(bool& done)
 {
 	bool result = m_mamo_search->Solve();
+	m_mamo_search->SaveStats();
 	if (result)
 	{
 		m_mamo_search->GetRearrangements(m_rearrangements, m_grasp_at);
@@ -306,7 +305,7 @@ bool Planner::createMAMOSearch()
 	}
 
 	m_mamo_search = std::make_unique<MAMOSearch>(this);
-	m_mamo_search->CreateRoot();
+	return m_mamo_search->CreateRoot();
 }
 
 bool Planner::setupProblem()
