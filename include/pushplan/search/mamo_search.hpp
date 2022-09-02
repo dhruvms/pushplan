@@ -43,6 +43,7 @@ public:
 	bool CreateRoot();
 	bool Solve();
 	void GetRearrangements(std::vector<trajectory_msgs::JointTrajectory>& rearrangements, int& grasp_at);
+	void SaveStats();
 
 private:
 	Planner *m_planner = nullptr;
@@ -53,8 +54,10 @@ private:
 
 	MAMONode *m_root_node = nullptr, *m_solved_node = nullptr;
 	MAMOSearchState *m_root_search = nullptr, *m_solved_search = nullptr;
+	bool m_solved = false;
 	unsigned int m_root_id;
 	HashManager<HashSearch, EqualsSearch> m_hashtable;
+	std::map<std::string, double> m_stats;
 
 	std::vector<trajectory_msgs::JointTrajectory> m_rearrangements;
 	trajectory_msgs::JointTrajectory m_exec_traj;
