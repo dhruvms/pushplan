@@ -204,7 +204,14 @@ bool AgentLattice::IsGoal(int state_id)
 
 	// if (!m_invalid_pushes.empty())
 	// {
-	// 	if (std::find(m_invalid_pushes.begin(), m_invalid_pushes.end(), s->coord) != m_invalid_pushes.end()) {
+	// 	double dist = 0.0;
+	// 	if (getNNDist(s->coord, dist))
+	// 	{
+	// 		if (dist < 1) {
+	// 			return false; // this is actually a known invalid goal
+	// 		}
+	// 	}
+	// 	else {
 	// 		return false;
 	// 	}
 	// }
@@ -232,21 +239,21 @@ bool AgentLattice::IsGoal(int state_id)
 			}
 		}
 
-		return !constrained;
-		// if (!constrained)
-		// {
-		// 	bool conflict = goalConflict(*s);
+		// return !constrained;
+		if (!constrained)
+		{
+			bool conflict = goalConflict(*s);
 
-		// 	// for forward search goal must valid for all future time
-		// 	// if (!conflict) {
-		// 	// 	m_agent->VisualiseState(*s, "valid_goal", 147);
-		// 	// 	SMPL_WARN("Goal visualised!");
-		// 	// }
-		// 	return !conflict;
-		// }
+			// for forward search goal must valid for all future time
+			// if (!conflict) {
+			// 	m_agent->VisualiseState(*s, "valid_goal", 147);
+			// 	SMPL_WARN("Goal visualised!");
+			// }
+			return !conflict;
+		}
 
-		// // for forward search goal must not be constrained
-		// return false;
+		// for forward search goal must not be constrained
+		return false;
 	}
 
 	// for forward search goal must be outside NGR
