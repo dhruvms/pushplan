@@ -32,6 +32,17 @@ namespace clutter
 class HighLevelNode;
 class Agent;
 
+struct HashPush {
+	size_t operator()(const std::tuple<ObjectState, Coord, int> &push_info) const;
+};
+
+struct EqualsPush
+{
+	bool operator()(
+		const std::tuple<ObjectState, Coord, int> &a,
+		const std::tuple<ObjectState, Coord, int> &b) const;
+};
+
 class Robot
 {
 public:
@@ -263,6 +274,12 @@ private:
 	std::map<std::string, double> m_stats;
 	double m_planner_time, m_sim_time;
 
+	std::unordered_map<
+		std::tuple<ObjectState, Coord, int>,
+		std::vector<std::tuple<comms::ObjectsPoses, comms::ObjectsPoses, std::vector<int>, trajectory_msgs::JointTrajectory> >,
+		HashPush,
+		EqualsPush> m_valid_sims;
+
 	void getPushStartPose(
 		const std::vector<double>& push,
 		Eigen::Affine3d& push_pose,
@@ -364,7 +381,20 @@ private:
 		const trajectory_msgs::JointTrajectory& traj,
 		std::set<std::vector<double> >& spheres);
 	void voxeliseTrajectory();
+
 	void createVirtualTable();
+
+	int getPushIdx(double push_frac);
+	void addPushToDB(
+		Object* o, const Coord &goal, const int& aidx,
+		const comms::ObjectsPoses &init_scene,
+		const comms::ObjectsPoses &result_scene,
+		const std::vector<int> &relevant_ids,
+		const trajectory_msgs::JointTrajectory& push_action);
+	bool lookupPushInDB(
+		Object* o, const Coord &goal, const int& aidx, const comms::ObjectsPoses &curr_scene,
+		comms::ObjectsPoses &new_scene,
+		trajectory_msgs::JointTrajectory &new_action);
 };
 
 } // namespace clutter

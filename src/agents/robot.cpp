@@ -1,8 +1,9 @@
 #include <pushplan/agents/robot.hpp>
 #include <pushplan/agents/agent.hpp>
 #include <pushplan/search/cbs_nodes.hpp>
-#include <pushplan/utils/geometry.hpp>
 #include <pushplan/utils/constants.hpp>
+#include <pushplan/utils/discretisation.hpp>
+#include <pushplan/utils/geometry.hpp>
 #include <pushplan/utils/pr2_allowed_collision_pairs.h>
 
 #include <smpl/stl/memory.h>
@@ -26,6 +27,50 @@
 
 namespace clutter
 {
+
+size_t HashPush::operator()(
+	const std::tuple<ObjectState, Coord, int> &push_info) const
+{
+	const auto &object_state = std::get<0>(push_info);
+	const auto &push_end_coord = std::get<1>(push_info);
+	const auto &aidx = std::get<2>(push_info);
+
+	size_t hash_val = 0;
+
+	// hash pushed object initial state
+	boost::hash_combine(hash_val, object_state.id());
+	const auto &disc_pose = object_state.disc_pose();
+	boost::hash_combine(hash_val, disc_pose.x());
+	boost::hash_combine(hash_val, disc_pose.y());
+
+	bool p = disc_pose.pitch() != 0, r = disc_pose.roll() != 0;
+	if (!object_state.symmetric() || p || r)
+	{
+		boost::hash_combine(hash_val, disc_pose.yaw());
+		if (p) {
+			boost::hash_combine(hash_val, disc_pose.pitch());
+		}
+		if (r) {
+			boost::hash_combine(hash_val, disc_pose.roll());
+		}
+	}
+
+	// hash push end pose
+	boost::hash_combine(hash_val, push_end_coord.at(0));
+	boost::hash_combine(hash_val, push_end_coord.at(1));
+
+	// hash push action (i.e. push fraction)
+	boost::hash_combine(hash_val, aidx);
+
+	return hash_val;
+}
+
+bool EqualsPush::operator()(
+	const std::tuple<ObjectState, Coord, int> &a,
+	const std::tuple<ObjectState, Coord, int> &b) const
+{
+	return a == b;
+}
 
 bool Robot::Setup()
 {
@@ -3298,6 +3343,116 @@ void Robot::createVirtualTable()
 	virtual_table.CreateSMPLCollisionObject();
 	virtual_table.GenerateCollisionModels();
 	ProcessObstacles({ &virtual_table });
+}
+
+int Robot::getPushIdx(double push_frac)
+{
+	if (push_frac == 1.0) {
+		return 0;
+	}
+}
+
+void Robot::addPushToDB(
+	Object* o, const Coord &goal, const int& aidx,
+	const comms::ObjectsPoses &init_scene,
+	const comms::ObjectsPoses &result_scene,
+	const std::vector<int> &relevant_ids,
+	const trajectory_msgs::JointTrajectory &push_action)
+{
+	ContPose pose(o->desc.o_x, o->desc.o_y, o->desc.o_z, o->desc.o_roll, o->desc.o_pitch, o->desc.o_yaw);
+	ObjectState ooi_state(o->desc.id, o->Symmetric(), pose);
+
+	auto db_key = std::make_tuple(ooi_state, goal, aidx);
+	auto db_value = std::make_tuple(init_scene, result_scene, relevant_ids, push_action);
+
+	const auto it = m_valid_sims.find(db_key);
+	if (it != m_valid_sims.end()) {
+		it->second.push_back(db_value);
+	}
+
+	m_valid_sims[db_key] = { db_value };
+}
+
+bool Robot::lookupPushInDB(
+	Object* o, const Coord &goal, const int& aidx, const comms::ObjectsPoses &curr_scene,
+	comms::ObjectsPoses &new_scene,
+	trajectory_msgs::JointTrajectory &new_action)
+{
+	ContPose pose(o->desc.o_x, o->desc.o_y, o->desc.o_z, o->desc.o_roll, o->desc.o_pitch, o->desc.o_yaw);
+	ObjectState ooi_state(o->desc.id, o->Symmetric(), pose);
+
+	auto db_key = std::make_tuple(ooi_state, goal, aidx);
+	const auto it = m_valid_sims.find(db_key);
+	if (it == m_valid_sims.end())
+	{
+		// have not seen this push before
+		return false;
+	}
+
+	// 1. relevant objects should currently be in same poses as seen before
+	// 2. irrelevant objects should not collide with the push action
+	//		- add them to movable collision space
+	for (const auto &push : it->second)
+	{
+		const auto &init_scene = std::get<0>(push);
+		const auto &result_scene = std::get<1>(push);
+		const auto &relevant_ids = std::get<2>(push);
+		const auto &push_action = std::get<3>(push);
+
+		std::vector<Object*> irrelevant_objs;
+		bool consistent = true;
+		for (size_t i = 0; i < init_scene.poses.size(); ++i)
+		{
+			if (std::find(relevant_ids.begin(), relevant_ids.end(), init_scene.poses.at(i).id) != relevant_ids.end())
+			{
+				DiscPose seen(ContPose(init_scene.poses.at(i).xyz[0], init_scene.poses.at(i).xyz[1], init_scene.poses.at(i).xyz[2], init_scene.poses.at(i).rpy[0], init_scene.poses.at(i).rpy[1], init_scene.poses.at(i).rpy[2]));
+				DiscPose curr(ContPose(curr_scene.poses.at(i).xyz[0], curr_scene.poses.at(i).xyz[1], curr_scene.poses.at(i).xyz[2], curr_scene.poses.at(i).rpy[0], curr_scene.poses.at(i).rpy[1], curr_scene.poses.at(i).rpy[2]));
+				if (seen != curr)
+				{
+					consistent = false;
+					break;
+				}
+			}
+			else
+			{
+				// m_movables[m_movable_map[curr_scene.poses.at(i).id]]->SetObjectPose(
+				// 		curr_scene.poses.at(i).xyz, curr_scene.poses.at(i).rpy);
+				irrelevant_objs.push_back(m_movables[m_movable_map[curr_scene.poses.at(i).id]]->GetObject());
+			}
+		}
+
+		if (consistent)
+		{
+			ProcessObstacles(irrelevant_objs, false, true);
+			for (const auto &push_state : push_action.points)
+			{
+				if (!m_cc_m->isStateValid(push_state.positions))
+				{
+					consistent = false;
+					break;
+				}
+			}
+			ProcessObstacles(irrelevant_objs, true, true);
+		}
+
+		if (consistent)
+		{
+			new_scene.poses.clear();
+			for (size_t i = 0; i < result_scene.poses.size(); ++i)
+			{
+				if (std::find(relevant_ids.begin(), relevant_ids.end(), result_scene.poses.at(i).id) != relevant_ids.end()) {
+					new_scene.poses.push_back(result_scene.poses.at(i));
+				}
+				else {
+					new_scene.poses.push_back(curr_scene.poses.at(i));
+				}
+			}
+
+			new_action = push_action;
+			return true;
+		}
+	}
+	return false;
 }
 
 } // namespace clutter
