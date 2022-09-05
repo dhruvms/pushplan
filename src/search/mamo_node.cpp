@@ -107,7 +107,7 @@ void MAMONode::GetSuccs(
 		comms::ObjectsPoses result;
 		int push_failure;
 		std::tuple<State, State, int> debug_push;
-		if (m_robot->PlanPush(this->GetCurrentStartState(), m_agents.at(m_agent_map[moved.first]).get(), push, movable_obstacles, m_all_objects, result, push_failure, debug_push, 1.0))
+		if (m_robot->PlanPush(this->GetCurrentStartState(), m_agents.at(m_agent_map[moved.first]).get(), push, movable_obstacles, m_all_objects, 1.0, result, push_failure, debug_push))
 		{
 			// valid push found!
 			succ_object_centric_actions->emplace_back(moved.first, 0); // TODO: currently only one aidx

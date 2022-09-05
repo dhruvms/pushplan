@@ -411,10 +411,11 @@ bool Robot::SteerAction(
 		interp.interpolate(action_size - 1, action_end, planning_variables);
 
 		int dummy, success;
+		std::vector<int> dummy_v;
 		// simulate for result
 		bool sim_result = m_sim->SimPushes(	{ steer_action }, -1, -1.0, -1.0,
-										dummy, success,
-										start_objs, end_objs);
+										start_objs,
+										dummy, success, end_objs, dummy_v);
 		result |= sim_result ? 0x00000008 : 0x00000063;
 		// simulated an action
 		// success if result is < 100, failure otherwise
@@ -1718,11 +1719,12 @@ bool Robot::PlanPush(
 
 	start_time = GetTime();
 	int pidx, successes;
+	std::vector<int> relevant_ids;
 	if (!input) {
-		m_sim->SimPushes(m_push_actions, object->GetID(), obj_traj->back().state.at(0), obj_traj->back().state.at(1), pidx, successes, rearranged, result);
+		m_sim->SimPushes(m_push_actions, object->GetID(), obj_traj->back().state.at(0), obj_traj->back().state.at(1), curr_scene, pidx, successes, result, relevant_ids);
 	}
 	else {
-		m_sim->SimPushes(m_push_actions, object->GetID(), push[3], push[4], pidx, successes, rearranged, result);
+		m_sim->SimPushes(m_push_actions, object->GetID(), push[3], push[4], curr_scene, pidx, successes, result, relevant_ids);
 	}
 	m_stats["push_sim_time"] += GetTime() - start_time;
 

@@ -80,11 +80,11 @@ public:
 		std::vector<double> *start_state,
 		Agent* object, const std::vector<double>& push,
 		const std::vector<Object*>& other_movables,
-		const comms::ObjectsPoses& rearranged,
+		const comms::ObjectsPoses& curr_scene,
+		const double& push_frac,
 		comms::ObjectsPoses& result,
 		int& push_failure,
 		std::tuple<State, State, int>& debug_push,
-		const double& push_frac,
 		bool input=false);
 	void IdentifyReachableMovables(
 		const std::vector<std::shared_ptr<Agent> >& agents,
