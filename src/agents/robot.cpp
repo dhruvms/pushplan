@@ -209,12 +209,12 @@ void Robot::SetMovables(const std::vector<std::shared_ptr<Agent> >& agents)
 
 bool Robot::SetScene(const comms::ObjectsPoses& objects)
 {
-	for (const auto& object : objects.poses)
+	for (const auto &object : objects.poses)
 	{
 		// find the collision object with this name
 		auto* cc_object = findCollisionObject(std::to_string(object.id), true);
 		if (!cc_object) {
-			return false;
+			continue;
 		}
 
 		Eigen::Affine3d pose = Eigen::Translation3d(object.xyz[0], object.xyz[1], object.xyz[2]) *
@@ -244,7 +244,7 @@ bool Robot::SetScene(const comms::ObjectsPoses& objects)
 bool Robot::ProcessObstacles(const std::vector<Object>& obstacles,
 	bool remove, bool movable)
 {
-	for (const auto& obs: obstacles)
+	for (const auto &obs: obstacles)
 	{
 		if (!obs.desc.ycb)
 		{
@@ -272,7 +272,7 @@ bool Robot::ProcessObstacles(const std::vector<Object>& obstacles,
 bool Robot::ProcessObstacles(const std::vector<Object*>& obstacles,
 	bool remove, bool movable)
 {
-	for (const auto& obs: obstacles)
+	for (const auto &obs: obstacles)
 	{
 		if (!obs->desc.ycb)
 		{
@@ -961,7 +961,7 @@ void Robot::voxeliseTrajectory()
 	// and computing the rest via symmetry
 
 	// int sphere_count = 0;
-	// for (const auto& wp: m_traj.points)
+	// for (const auto &wp: m_traj.points)
 	// {
 	// 	auto markers = m_cc_i->getCollisionModelVisualization(wp.positions);
 	// 	for (auto& marker : markers)
@@ -1152,7 +1152,7 @@ bool Robot::SatisfyPath(HighLevelNode* ct_node, Trajectory** sol_path, int& expa
 
 	m_solve.clear();
 	int t = 0;
-	for (const auto& wp: m_traj.points)
+	for (const auto &wp: m_traj.points)
 	{
 		LatticeState s;
 		s.state = wp.positions;
@@ -1511,7 +1511,7 @@ void Robot::IdentifyReachableMovables(
 	reachable_ids.clear();
 
 	std::vector<Object*> movables;
-	for (const auto& a: agents) {
+	for (const auto &a: agents) {
 		movables.push_back(a->GetObject());
 	}
 	ProcessObstacles(movables);
