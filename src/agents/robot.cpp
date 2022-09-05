@@ -199,11 +199,14 @@ bool Robot::Setup()
 
 void Robot::SetMovables(const std::vector<std::shared_ptr<Agent> >& agents)
 {
+	m_movables = agents;
 	moveit_msgs::CollisionObject mov_obj;
-	for (const auto& a: agents)
+	for (size_t i = 0; i < m_movables.size(); ++i)
 	{
-		a->GetMoveitObj(mov_obj);
-		m_movables.push_back(mov_obj);
+		m_movable_map[m_movables.at(i)->GetID()] = i;
+
+		m_movables.at(i)->GetMoveitObj(mov_obj);
+		m_movable_moveit_objs.push_back(mov_obj);
 	}
 }
 
@@ -771,22 +774,17 @@ bool Robot::planApproach(
 		return false;
 	}
 
-	if (have_obs) {
-		// add to immovable collision checker for final plan, and
-		// movable collision checker otherwise
-		ProcessObstacles(movable_obstacles, false, !finalise);
-		if (finalise) {
-			// remove from movable collision checker if they were added before
-			ProcessObstacles(movable_obstacles, true, true);
-		}
+	if (have_obs && finalise) {
+		// add to immovable collision checker
+		ProcessObstacles(movable_obstacles);
 	}
 
-	if (!m_planner->solve_with_constraints(req, res, m_movables, approach_cvecs))
+	if (!m_planner->solve_with_constraints(req, res, m_movable_moveit_objs, approach_cvecs))
 	{
 		// ROS_ERROR("Failed to plan to pregrasp state.");
 		if (have_obs && finalise) {
 			// remove from immovable collision checker
-			ProcessObstacles(movable_obstacles, true, false);
+			ProcessObstacles(movable_obstacles, true);
 		}
 
 		if (start_state != nullptr) {
@@ -798,7 +796,7 @@ bool Robot::planApproach(
 
 	if (have_obs && finalise) {
 		// remove from immovable collision checker
-		ProcessObstacles(movable_obstacles, true, false);
+		ProcessObstacles(movable_obstacles, true);
 	}
 
 	if (start_state != nullptr) {
@@ -867,17 +865,12 @@ bool Robot::planRetract(
 		return false;
 	}
 
-	if (have_obs) {
-		// add to immovable collision checker for final plan, and
-		// movable collision checker otherwise
-		ProcessObstacles(movable_obstacles, false, !finalise);
-		if (finalise) {
-			// remove from movable collision checker if they were added before
-			ProcessObstacles(movable_obstacles, true, true);
-		}
+	if (have_obs && finalise) {
+		// add to immovable collision checker
+		ProcessObstacles(movable_obstacles);
 	}
 
-	if (!m_planner->solve_with_constraints(req, res, m_movables, retract_cvecs))
+	if (!m_planner->solve_with_constraints(req, res, m_movable_moveit_objs, retract_cvecs))
 	{
 		// ROS_ERROR("Failed to plan to home state with attached body.");
 		detachObject();
@@ -885,14 +878,14 @@ bool Robot::planRetract(
 
 		if (have_obs && finalise) {
 			// remove from immovable collision checker
-			ProcessObstacles(movable_obstacles, true, false);
+			ProcessObstacles(movable_obstacles, true);
 		}
 		return false;
 	}
 	// SMPL_INFO("Robot found extraction plan! # wps = %d", res.trajectory.joint_trajectory.points.size());
 	if (have_obs && finalise) {
 		// remove from immovable collision checker
-		ProcessObstacles(movable_obstacles, true, false);
+		ProcessObstacles(movable_obstacles, true);
 	}
 
 	detachObject();

@@ -250,8 +250,9 @@ private:
 	int m_t, m_priority;
 	Trajectory m_solve;
 	Object m_ooi;
-	std::vector<moveit_msgs::CollisionObject> m_movables;
-	std::vector<Object> m_objs;
+	std::vector<std::shared_ptr<Agent> > m_movables; // pointers to relevant objects
+	std::unordered_map<int, size_t> m_movable_map;
+	std::vector<moveit_msgs::CollisionObject> m_movable_moveit_objs;
 	std::shared_ptr<CollisionChecker> m_cc;
 
 	std::shared_ptr<BulletSim> m_sim;
