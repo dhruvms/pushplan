@@ -98,7 +98,7 @@ bool Planner::Init(const std::string& scene_file, int scene_id, bool ycb)
 		m_cc->AddObstacle(m_ooi->GetObject());
 		m_ooi->SetCC(m_cc);
 		m_robot->SetOOI(m_ooi->GetObject());
-		// m_robot->SetMovables(m_agents);
+		m_robot->SetMovables(m_agents);
 
 		// Compute robot grasping states and plan path through them
 		int t = 0, grasp_tries;
@@ -195,7 +195,7 @@ bool Planner::SetupNGR()
 			c.push_back(DiscretisationManager::ContXToDiscX(itr->x()));
 			c.push_back(DiscretisationManager::ContYToDiscY(itr->y()));
 			c.push_back(DiscretisationManager::ContYToDiscY(itr->z()));
-			m_ngr.insert(c);
+			m_ngr.insert(std::move(c));
 		}
 	}
 

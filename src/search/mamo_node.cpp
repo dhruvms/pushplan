@@ -198,6 +198,7 @@ size_t MAMONode::GetConstraintHash() const
 
 	for (const auto &object_state : kobject_states())
 	{
+		boost::hash_combine(hash_val, object_state.id());
 		const auto &disc_pose = object_state.disc_pose();
 		boost::hash_combine(hash_val, disc_pose.x());
 		boost::hash_combine(hash_val, disc_pose.y());
