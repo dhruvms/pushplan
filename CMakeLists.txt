@@ -68,6 +68,7 @@ add_library(
 	src/utils/constants.cpp
 	src/utils/discretisation.cpp
 	src/utils/hash_manager.cpp
+	src/utils/geometry.cpp
 	src/utils/types.cpp)
 target_link_libraries(PUSHPLAN ${catkin_LIBRARIES} smpl::smpl) # -lprofiler
 
