@@ -84,6 +84,11 @@ bool Robot::Setup()
 	m_stats["push_plan_time"] = 0.0;
 	m_stats["push_sim_time"] = 0.0;
 	m_stats["push_sim_successes"] = 0;
+	m_stats["push_db_lookup_time"] = 0.0;
+	m_stats["push_db_total_time"] = 0.0;
+	m_stats["push_found_in_db"] = 0;
+	m_stats["push_db_successes"] = 0;
+	m_stats["push_db_failures"] = 0;
 
 	/////////////////
 	// Robot Model //
@@ -1576,52 +1581,20 @@ void Robot::IdentifyReachableMovables(
 bool Robot::PlanPush(
 	std::vector<double> *start_state,
 	Agent* object, const std::vector<double>& push,
-	const std::vector<Object*>& other_movables,	const comms::ObjectsPoses& rearranged,
+	const std::vector<Object*>& other_movables,	const comms::ObjectsPoses& curr_scene,
+	const double& push_frac,
 	comms::ObjectsPoses& result,
 	int& push_failure,
 	std::tuple<State, State, int>& debug_push,
-	const double& push_frac,
 	bool input)
 {
-	m_push_trajs.clear();
-	m_push_actions.clear();
-
 	// required info about object being pushed
+	int aidx = getPushIdx(push_frac);
 	const Trajectory* obj_traj = object->SolveTraj();
 	std::vector<Object*> pushed_obj = { object->GetObject() };
-
-	// remove objects from movable collision checker if they exist
-	ProcessObstacles(pushed_obj, true, true);
-	ProcessObstacles(other_movables, true, true);
-
-	bool push_found = false;
-	double start_time = GetTime();
-	++m_stats["plan_push_calls"];
-
-	// add all movable objects as obstacles into immovable collision checker
-	// they should be at their latest positions
-	ProcessObstacles(pushed_obj, false, false);
-	ProcessObstacles(other_movables, false, false);
-
-	// get push start pose
 	Eigen::Affine3d push_start_pose, push_end_pose;
 	State debug_push_start, debug_push_end;
-	getPushStartPose(push, push_start_pose, input);
-	debug_push_start = { push_start_pose.translation().x(), push_start_pose.translation().y() };
 
-	if (m_grid_i->getDistanceFromPoint(
-		push_start_pose.translation().x(),
-		push_start_pose.translation().y(),
-		push_start_pose.translation().z()) <= m_grid_i->resolution())
-	{
-		push_failure = 1;
-		debug_push_end = { -99.0, -99.0 };
-		debug_push = std::make_tuple(debug_push_start, debug_push_end, push_failure);
-		return false;
-	}
-
-	// plan path to push start pose with all other objects as obstacles
-	trajectory_msgs::JointTrajectory push_traj;
 	moveit_msgs::RobotState push_start_state = m_start_state;
 	if (start_state != nullptr)
 	{
@@ -1634,18 +1607,122 @@ bool Robot::PlanPush(
 			push_start_state.joint_state.position.begin() + 1,
 			start_state->begin(), start_state->end());
 	}
-	if (!planToPoseGoal(push_start_state, push_start_pose, push_traj))
+	smpl::RobotState push_start_joints(push_start_state.joint_state.position.begin() + 1, push_start_state.joint_state.position.end());;
+	bool push_found = false;
+
+	double start_time = GetTime();
+	++m_stats["plan_push_calls"];
+
+	comms::ObjectsPoses new_scene;
+	trajectory_msgs::JointTrajectory new_action;
+	bool push_in_db = lookupPushInDB(
+						object->GetObject(), obj_traj->back().coord, aidx, curr_scene,
+						new_scene, new_action);
+	m_stats["push_db_lookup_time"] += GetTime() - start_time;
+
+	if (push_in_db)
+	{
+		ROS_INFO("Push found in DB in %f seconds", GetTime() - start_time);
+		++m_stats["push_found_in_db"];
+
+		push_start_pose = m_rm->computeFK(new_action.points.front().positions);
+		push_end_pose = m_rm->computeFK(new_action.points.back().positions);
+		debug_push_start = { push_start_pose.translation().x(), push_start_pose.translation().y() };
+		debug_push_end = { push_end_pose.translation().x(), push_end_pose.translation().y() };
+
+		ProcessObstacles(pushed_obj);
+		ProcessObstacles(other_movables);
+
+		bool success = true;
+		if (!m_cc_i->isStateValid(push_start_joints))
+		{
+			push_failure = 1;
+			debug_push = std::make_tuple(debug_push_start, debug_push_end, push_failure);
+
+			success = false;
+		}
+
+		trajectory_msgs::JointTrajectory push_traj;
+		if (success && !planToPoseGoal(push_start_state, push_start_pose, push_traj))
+		{
+			push_failure = 2;
+			debug_push = std::make_tuple(debug_push_start, debug_push_end, push_failure);
+
+			success = false;
+		}
+
+		// remove all movable objects from immovable collision space
+		ProcessObstacles(pushed_obj, true);
+		ProcessObstacles(other_movables, true);
+		if (success)
+		{
+			m_planner->ProfilePath(m_rm.get(), push_traj);
+			new_action.points.front().time_from_start = push_traj.points.back().time_from_start + ros::Duration(m_dt);
+			for (size_t i = 1; i < new_action.points.size(); ++i) {
+				new_action.points.at(i).time_from_start = new_action.points.at(i-1).time_from_start + ros::Duration(m_dt);
+			}
+
+			for (auto itr = new_action.points.begin() + 1; itr != new_action.points.end(); ++itr) {
+				push_traj.points.push_back(*itr);
+			}
+
+			result = new_scene;
+			push_failure = -1;
+			debug_push = std::make_tuple(debug_push_start, debug_push_end, push_failure);
+			m_traj = push_traj;
+			++m_stats["push_db_successes"];
+			m_stats["push_db_total_time"] += GetTime() - start_time;
+			ROS_INFO("Push evaluation sans simulation using DB took %f seconds", GetTime() - start_time);
+			return true;
+		}
+		++m_stats["push_db_failures"];
+		m_stats["push_db_total_time"] += GetTime() - start_time;
+	}
+
+	m_push_trajs.clear();
+	m_push_actions.clear();
+
+	// add all movable objects as obstacles into immovable collision checker
+	// they should be at their latest positions
+	ProcessObstacles(pushed_obj);
+	ProcessObstacles(other_movables);
+
+	// get push start pose
+	getPushStartPose(push, push_start_pose, input);
+	debug_push_start = { push_start_pose.translation().x(), push_start_pose.translation().y() };
+
+	bool failure = false;
+	if (m_grid_i->getDistanceFromPoint(
+		push_start_pose.translation().x(),
+		push_start_pose.translation().y(),
+		push_start_pose.translation().z()) <= m_grid_i->resolution())
+	{
+		push_failure = 1;
+		debug_push_end = { -99.0, -99.0 };
+		debug_push = std::make_tuple(debug_push_start, debug_push_end, push_failure);
+
+		failure = true;
+	}
+
+	// plan path to push start pose with all other objects as obstacles
+	trajectory_msgs::JointTrajectory push_traj;
+	if (!failure && !planToPoseGoal(push_start_state, push_start_pose, push_traj))
 	{
 		push_failure = 2;
 		debug_push_end = { -99.0, -99.0 };
 		debug_push = std::make_tuple(debug_push_start, debug_push_end, push_failure);
-		return false;
+
+		failure = true;
 	}
-	++m_stats["push_samples_found"];
 
 	// remove all movable objects from immovable collision space
-	ProcessObstacles(pushed_obj, true, false);
-	ProcessObstacles(other_movables, true, false);
+	ProcessObstacles(pushed_obj, true);
+	ProcessObstacles(other_movables, true);
+	if (failure) {
+		return false;
+	}
+
+	++m_stats["push_samples_found"];
 
 	// push action parameters
 	push_end_pose = m_rm->computeFK(push_traj.points.back().positions);
@@ -1697,26 +1774,23 @@ bool Robot::PlanPush(
 	// ensure that it collides
 	{
 		bool collides = false;
-		ProcessObstacles(pushed_obj, false, false);
+		ProcessObstacles(pushed_obj);
 		for (size_t wp = 1; wp < push_action.points.size(); ++wp)
 		{
-			auto& prev_istate = push_action.points[wp - 1].positions;
-			auto& curr_istate = push_action.points[wp].positions;
-			if (!m_cc_i->isStateToStateValid(prev_istate, curr_istate))
+			if (!m_cc_i->isStateValid(push_action.points[wp].positions))
 			{
 				collides = true;
 				break;
 			}
 		}
 
+		ProcessObstacles(pushed_obj, true);
 		if (!collides)
 		{
-			ProcessObstacles(pushed_obj, true, false);
 			push_failure = 6;
 			debug_push = std::make_tuple(debug_push_start, debug_push_end, push_failure);
 			return false;
 		}
-		ProcessObstacles(pushed_obj, true, false);
 
 		push_found = true;
 		++m_stats["push_actions_found"];
@@ -1727,7 +1801,7 @@ bool Robot::PlanPush(
 		auto t_reverse = push_action_copy.points.rbegin()->time_from_start;
 		for (auto itr = push_action_copy.points.rbegin() + 1; itr != push_action_copy.points.rend(); ++itr)
 		{
-			itr->time_from_start = t_reverse + ros::Duration(0.01);
+			itr->time_from_start = t_reverse + ros::Duration(m_dt);
 			push_action.points.push_back(*itr);
 			t_reverse = itr->time_from_start;
 		}
@@ -1770,7 +1844,12 @@ bool Robot::PlanPush(
 
 	++m_stats["push_sim_successes"];
 	m_traj = m_push_trajs.at(pidx);
-	// SMPL_INFO("Found good push traj of length %d!", m_traj.points.size());
+	SMPL_INFO("Computed and simulated new push in %f seconds!", GetTime() - start_time);
+
+	addPushToDB(
+		object->GetObject(), obj_traj->back().coord, aidx,
+		curr_scene, result, relevant_ids, m_push_actions.at(pidx));
+
 	return true;
 }
 
