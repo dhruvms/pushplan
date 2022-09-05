@@ -2224,6 +2224,18 @@ void Robot::initOccupancyGrids()
 
 	m_grid_ngr = std::make_unique<smpl::OccupancyGrid>(m_df_ngr, ref_counted);
 	m_grid_ngr->setReferenceFrame(m_planning_frame);
+
+	m_ngr_res = m_grid_ngr->resolution();
+	m_ngr_origin = Eigen::Vector3d(
+			m_grid_ngr->originX(), m_grid_ngr->originY(), m_grid_ngr->originZ());
+
+	m_ngr_gmin = Eigen::Vector3d(
+			m_grid_ngr->originX(), m_grid_ngr->originY(), m_grid_ngr->originZ());
+
+	m_ngr_gmax = Eigen::Vector3d(
+			m_grid_ngr->originX() + m_grid_ngr->sizeX(),
+			m_grid_ngr->originY() + m_grid_ngr->sizeY(),
+			m_grid_ngr->originZ() + m_grid_ngr->sizeZ());
 }
 
 bool Robot::initCollisionChecker()

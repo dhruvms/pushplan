@@ -234,6 +234,8 @@ private:
 	std::shared_ptr<smpl::DistanceMapInterface> m_df_i, m_df_m, m_df_ngr;
 	std::shared_ptr<smpl::OccupancyGrid> m_grid_i, m_grid_m, m_grid_ngr;
 	std::unique_ptr<smpl::collision::CollisionSpace> m_cc_i, m_cc_m;
+	double m_ngr_res;
+	Eigen::Vector3d m_ngr_origin, m_ngr_gmin, m_ngr_gmax;
 
 	PlannerConfig m_planning_config;
 	smpl::PlanningParams m_planning_params;
