@@ -36,9 +36,10 @@ public:
 	bool SimPushes(
 		const std::vector<trajectory_msgs::JointTrajectory>& pushes,
 		int oid, float gx, float gy,
-		int& pidx, int& successes,
 		const comms::ObjectsPoses& rearranged,
-		comms::ObjectsPoses& result);
+		int& pidx, int& successes,
+		comms::ObjectsPoses& result,
+		std::vector<int> &relevant_objs);
 	bool RemoveConstraint();
 
 	const std::vector<std::vector<double>>* GetImmovableObjs() const {

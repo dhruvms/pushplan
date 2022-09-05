@@ -598,6 +598,7 @@ class BulletSim:
 		best_idx = -1
 		best_dist = float('inf')
 		best_objs = self.getObjects(sim_id)
+		start_objs = None
 		goal_pos = None
 		if (req.oid != -1):
 			assert(num_pushes == 1)
@@ -636,6 +637,7 @@ class BulletSim:
 
 			self.enableCollisionsWithObjects(sim_id)
 
+			start_objs = self.getObjects(sim_id)
 			violation_flag = False
 			cause = 0
 			robot_contacts = []
@@ -747,12 +749,20 @@ class BulletSim:
 			if sim_data['objs'][object.id]['movable']:
 				return_objs.append(object)
 
+		relevant_ids = []
+		if (res):
+			for i, object in enumerate(best_objs):
+				if sim_data['objs'][object.id]['movable']:
+					if (np.linalg.norm(np.asarray(start_objs[i].xyz) - np.asarray(object.xyz)) > 0.01):
+						relevant_ids.append(object.id)
+
 		output = SimPushesResponse()
 		output.res = res
 		output.idx = best_idx
 		output.successes = successes
 		output.objects = ObjectsPoses()
 		output.objects.poses = return_objs
+		output.relevant_ids = relevant_ids
 		return output
 
 	def RemoveConstraint(self, req):

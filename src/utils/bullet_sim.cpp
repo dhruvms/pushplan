@@ -244,9 +244,10 @@ bool BulletSim::ExecTraj(
 bool BulletSim::SimPushes(
 	const std::vector<trajectory_msgs::JointTrajectory>& pushes,
 	int oid, float gx, float gy,
-	int& pidx, int& successes,
 	const comms::ObjectsPoses& rearranged,
-	comms::ObjectsPoses& result)
+	int& pidx, int& successes,
+	comms::ObjectsPoses& result,
+	std::vector<int> &relevant_ids)
 {
 	comms::SimPushes srv;
 	srv.request.pushes = pushes;
@@ -264,6 +265,8 @@ bool BulletSim::SimPushes(
 	pidx = srv.response.idx;
 	successes = srv.response.successes;
 	result = srv.response.objects;
+	relevant_ids.clear();
+	relevant_ids.insert(relevant_ids.begin(), srv.response.relevant_ids.begin(), srv.response.relevant_ids.end());
 
 	return srv.response.res;
 }
