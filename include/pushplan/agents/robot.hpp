@@ -358,6 +358,10 @@ private:
 		moveit_msgs::MotionPlanResponse& res,
 		const std::vector<Object*>& movable_obstacles,
 		bool finalise=false);
+
+	void getTrajSpheres(
+		const trajectory_msgs::JointTrajectory& traj,
+		std::set<std::vector<double> >& spheres);
 	void voxeliseTrajectory();
 	void createVirtualTable();
 };

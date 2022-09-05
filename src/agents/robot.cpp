@@ -901,61 +901,57 @@ bool Robot::planRetract(
 	return true;
 }
 
+void Robot::getTrajSpheres(
+	const trajectory_msgs::JointTrajectory& traj,
+	std::set<std::vector<double> >& spheres)
+{
+	spheres.clear();
+	for (const auto &wp: traj.points)
+	{
+		auto markers = m_cc_i->getCollisionModelVisualization(wp.positions);
+		for (auto& marker : markers) {
+			spheres.emplace(
+				std::initializer_list<double>{
+					std::ceil(marker.pose.position[0] * 100.0) / 100.0,
+					std::ceil(marker.pose.position[1] * 100.0) / 100.0,
+					std::ceil(marker.pose.position[2] * 100.0) / 100.0,
+					std::ceil((boost::get<smpl::visual::Ellipse>(marker.shape).axis_x - RES) * 100.0) / 100.0 });
+		}
+	}
+}
+
 void Robot::voxeliseTrajectory()
 {
 	m_traj_voxels.clear();
-	// double start_time = GetTime();
+	std::set<std::vector<double> > spheres;
+	double start_time = GetTime();
+	getTrajSpheres(m_traj, spheres);
 
 	int sphere_count = 0;
-	for (const auto& wp: m_traj.points)
+	for (const auto &s : spheres)
 	{
-		auto markers = m_cc_i->getCollisionModelVisualization(wp.positions);
-		for (auto& marker : markers)
-		{
-			std::unique_ptr<smpl::collision::CollisionShape> shape;
-			shape = smpl::make_unique<smpl::collision::SphereShape>(boost::get<smpl::visual::Ellipse>(marker.shape).axis_x - RES);
+		std::unique_ptr<smpl::collision::CollisionShape> shape;
+		shape = smpl::make_unique<smpl::collision::SphereShape>(s[3]);
 
-			std::vector<smpl::collision::CollisionShape*> shapes;
-			shapes.push_back(shape.get());
+		std::vector<smpl::collision::CollisionShape*> shapes;
+		shapes.push_back(shape.get());
 
-			geometry_msgs::Pose pose;
-			pose.position.x = marker.pose.position[0];
-			pose.position.y = marker.pose.position[1];
-			pose.position.z = marker.pose.position[2];
-			geometry_msgs::Quaternion orientation;
-			tf::quaternionEigenToMsg(marker.pose.orientation, orientation);
-			pose.orientation = orientation;
+		smpl::collision::AlignedVector<Eigen::Affine3d> shape_poses;
+		Eigen::Affine3d transform(Eigen::Translation3d(s[0], s[1], s[2]));
+		shape_poses.push_back(transform);
 
-			smpl::collision::AlignedVector<Eigen::Affine3d> shape_poses;
-			Eigen::Affine3d transform;
-			tf::poseMsgToEigen(pose, transform);
-			shape_poses.push_back(transform);
+		// create the collision object
+		smpl::collision::CollisionObject co;
+		co.id = std::to_string(sphere_count++);
+		co.shapes = std::move(shapes);
+		co.shape_poses = std::move(shape_poses);
 
-			// create the collision object
-			smpl::collision::CollisionObject co;
-			co.id = std::to_string(sphere_count++);
-			co.shapes = std::move(shapes);
-			co.shape_poses = std::move(shape_poses);
-
-			const double res = m_grid_ngr->resolution();
-			const Eigen::Vector3d origin(
-					m_grid_ngr->originX(), m_grid_ngr->originY(), m_grid_ngr->originZ());
-
-			const Eigen::Vector3d gmin(
-					m_grid_ngr->originX(), m_grid_ngr->originY(), m_grid_ngr->originZ());
-
-			const Eigen::Vector3d gmax(
-					m_grid_ngr->originX() + m_grid_ngr->sizeX(),
-					m_grid_ngr->originY() + m_grid_ngr->sizeY(),
-					m_grid_ngr->originZ() + m_grid_ngr->sizeZ());
-
-			if (!smpl::collision::VoxelizeObject(co, res, origin, gmin, gmax, m_traj_voxels)) {
-				continue;
-			}
+		if (!smpl::collision::VoxelizeObject(co, m_ngr_res, m_ngr_origin, m_ngr_gmin, m_ngr_gmax, m_traj_voxels)) {
+			continue;
 		}
 	}
 
-	// ROS_INFO("Robot trajectory voxelisation took %f seconds", GetTime() - start_time);
+	ROS_INFO("Robot trajectory voxelisation took %f seconds", GetTime() - start_time);
 
 	// TODO: make this faster by looping over cells in a sphere octant
 	// and computing the rest via symmetry
