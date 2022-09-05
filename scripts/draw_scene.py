@@ -200,8 +200,52 @@ def DrawScene(filepath, objs, trajs, invalids, ngr, goals, pushes, alpha=1.0):
 			if (traj.shape[0] > 0):
 				AX.plot(traj[:, 0], traj[:, 1], c=lc, alpha=1.0, zorder=25)
 
+			for wp in traj:
+				obj = objs[key]
+
+				obj_shape = obj[0]
+				obj_movable = obj[-1]
+				ec = lc
+				fc = lc
+
+				obj_cent = np.array(wp)
+
+				if (obj_shape == 0): # rectangle
+					obj_extents = np.array(obj[8:10])
+					obj_pts = np.vstack([	obj_cent - (obj_extents * [1, 1]),
+											obj_cent - (obj_extents * [-1, 1]),
+											obj_cent - (obj_extents * [-1, -1]),
+											obj_cent - (obj_extents * [1, -1]),
+											obj_cent - (obj_extents * [1, 1])]) # axis-aligned
+
+					R = np.array([
+							[np.cos(obj[7]), -np.sin(obj[7])],
+							[np.sin(obj[7]), np.cos(obj[7])]]) # rotation matrix
+					obj_pts = obj_pts - obj_cent # axis-aligned, at origin
+					obj_pts = np.dot(obj_pts, R.T) # rotate at origin
+					obj_pts = obj_pts + obj_cent # translate back
+
+					path = Path(obj_pts, codes)
+					obj_rect = patches.PathPatch(path, ec=ec, fc=fc, lw=1,
+										alpha=0.2, zorder=2)
+
+					AX.add_artist(obj_rect)
+
+				elif (obj_shape == 2): # circle
+					assert obj[8] == obj[9]
+
+					obj_rad = obj[8]
+					obj_circ = patches.Circle(
+								obj_cent, radius=obj_rad,
+								ec=ec, fc=fc, lw=1,
+								alpha=0.2, zorder=2)
+
+					AX.add_artist(obj_circ)
+
 	if (ngr):
-		NGR = np.asarray(ngr)*RES
+		NGR = np.asarray(ngr)
+		NGR = np.unique(NGR, axis=0)
+		NGR *= RES
 		AX.scatter(NGR[:, 0], NGR[:, 1], c='gray', alpha=0.2, zorder=2)
 
 	# if (goals):
