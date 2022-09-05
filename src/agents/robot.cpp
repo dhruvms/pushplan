@@ -168,8 +168,6 @@ bool Robot::Setup()
 	m_link_w = smpl::urdf::GetLink(&m_rm->m_robot_model, m_wrist.c_str());
 	m_link_t = smpl::urdf::GetLink(&m_rm->m_robot_model, m_tip.c_str());
 
-	initObjects();
-
 	smpl::RobotState dummy;
 	dummy.insert(dummy.begin(),
 		m_start_state.joint_state.position.begin() + 1, m_start_state.joint_state.position.end());
@@ -523,7 +521,6 @@ bool Robot::Init()
 	LatticeState s;
 	s.state.insert(s.state.begin(),
 		m_start_state.joint_state.position.begin() + 1, m_start_state.joint_state.position.end());
-	reinitObjects(s.state);
 
 	return true;
 }
@@ -539,7 +536,6 @@ bool Robot::RandomiseStart()
 	LatticeState s;
 	s.state.insert(s.state.begin(),
 		m_start_state.joint_state.position.begin() + 1, m_start_state.joint_state.position.end());
-	reinitObjects(s.state);
 
 	return true;
 }
@@ -1761,12 +1757,6 @@ void Robot::AnimateSolution()
 	}
 }
 
-const std::vector<Object>* Robot::GetObject(const LatticeState& s)
-{
-	reinitObjects(s.state);
-	return &m_objs;
-}
-
 State Robot::GetEEState(const State& state)
 {
 	Eigen::Affine3d ee_pose = m_rm->computeFK(state);
@@ -2168,62 +2158,6 @@ bool Robot::readResolutions(std::vector<double>& resolutions)
 	}
 
 	return true;
-}
-
-void Robot::initObjects()
-{
-	Object o;
-	o.desc.shape = 0; // rectangle
-	o.desc.type = 1; // movable
-	o.desc.o_x = 0.0; // TBD
-	o.desc.o_y = 0.0; // TBD
-	o.desc.o_z = 0.0; // NA
-	o.desc.o_roll = 0.0; // NA
-	o.desc.o_pitch = 0.0; // NA
-	o.desc.o_yaw = 0.0; // TBD
-	o.desc.x_size = 0.0; // TBD
-	o.desc.y_size = 0.0; // TBD
-	o.desc.z_size = 0.0; // NA
-	o.desc.mass = 1.0;
-	o.desc.locked = o.desc.mass == 0;
-	o.desc.mu = 0.8;
-	o.desc.movable = true;
-
-	// shoulder-elbow rectangle
-	o.desc.id = 100;
-	m_objs.push_back(o);
-
-	// elbow-wrist rectangle
-	o.desc.id = 101;
-	m_objs.push_back(o);
-
-	// wrist-tip rectangle
-	o.desc.id = 102;
-	m_objs.push_back(o);
-}
-
-void Robot::reinitObjects(const State& s)
-{
-	// shoulder-elbow rectangle
-	auto link_pose_s = m_rm->computeFKLink(s, m_link_s);
-	auto link_pose_e = m_rm->computeFKLink(s, m_link_e);
-	State F1 = {link_pose_s.translation().x(), link_pose_s.translation().y()};
-	State F2 = {link_pose_e.translation().x(), link_pose_e.translation().y()};
-	ArmRectObj(F1, F2, m_b, m_objs.at(0).desc);
-
-	// elbow-wrist rectangle
-	auto link_pose_w = m_rm->computeFKLink(s, m_link_w);
-	F1 = F2;
-	F2.at(0) = link_pose_w.translation().x();
-	F2.at(1) = link_pose_w.translation().y();
-	ArmRectObj(F1, F2, m_b, m_objs.at(1).desc);
-
-	// wrist-tip rectangle
-	auto link_pose_t = m_rm->computeFKLink(s, m_link_t);
-	F1 = F2;
-	F2.at(0) = link_pose_t.translation().x();
-	F2.at(1) = link_pose_t.translation().y();
-	ArmRectObj(F1, F2, m_b, m_objs.at(2).desc);
 }
 
 double Robot::profileAction(

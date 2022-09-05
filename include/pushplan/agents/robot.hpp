@@ -113,8 +113,6 @@ public:
 	void SetCC(const std::shared_ptr<CollisionChecker>& cc) {
 		m_cc = cc;
 	}
-	const std::vector<Object>* GetObject() const { return &m_objs; };
-	const std::vector<Object>* GetObject(const LatticeState& s);
 	const Trajectory* SolveTraj() const { return &m_solve; };
 
 	State GetEEState(const State& state);
