@@ -3139,7 +3139,8 @@ void Robot::RunManipulabilityStudy(int N)
 	trajectory_msgs::JointTrajectory path;
 	Eigen::MatrixXd J, Jprod;
 
-	for (double z = 0.03; z < 0.08; z += 0.02)
+	// for (double z = 0.03; z < 0.08; z += 0.02)
+	for (double z = 0.03; z < 0.04; z += 0.02)
 	{
 		std::string filename(__FILE__);
 		auto found = filename.find_last_of("/\\");
@@ -3154,9 +3155,9 @@ void Robot::RunManipulabilityStudy(int N)
 			DATA << "x,y,manipulability,success\n";
 		}
 
-		for (double x = ox; x <= ox + sx; x += 0.05)
+		for (double x0 = ox; x0 <= ox + sx - 0.02; x0 += 0.01)
 		{
-			for (double y = oy; y <= oy + sy; y += 0.05)
+			for (double y0 = oy + 0.02; y0 <= oy + sy; y0 += 0.01)
 			{
 				double manipulability = std::numeric_limits<double>::lowest();
 				int plans = 0;
@@ -3193,10 +3194,14 @@ void Robot::RunManipulabilityStudy(int N)
 						start.joint_state.position.begin() + 1,
 						start_state.begin(), start_state.end());
 
+					// random ee yaw at push start pose
+					double yaw0 = m_distD(m_rng) * M_PI * 2;
+					yaw0 = smpl::angles::normalize_angle(yaw0);
+
 					// goal xyz
-					goal = Eigen::Translation3d(x, y, z + oz) *
-						Eigen::AngleAxisd(0.0, Eigen::Vector3d::UnitZ()) *
-						Eigen::AngleAxisd(0.0, Eigen::Vector3d::UnitY()) *
+					goal = Eigen::Translation3d(x0, y0, z + oz) *
+						Eigen::AngleAxisd(yaw0, Eigen::Vector3d::UnitZ()) *
+						Eigen::AngleAxisd(M_PI/6.0, Eigen::Vector3d::UnitY()) *
 						Eigen::AngleAxisd(0.0, Eigen::Vector3d::UnitX());
 
 					if (planToPoseGoal(start, goal, path, 0.2))
@@ -3215,7 +3220,7 @@ void Robot::RunManipulabilityStudy(int N)
 				}
 
 				double success = 100.0 * (plans/(double)N);
-				DATA << x << ',' << y << ',' << manipulability << ',' << success << '\n';
+				DATA << x0 << ',' << y0 << ',' << manipulability << ',' << success << '\n';
 			}
 		}
 
@@ -3240,7 +3245,8 @@ void Robot::RunPushIKStudy(int N)
 	trajectory_msgs::JointTrajectory path;
 	Eigen::MatrixXd J, Jprod;
 
-	for (double z = 0.03; z < 0.08; z += 0.02)
+	// for (double z = 0.03; z < 0.08; z += 0.02)
+	for (double z = 0.03; z < 0.04; z += 0.02)
 	{
 		std::string filename(__FILE__);
 		auto found = filename.find_last_of("/\\");
@@ -3299,7 +3305,7 @@ void Robot::RunPushIKStudy(int N)
 					// 3. random push start pose
 					goal = Eigen::Translation3d(x0, y0, z + oz) *
 						Eigen::AngleAxisd(yaw0, Eigen::Vector3d::UnitZ()) *
-						Eigen::AngleAxisd(0.0, Eigen::Vector3d::UnitY()) *
+						Eigen::AngleAxisd(M_PI/6.0, Eigen::Vector3d::UnitY()) *
 						Eigen::AngleAxisd(0.0, Eigen::Vector3d::UnitX());
 
 					// 4. find path to push start
@@ -3318,8 +3324,6 @@ void Robot::RunPushIKStudy(int N)
 						goal = m_rm->computeFK(path.points.back().positions);
 						goal.translation().x() = x1;
 						goal.translation().y() = y1;
-						SV_SHOW_INFO_NAMED("push_end_pose", smpl::visual::MakePoseMarkers(
-								goal, m_grid_i->getReferenceFrame(), "push_end_pose"));
 
 						// get push action trajectory via inverse velocity
 						trajectory_msgs::JointTrajectory push_action;
@@ -3330,15 +3334,14 @@ void Robot::RunPushIKStudy(int N)
 										joint_vel,
 										goal,
 										push_action);
-						failure -= 2;
-						if (failure == -2) { failure = 4; };
+						if (failure > 0) { failure -= 2; };
 						DATA << x0 << ',' << y0 << ',' << yaw0 << ','
 							<< x1 << ',' << y1 << ',' << failure << '\n';
 					}
 					else
 					{
 						DATA << x0 << ',' << y0 << ',' << yaw0 << ','
-								<< -1 << ',' << -1 << ',' << 0 << '\n';
+								<< -1 << ',' << -1 << ',' << 4 << '\n';
 					}
 				}
 			}
