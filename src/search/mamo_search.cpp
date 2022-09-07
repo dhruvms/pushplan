@@ -15,6 +15,7 @@ bool MAMOSearch::CreateRoot()
 	///////////
 
 	m_stats["expansions"] = 0.0;
+	m_stats["no_succs"] = 0.0;
 	m_stats["only_duplicate"] = 0.0;
 	m_stats["no_duplicate"] = 0.0;
 	m_stats["mapf_time"] = 0.0;
@@ -52,21 +53,22 @@ bool MAMOSearch::CreateRoot()
 bool MAMOSearch::Solve()
 {
 	double t1 = GetTime();
-	m_root_search->g = 0;
-	m_root_search->h = m_root_node->ComputeMAMOHeuristic();
-	m_root_search->f = m_root_search->g + m_root_search->h;
+	m_root_search->f = 0;
+	m_root_search->depth = 0;
+	m_root_search->actions = 0;
+	m_root_search->noops = 0;
 	m_root_search->m_OPEN_h = m_OPEN.push(m_root_search);
 
 	while (!m_OPEN.empty())
 	{
-		if (GetTime() - t1 > 1500.0)
+		if (GetTime() - t1 > 300.0)
 		{
-			SMPL_ERROR("MAOM Search took more than 20 minutes!");
+			SMPL_ERROR("MAMO Search took more than 5 minutes!");
 			break;
 		}
 
 		auto next = m_OPEN.top();
-		SMPL_WARN("Select %d, g = %u, h = %u", next->state_id, next->g, next->h);
+		SMPL_WARN("Select %d, f-value = %u", next->state_id, next->f);
 		if (done(next))
 		{
 			SMPL_INFO("Final plan found!");
@@ -76,7 +78,6 @@ bool MAMOSearch::Solve()
 			double t2 = GetTime();
 			node->RunMAPF();
 			m_stats["mapf_time"] += GetTime() - t2;
-			next->g += node->robot_traj().points.size();
 
 			m_solved_node = node;
 			m_solved_search = next;
@@ -125,7 +126,7 @@ void MAMOSearch::SaveStats()
 
 bool MAMOSearch::expand(MAMOSearchState *state)
 {
-	SMPL_WARN("Expand %d, g = %u, h = %u", state->state_id, state->g, state->h);
+	SMPL_WARN("Expand %d, f-value = %u", state->state_id, state->f);
 	auto node = m_hashtable.GetState(state->state_id);
 
 	// 2. generate appropriate successor states
@@ -186,7 +187,7 @@ void MAMOSearch::extractRearrangements()
 		auto node = m_hashtable.GetState(state->state_id);
 		if (node->has_traj())
 		{
-			ROS_WARN("\t%u", state->state_id);
+			ROS_WARN("\t%d", state->state_id);
 			m_rearrangements.push_back(node->krobot_traj());
 		}
 	}
@@ -205,14 +206,23 @@ void MAMOSearch::createSuccs(
 	size_t num_succs = succ_object_centric_actions->size();
 	bool duplicate_successor = succ_object_centric_actions->back() == std::make_pair(-1, -1);
 
-	if (duplicate_successor && num_succs == 1) {
+	// if (num_succs == 0)
+	// {
+	// 	m_stats["no_succs"] += 1;
+	// 	parent_search_state->closed = true;
+	// 	m_OPEN.erase(parent_search_state->m_OPEN_h);
+	// 	return;
+	// }
+	if (duplicate_successor && num_succs == 1)
+	{
 		m_stats["only_duplicate"] += 1;
+		parent_search_state->closed = true;
+		m_OPEN.erase(parent_search_state->m_OPEN_h);
 	}
 	if (!duplicate_successor) {
 		m_stats["no_duplicate"] += 1;
 	}
 
-	unsigned int parent_g = parent_search_state->g;
 	for (size_t i = 0; i < num_succs; ++i)
 	{
 		auto succ = new MAMONode;
@@ -235,20 +245,21 @@ void MAMOSearch::createSuccs(
 		}
 
 		// check if we have visited this mamo state before
-		unsigned int old_id, old_g;
+		unsigned int old_id, old_f;
 		MAMOSearchState *prev_search_state = nullptr;
 		if (m_hashtable.Exists(succ))
 		{
 			old_id = m_hashtable.GetStateID(succ);
 			prev_search_state = getSearchState(old_id);
-			old_g = prev_search_state->g;
+			old_f = prev_search_state->f;
 		}
 
-		unsigned int succ_cost = (duplicate_successor && i == num_succs - 1) ? parent_search_state->h : succ_trajs->at(i).points.size();
-		unsigned int succ_g = parent_g + succ_cost;
-		if (prev_search_state != nullptr && (prev_search_state->closed || old_g <= succ_g))
+		unsigned int succ_actions = parent_search_state->actions + (1 - (duplicate_successor && i == num_succs - 1));
+		unsigned int succ_noops = parent_search_state->noops + (duplicate_successor && i == num_succs - 1);
+		if (prev_search_state != nullptr && (prev_search_state->closed ||
+				prev_search_state->actions <= succ_actions || prev_search_state->noops <= succ_noops))
 		{
-			// previously visited this mamo state with a better value, move on
+			// previously visited this mamo state with fewer actions, move on
 			delete succ;
 			continue;
 		}
@@ -274,9 +285,11 @@ void MAMOSearch::createSuccs(
 
 				m_hashtable.UpdateState(succ);
 				prev_search_state->bp = parent_search_state;
-				prev_search_state->g = succ_g;
+				prev_search_state->depth = parent_search_state->depth + 1;
+				prev_search_state->actions = succ_actions;
+				prev_search_state->noops = succ_noops;
 				m_OPEN.update(prev_search_state->m_OPEN_h);
-				SMPL_WARN("Update %d, g = %u (previously %u), h = %u", old_id, prev_search_state->g, old_g, prev_search_state->h);
+				SMPL_WARN("Update %d, new f-value = %u (previously %u)", old_id, old_f, prev_search_state->f);
 			}
 			else
 			{
@@ -284,12 +297,13 @@ void MAMOSearch::createSuccs(
 				unsigned int succ_id = m_hashtable.GetStateIDForceful(succ);
 				auto succ_search_state = getSearchState(succ_id);
 				succ_search_state->bp = parent_search_state;
-				succ_search_state->g = succ_g;
-				succ_search_state->h = succ->ComputeMAMOHeuristic();
-				succ_search_state->f = succ_search_state->g + succ_search_state->h;
+				succ_search_state->f = succ->ComputeMAMOPriority();
+				succ_search_state->depth = parent_search_state->depth + 1;
+				succ_search_state->actions = succ_actions;
+				succ_search_state->noops = succ_noops;
 				succ_search_state->m_OPEN_h = m_OPEN.push(succ_search_state);
 
-				SMPL_WARN("Generate %d, g = %u, h = %u", succ_id, succ_search_state->g, succ_search_state->h);
+				SMPL_WARN("Generate %d, f-value = %u", succ_id, succ_search_state->f);
 				succ->SaveNode(succ_id, parent_search_state->state_id);
 			}
 			parent_node->AddChild(succ);
@@ -321,7 +335,10 @@ MAMOSearchState* MAMOSearch::createSearchState(unsigned int state_id)
 
 void MAMOSearch::initSearchState(MAMOSearchState *state)
 {
-	state->g = std::numeric_limits<unsigned int>::max();
+	state->f = std::numeric_limits<unsigned int>::max();
+	state->depth = -1;
+	state->actions = -1;
+	state->noops = -1;
 	state->closed = false;
 	state->bp = nullptr;
 }

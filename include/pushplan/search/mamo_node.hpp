@@ -40,7 +40,7 @@ public:
 		std::vector<comms::ObjectsPoses> *succ_objects,
 		std::vector<trajectory_msgs::JointTrajectory> *succ_trajs,
 		std::vector<std::tuple<State, State, int> > *debug_pushes);
-	unsigned int ComputeMAMOHeuristic();
+	unsigned int ComputeMAMOPriority();
 	void SaveNode(unsigned int my_id,	unsigned int parent_id);
 
 	size_t GetConstraintHash() const;
@@ -85,6 +85,7 @@ private:
 	std::vector<MAMONode*> m_children; // children nodes in tree
 
 	std::vector<std::pair<int, Trajectory> > m_mapf_solution; // mapf solution found at this node
+	// std::list<std::pair<int, Coord> > m_successful_pushes;
 	std::vector<int> m_relevant_ids;
 
 	Planner *m_planner;
@@ -99,6 +100,8 @@ private:
 		const std::shared_ptr<Agent>& agent,
 		const size_t& pidx);
 	void identifyRelevantMovables();
+	void computePriorityFactors(
+		unsigned int &percent_ngr, unsigned int &percent_objs, unsigned int &num_objs);
 
 	void resetAgents();
 };
