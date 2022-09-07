@@ -216,8 +216,8 @@ void MAMOSearch::createSuccs(
 	if (duplicate_successor && num_succs == 1)
 	{
 		m_stats["only_duplicate"] += 1;
-		parent_search_state->closed = true;
-		m_OPEN.erase(parent_search_state->m_OPEN_h);
+		// parent_search_state->closed = true;
+		// m_OPEN.erase(parent_search_state->m_OPEN_h);
 	}
 	if (!duplicate_successor) {
 		m_stats["no_duplicate"] += 1;
