@@ -72,3 +72,5 @@ const std::map<int, std::string> clutter::EXEC_TRAJ_FAIL = {
 };
 
 double clutter::DEG5 = 0.0872665;
+
+int clutter::SAMPLES;

@@ -73,6 +73,8 @@ extern const std::map<int, std::string> EXEC_TRAJ_FAIL;
 
 extern double DEG5;
 
+extern int SAMPLES;
+
 } // namespace clutter
 
 

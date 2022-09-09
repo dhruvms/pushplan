@@ -39,14 +39,15 @@ public:
 		std::vector<std::pair<int, int> > *succ_object_centric_actions,
 		std::vector<comms::ObjectsPoses> *succ_objects,
 		std::vector<trajectory_msgs::JointTrajectory> *succ_trajs,
-		std::vector<std::tuple<State, State, int> > *debug_pushes);
+		std::vector<std::tuple<State, State, int> > *debug_pushes,
+		bool *close);
 	unsigned int ComputeMAMOPriority();
 	void SaveNode(unsigned int my_id,	unsigned int parent_id);
 
-	size_t GetConstraintHash() const;
-	size_t GetSearchHash() const;
-	void SetConstraintHash(const size_t& hash_val);
-	void SetSearchHash(const size_t& hash_val);
+	size_t GetObjectsHash() const;
+	size_t GetObjectsMAPFHash() const;
+	void SetObjectsHash(const size_t& hash_val);
+	void SetObjectsMAPFHash(const size_t& hash_val);
 
 	void SetParent(MAMONode *parent);
 	void SetRobotTrajectory(const trajectory_msgs::JointTrajectory& robot_traj);
@@ -85,7 +86,8 @@ private:
 	std::vector<MAMONode*> m_children; // children nodes in tree
 
 	std::vector<std::pair<int, Trajectory> > m_mapf_solution; // mapf solution found at this node
-	// std::list<std::pair<int, Coord> > m_successful_pushes;
+	bool m_fully_evaluated = false;
+	std::list<std::pair<int, Coord> > m_successful_pushes;
 	std::vector<int> m_relevant_ids;
 
 	Planner *m_planner;
@@ -110,7 +112,7 @@ private:
 // Equality operators //
 ////////////////////////
 
-struct EqualsConstraint
+struct EqualsObjects
 {
 	bool operator()(MAMONode *a, MAMONode *b) const
 	{
@@ -122,11 +124,11 @@ struct EqualsConstraint
 	}
 };
 
-struct EqualsSearch
+struct EqualsObjectsMAPF
 {
 	bool operator()(MAMONode *a, MAMONode *b) const
 	{
-		EqualsConstraint checkObjects;
+		EqualsObjects checkObjects;
 		if (!checkObjects(a, b)) {
 			return false;
 		}
@@ -138,20 +140,20 @@ struct EqualsSearch
 // Hash Function Structs //
 ///////////////////////////
 
-struct HashConstraint {
+struct HashObjects {
 	size_t operator()(MAMONode *hashable_node) const
 	{
-		auto hash_val = hashable_node->GetConstraintHash();
-		hashable_node->SetConstraintHash(hash_val);
+		auto hash_val = hashable_node->GetObjectsHash();
+		hashable_node->SetObjectsHash(hash_val);
 		return hash_val;
 	}
 };
 
-struct HashSearch {
+struct HashObjectsMAPF {
 	size_t operator()(MAMONode *hashable_node) const
 	{
-		auto hash_val = hashable_node->GetSearchHash();
-		hashable_node->SetSearchHash(hash_val);
+		auto hash_val = hashable_node->GetObjectsMAPFHash();
+		hashable_node->SetObjectsMAPFHash(hash_val);
 		return hash_val;
 	}
 };

@@ -34,7 +34,7 @@ robot:
     qz: 0.0
     qw: 1.0
   pushing:
-    num: 1
+    samples: 10
     plan_time: 0.2
     control:
       dt: 0.01

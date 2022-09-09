@@ -211,7 +211,7 @@ bool Robot::Setup()
 	m_tip = "r_gripper_finger_dummy_planning_link"; // TODO: check
 	m_table_z = m_cc->GetTableHeight();
 	m_distD = std::uniform_real_distribution<double>(0.0, 1.0);
-	m_distG = std::normal_distribution<>(0.0, 1.0);
+	m_distG = std::normal_distribution<>(0.0, 0.025);
 
 	m_link_s = smpl::urdf::GetLink(&m_rm->m_robot_model, m_shoulder.c_str());
 	m_link_e = smpl::urdf::GetLink(&m_rm->m_robot_model, m_elbow.c_str());
@@ -233,7 +233,6 @@ bool Robot::Setup()
 	m_ph.getParam("robot/grasping/tries", m_grasp_tries);
 	m_ph.getParam("robot/grasping/lift", m_grasp_lift);
 
-	m_ph.getParam("robot/pushing/num", m_pushes_per_object);
 	m_ph.getParam("robot/pushing/plan_time", m_plan_push_time);
 	m_ph.param<double>("robot/pushing/control/Kp", m_Kp, 1.0);
 	m_ph.param<double>("robot/pushing/control/Ki", m_Ki, 1.0);
@@ -1745,8 +1744,8 @@ bool Robot::PlanPush(
 	}
 
 	// compute push action end pose
-	push_end_pose.translation().x() += std::cos(push_at_angle) * push_dist * push_frac;
-	push_end_pose.translation().y() += std::sin(push_at_angle) * push_dist * push_frac;
+	push_end_pose.translation().x() += std::cos(push_at_angle) * push_dist * push_frac + (m_distG(m_rng));
+	push_end_pose.translation().y() += std::sin(push_at_angle) * push_dist * push_frac + (m_distG(m_rng));
 	debug_push_end = { push_end_pose.translation().x(), push_end_pose.translation().y() };
 	// SV_SHOW_INFO_NAMED("push_end_pose", smpl::visual::MakePoseMarkers(
 	// 	push_end_pose, m_grid_i->getReferenceFrame(), "push_end_pose"));
@@ -1896,8 +1895,8 @@ void Robot::getPushStartPose(
 	double y = push[1];
 	if (!input)
 	{
-		x += std::cos(push[2] + M_PI) * 0.05;
-		y += std::sin(push[2] + M_PI) * 0.05;
+		x += std::cos(push[2] + M_PI) * 0.05 + (m_distG(m_rng));
+		y += std::sin(push[2] + M_PI) * 0.05 + (m_distG(m_rng));
 	}
 
 	push_pose = Eigen::Translation3d(x, y, z) *

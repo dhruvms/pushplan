@@ -68,14 +68,22 @@ void MAMONode::GetSuccs(
 	std::vector<std::pair<int, int> > *succ_object_centric_actions,
 	std::vector<comms::ObjectsPoses> *succ_objects,
 	std::vector<trajectory_msgs::JointTrajectory> *succ_trajs,
-	std::vector<std::tuple<State, State, int> > *debug_pushes)
+	std::vector<std::tuple<State, State, int> > *debug_pushes,
+	bool *close)
 {
-	// if (!m_children.empty())
-	// {
-	// 	// do something else
-	// 	m_successful_pushes.back();
-	// 	m_successful_pushes.pop_back();
-	// }
+	if (m_fully_evaluated)
+	{
+		// // do something different here to ensure we search over
+		// // all rearrangement locations for an object for which
+		// // a successful push was found already
+		// const auto& successful_push = m_successful_pushes.back();
+		// trajectory_msgs::JointTrajectory dummy_traj;
+		// succ_object_centric_actions->emplace(succ_object_centric_actions->begin(), successful_push.first, -1);
+		// succ_objects->insert(succ_objects->begin(), m_all_objects);
+		// succ_trajs->insert(succ_trajs->begin(), dummy_traj);
+		// debug_pushes->emplace(debug_pushes->begin(), -1, -1);
+		// return;
+	}
 
 	bool duplicate_successor = false;
 	std::vector<std::tuple<State, State, int> > duplicate_successor_debug_pushes;
@@ -108,51 +116,67 @@ void MAMONode::GetSuccs(
 			movable_obstacles.push_back(m_agents.at(i)->GetObject());
 		}
 
-		// plan to push location
-		// m_robot->PlanPush creates the planner internally, because it might
-		// change KDL chain during the process
-		comms::ObjectsPoses result;
-		int push_failure;
-		std::tuple<State, State, int> debug_push;
-		if (m_robot->PlanPush(this->GetCurrentStartState(), m_agents.at(m_agent_map[moved.first]).get(), push, movable_obstacles, m_all_objects, 1.0, result, push_failure, debug_push))
+		int p = 0;
+		bool globally_invalid = false;
+		for (; p < SAMPLES; ++p)
 		{
-			// valid push found!
-			succ_object_centric_actions->emplace_back(moved.first, 0); // TODO: currently only one aidx
-			succ_objects->push_back(std::move(result));
-			succ_trajs->push_back(m_robot->GetLastPlan());
-			debug_pushes->push_back(std::move(debug_push));
-			// m_successful_pushes.push_back(std::make_pair(moved.first, moved.second.back().coord));
-		}
-		else
-		{
-			// SMPL_INFO("Tried pushing object %d. Return value = %d", moved.first, push_failure);
-			switch (push_failure)
+			// plan to push location
+			// m_robot->PlanPush creates the planner internally, because it might
+			// change KDL chain during the process
+			comms::ObjectsPoses result;
+			int push_failure;
+			std::tuple<State, State, int> debug_push;
+			if (m_robot->PlanPush(this->GetCurrentStartState(), m_agents.at(m_agent_map[moved.first]).get(), push, movable_obstacles, m_all_objects, 1.0, result, push_failure, debug_push))
 			{
-				case 3: // SMPL_ERROR("Inverse dynamics failed to reach push end."); break;
-				case 4: // SMPL_ERROR("Inverse kinematics/dynamics failed (joint limits likely)."); break;
-				case 5: // SMPL_ERROR("Inverse kinematics hit static obstacle."); break;
+				// valid push found!
+				succ_object_centric_actions->emplace_back(moved.first, 0); // TODO: currently only one aidx
+				succ_objects->push_back(std::move(result));
+				succ_trajs->push_back(m_robot->GetLastPlan());
+				debug_pushes->push_back(std::move(debug_push));
+				m_successful_pushes.push_back(std::make_pair(moved.first, moved.second.back().coord));
+				break;
+			}
+			else
+			{
+				// SMPL_INFO("Tried pushing object %d. Return value = %d", moved.first, push_failure);
+				switch (push_failure)
 				{
-					m_planner->AddGloballyInvalidPush(std::make_pair(moved.second.front().coord, moved.second.back().coord));
+					case 3: // SMPL_ERROR("Inverse dynamics failed to reach push end."); break;
+					case 4: // SMPL_ERROR("Inverse kinematics/dynamics failed (joint limits likely)."); break;
+					case 5: // SMPL_ERROR("Inverse kinematics hit static obstacle."); break;
+					{
+						m_planner->AddGloballyInvalidPush(std::make_pair(moved.second.front().coord, moved.second.back().coord));
+						globally_invalid = true;
+						break;
+					}
+					// case 1: // SMPL_ERROR("Push start inside object."); break;
+					// case 2: // SMPL_ERROR("Failed to reach push start."); break;
+					// case 6: // SMPL_ERROR("Push action did not collide with intended object."); break;
+					// case 0: // SMPL_ERROR("Valid push computed! Failed in simulation."); break;
+					// case -1: SMPL_INFO("Push succeeded in simulation!"); break;
+					default: SMPL_WARN("Unknown push failure cause.");
+				}
+				duplicate_successor_debug_pushes.push_back(std::move(debug_push));
+				if (!duplicate_successor) {
+					duplicate_successor = true;
+				}
+				if (globally_invalid) {
 					break;
 				}
-				case 1: // SMPL_ERROR("Push start inside object."); break;
-				case 2: // SMPL_ERROR("Failed to reach push start."); break;
-				case 6: // SMPL_ERROR("Push action did not collide with intended object."); break;
-				case 0: // SMPL_ERROR("Valid push computed! Failed in simulation."); break;
-				{
-					m_planner->AddLocallyInvalidPush(
-						this->GetConstraintHash(),
-						moved.first,
-						moved.second.back().coord);
-					break;
-				}
-				// case -1: SMPL_INFO("Push succeeded in simulation!"); break;
-				default: SMPL_WARN("Unknown push failure cause.");
 			}
-			duplicate_successor_debug_pushes.push_back(std::move(debug_push));
-			if (!duplicate_successor) {
-				duplicate_successor = true;
-			}
+		}
+
+		if (globally_invalid) {
+			p = SAMPLES; // automatic maximum penalty
+		}
+		if (p > 0)
+		{
+			// treat this action to have p invalid samples
+			m_planner->AddLocallyInvalidPush(
+				this->GetObjectsHash(),
+				moved.first,
+				moved.second.back().coord,
+				p);
 		}
 	}
 
@@ -165,12 +189,23 @@ void MAMONode::GetSuccs(
 		debug_pushes->insert(debug_pushes->end(),
 					duplicate_successor_debug_pushes.begin(), duplicate_successor_debug_pushes.end());
 	}
+
+	// exhausted push sample budget for all (object, MAPF path) tuples from this node
+	// future expansions should generate successors corresponding to hallucinated invalid goals
+	// i.e. hallucinate a previously valid goal (successful push) as being invalid
+	// to search over all rearrangements of each object moved from this node
+	m_fully_evaluated = true;
+	*close = m_successful_pushes.empty();
 }
 
 unsigned int MAMONode::ComputeMAMOPriority()
 {
 	unsigned int percent_ngr, percent_objs, num_objs;
 	computePriorityFactors(percent_ngr, percent_objs, num_objs);
+
+	if (num_objs == 0) {
+		return percent_ngr;
+	}
 	return (percent_objs/num_objs) + percent_ngr;
 }
 
