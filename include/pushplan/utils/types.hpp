@@ -5,6 +5,7 @@
 
 #include <smpl/angles.h>
 #include <smpl/console/console.h>
+#include <boost/functional/hash.hpp>
 
 #include <ostream>
 #include <vector>
@@ -31,6 +32,20 @@ struct coord_compare
 		else if (u.size() == 3) {
 			return std::tie(u.at(0), u.at(1), u.at(2)) < std::tie(v.at(0), v.at(1), v.at(2));
 		}
+		else {
+			assert(false);
+			return false;
+		}
+	}
+};
+
+struct coord_hash
+{
+	size_t operator()(const Coord& c) const
+	{
+		size_t seed = 0;
+		boost::hash_combine(seed, boost::hash_range(c.begin(), c.begin() + 2));
+		return seed;
 	}
 };
 

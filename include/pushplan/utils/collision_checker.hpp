@@ -4,7 +4,6 @@
 #include <pushplan/agents/object.hpp>
 #include <pushplan/utils/types.hpp>
 
-#include <boost/functional/hash.hpp>
 #include <fcl/broadphase/broadphase.h>
 
 #include <vector>

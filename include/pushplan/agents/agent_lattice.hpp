@@ -33,7 +33,7 @@ public:
 	void AvoidAgents(const std::unordered_set<int>& to_avoid);
 	void ResetInvalidPushes(
 		const std::vector<std::pair<Coord, Coord> >* invalids_G,
-		const std::set<Coord, coord_compare>* invalids_L);
+		const std::unordered_map<Coord, int, coord_hash, coord_compare>* invalids_L);
 	// const bgi::rtree<value, bgi::quadratic<8> >& GetInvalidPushes() const;
 
 	void GetSuccs(
@@ -97,7 +97,7 @@ private:
 
 	int conflictHeuristic(const LatticeState& state);
 	bool goalConflict(const LatticeState& state);
-	bool getNNDist(const Coord& c, double& d);
+	bool checkNNCost(const Coord& c, double& cost);
 
 	LatticeState* getHashEntry(int state_id) const;
 	int getHashEntry(

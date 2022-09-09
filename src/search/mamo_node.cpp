@@ -593,12 +593,12 @@ void MAMONode::SaveNode(unsigned int my_id,	unsigned int parent_id)
 			if (invalid_l != nullptr)
 			{
 				DATA << invalid_l->size() << '\n';
-				for (const auto& c: *invalid_l)
+				for (auto it = invalid_l->cbegin(); it != invalid_l->cend(); ++it)
 				{
 					State s;
-					s.push_back(DiscretisationManager::DiscXToContX(c.at(0)));
-					s.push_back(DiscretisationManager::DiscYToContY(c.at(1)));
-					DATA << s.at(0) << ',' << s.at(1) << '\n';
+					s.push_back(DiscretisationManager::DiscXToContX(it->first.at(0)));
+					s.push_back(DiscretisationManager::DiscYToContY(it->first.at(1)));
+					DATA << s.at(0) << ',' << s.at(1) << ',' << it->second << '\n';
 				}
 			}
 			else {

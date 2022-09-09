@@ -144,7 +144,7 @@ void Agent::ComputeNGRComplement(
 
 void Agent::ResetInvalidPushes(
 	const std::vector<std::pair<Coord, Coord> >* invalids_G,
-	const std::set<Coord, coord_compare>* invalids_L)
+	const std::unordered_map<Coord, int, coord_hash, coord_compare>* invalids_L)
 {
 	m_lattice->ResetInvalidPushes(invalids_G, invalids_L);
 }

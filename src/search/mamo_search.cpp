@@ -134,18 +134,23 @@ bool MAMOSearch::expand(MAMOSearchState *state)
 	std::vector<comms::ObjectsPoses> succ_objects;
 	std::vector<trajectory_msgs::JointTrajectory> succ_trajs;
 	std::vector<std::tuple<State, State, int> > debug_pushes;
+	bool close;
 	double t = GetTime();
-	node->GetSuccs(&succ_object_centric_actions, &succ_objects, &succ_trajs, &debug_pushes);
+	node->GetSuccs(&succ_object_centric_actions, &succ_objects, &succ_trajs, &debug_pushes, &close);
 	m_stats["push_planner_time"] += GetTime() - t;
 
 	assert(succ_object_centric_actions.size() == succ_objects.size());
 	assert(succ_objects.size() == succ_trajs.size());
 	assert(succ_trajs.size() == succ_object_centric_actions.size());
 
+	if (close)
+	{
+		state->closed = true;
+		m_OPEN.erase(state->m_OPEN_h);
+	}
+
 	// 3. add successor states to search graph
 	createSuccs(node, state, &succ_object_centric_actions, &succ_objects, &succ_trajs, &debug_pushes);
-	state->closed = true;
-	m_OPEN.erase(state->m_OPEN_h);
 
 	return true;
 }

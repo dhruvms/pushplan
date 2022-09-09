@@ -80,7 +80,7 @@ void AgentLattice::AvoidAgents(const std::unordered_set<int>& to_avoid)
 
 void AgentLattice::ResetInvalidPushes(
 	const std::vector<std::pair<Coord, Coord> >* invalids_G,
-	const std::set<Coord, coord_compare>* invalids_L)
+	const std::unordered_map<Coord, int, coord_hash, coord_compare>* invalids_L)
 {
 	m_invalid_pushes.clear();
 	point p;
@@ -90,7 +90,7 @@ void AgentLattice::ResetInvalidPushes(
 		{
 			bg::set<0>(p, invalids_G->at(i).second.at(0));
 			bg::set<1>(p, invalids_G->at(i).second.at(1));
-			m_invalid_pushes.insert(std::make_pair(p, 0));
+			m_invalid_pushes.insert(std::make_pair(p, SAMPLES * 2));
 			// m_invalid_pushes.insert(invalids_G->at(i).second);
 		}
 	}
@@ -99,9 +99,9 @@ void AgentLattice::ResetInvalidPushes(
 	{
 		for (auto it = invalids_L->cbegin(); it != invalids_L->cend(); ++it)
 		{
-			bg::set<0>(p, it->at(0));
-			bg::set<1>(p, it->at(1));
-			m_invalid_pushes.insert(std::make_pair(p, 1));
+			bg::set<0>(p, it->first.at(0));
+			bg::set<1>(p, it->first.at(1));
+			m_invalid_pushes.insert(std::make_pair(p, it->second));
 		}
 		// m_invalid_pushes.insert(invalids_L->begin(), invalids_L->end());
 	}
@@ -168,18 +168,9 @@ bool AgentLattice::CheckGoalCost(
 		// need to compute pseudo-edge cost for valid goal state
 		LatticeState* s = getHashEntry(state_id);
 
-		double dist = 0.0;
-		if (getNNDist(s->coord, dist))
+		double cost = 0.0;
+		if (checkNNCost(s->coord, cost))
 		{
-			if (dist < 1) {
-				return false; // this is actually a known invalid goal
-			}
-
-			// // exponential between (1, 10) and (5, 1)
-			// double cost = 12.915 * std::exp(-0.256 * dist);
-			// exponential between (1, 20) and (5, 2)
-			double cost = 25.831 * std::exp(-0.256 * dist);
-			cost = std::max(std::min(20.0, cost), 2.0);
 			succ_ids->push_back(m_goal_ids.back()); // pseudogoal
 			costs->push_back(cost);
 		}
@@ -204,14 +195,8 @@ bool AgentLattice::IsGoal(int state_id)
 
 	// if (!m_invalid_pushes.empty())
 	// {
-	// 	double dist = 0.0;
-	// 	if (getNNDist(s->coord, dist))
-	// 	{
-	// 		if (dist < 1) {
-	// 			return false; // this is actually a known invalid goal
-	// 		}
-	// 	}
-	// 	else {
+	// 	double cost = 0.0;
+	// 	if (!checkNNCost(s->coord, cost)) {
 	// 		return false;
 	// 	}
 	// }
@@ -616,22 +601,33 @@ bool AgentLattice::goalConflict(const LatticeState& state)
 	return false;
 }
 
-bool AgentLattice::getNNDist(const Coord& c, double& d)
+bool AgentLattice::checkNNCost(const Coord& c, double& cost)
 {
-	std::vector<value> nn;
-	point query_g;
-	bg::set<0>(query_g, c.at(0));
-	bg::set<1>(query_g, c.at(1));
-	m_invalid_pushes.query(bgi::nearest(query_g, 1), std::back_inserter(nn));
+	std::vector<value> nns;
+	point query(c.at(0), c.at(1));
+	bg::model::box<point> b(point(c.at(0) - 2, c.at(1) - 2), point(c.at(0) + 2, c.at(1) + 2));
+	m_invalid_pushes.query(bgi::within(b), std::back_inserter(nns));
 
-	if (nn.empty())
+	if (nns.empty())
 	{
 		// why did we end here?
 		SMPL_WARN("Invalid pushes rtree is not empty, but no NNs found.");
 		return false;
 	}
 
-	d = bg::distance(nn.back().first, query_g);
+	cost = 0.0;
+	for (const auto &nn : nns)
+	{
+		double d = bg::distance(nn.first, query);
+		if (d < 1) {
+			return false;
+		}
+
+		cost += nn.second/double(d);
+	}
+	// // exponential between (1, 2) and (5, 10)
+	// double cost = 25.831 * std::exp(-0.256 * dist);
+	// cost = std::max(std::min(20.0, cost), 2.0);
 	return true;
 }
 

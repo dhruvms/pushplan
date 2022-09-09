@@ -41,6 +41,7 @@ void setupGlobals(const ros::NodeHandle& ph)
 	ph.getParam("goal/cc_2d", CC_2D);
 	ph.getParam("goal/cc_3d", CC_3D);
 	ph.getParam("occupancy_grid/res", DF_RES);
+	ph.getParam("robot/pushing/samples", SAMPLES);
 
 	int llhc, hlhc, cp, algo;
 	ph.getParam("mapf/cbs/llhc", llhc);

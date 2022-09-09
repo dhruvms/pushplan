@@ -248,21 +248,35 @@ void Planner::AddGloballyInvalidPush(
 }
 
 void Planner::AddLocallyInvalidPush(
-	unsigned int state_id, int agent_id, Coord bad_goal)
+	unsigned int state_id, int agent_id, Coord bad_goal, int samples)
 {
 	const auto it1 = m_invalid_pushes_L.find(state_id);
 	if (it1 == m_invalid_pushes_L.end())
 	{
-		m_invalid_pushes_L[state_id][agent_id] = { bad_goal };
+		// never seen an invalid push for this state before
+		m_invalid_pushes_L[state_id][agent_id][bad_goal] = samples;
 	}
 	else
 	{
 		const auto it2 = it1->second.find(agent_id);
-		if (it2 == it1->second.end()) {
-			it1->second[agent_id] = { bad_goal };
+		if (it2 == it1->second.end())
+		{
+			// never seen an invalid push for this object in this state before
+			it1->second[agent_id][bad_goal] = samples;
 		}
-		else {
-			it2->second.insert(bad_goal);
+		else
+		{
+			const auto it3 = it2->second.find(bad_goal);
+			if (it3 == it2->second.end())
+			{
+				// never seen this invalid push for this object in this state before
+				it2->second[bad_goal] = samples;
+			}
+			else
+			{
+				// have seen this invalid push for this object in this state before
+				it3->second = std::max(it3->second, samples);
+			}
 		}
 	}
 }
@@ -1037,7 +1051,7 @@ const std::vector<std::pair<Coord, Coord> >* Planner::GetGloballyInvalidPushes()
 	return &m_invalid_pushes_G;
 }
 
-const std::set<Coord, coord_compare>* Planner::GetLocallyInvalidPushes(
+const std::unordered_map<Coord, int, coord_hash, coord_compare>* Planner::GetLocallyInvalidPushes(
 	unsigned int state_id, int agent_id) const
 {
 	if (m_invalid_pushes_L.empty()) {
