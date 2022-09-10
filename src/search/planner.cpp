@@ -1051,7 +1051,7 @@ const std::vector<std::pair<Coord, Coord> >* Planner::GetGloballyInvalidPushes()
 	return &m_invalid_pushes_G;
 }
 
-const std::unordered_map<Coord, int, coord_hash, coord_compare>* Planner::GetLocallyInvalidPushes(
+const std::map<Coord, int, coord_compare>* Planner::GetLocallyInvalidPushes(
 	unsigned int state_id, int agent_id) const
 {
 	if (m_invalid_pushes_L.empty()) {

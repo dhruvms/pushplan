@@ -33,7 +33,7 @@ public:
 	void AvoidAgents(const std::unordered_set<int>& to_avoid);
 	void ResetInvalidPushes(
 		const std::vector<std::pair<Coord, Coord> >* invalids_G,
-		const std::unordered_map<Coord, int, coord_hash, coord_compare>* invalids_L);
+		const std::map<Coord, int, coord_compare>* invalids_L);
 	// const bgi::rtree<value, bgi::quadratic<8> >& GetInvalidPushes() const;
 
 	void GetSuccs(
