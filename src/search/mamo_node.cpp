@@ -43,7 +43,7 @@ bool MAMONode::RunMAPF()
 
 		m_agents.at(i)->ResetInvalidPushes(
 			m_planner->GetGloballyInvalidPushes(),
-			m_planner->GetLocallyInvalidPushes(this->GetConstraintHash(), m_agents.at(i)->GetID()));
+			m_planner->GetLocallyInvalidPushes(this->GetObjectsHash(), m_agents.at(i)->GetID()));
 	}
 
 	// set/update/init necessary components
@@ -209,7 +209,7 @@ unsigned int MAMONode::ComputeMAMOPriority()
 	return (percent_objs/num_objs) + percent_ngr;
 }
 
-size_t MAMONode::GetConstraintHash() const
+size_t MAMONode::GetObjectsHash() const
 {
 	if (m_hash_set_C) {
 		return m_hash_C;
@@ -240,13 +240,13 @@ size_t MAMONode::GetConstraintHash() const
 	return hash_val;
 }
 
-size_t MAMONode::GetSearchHash() const
+size_t MAMONode::GetObjectsMAPFHash() const
 {
 	if (m_hash_set_S) {
 		return m_hash_S;
 	}
 
-	size_t hash_val = GetConstraintHash();
+	size_t hash_val = GetObjectsHash();
 	for (const auto &movable : m_mapf_solution)
 	{
 		hash_val ^= std::hash<int>()(movable.first);
@@ -258,7 +258,7 @@ size_t MAMONode::GetSearchHash() const
 	return hash_val;
 }
 
-void MAMONode::SetConstraintHash(const size_t& hash_val)
+void MAMONode::SetObjectsHash(const size_t& hash_val)
 {
 	if (!m_hash_set_C)
 	{
@@ -270,7 +270,7 @@ void MAMONode::SetConstraintHash(const size_t& hash_val)
 	}
 }
 
-void MAMONode::SetSearchHash(const size_t& hash_val)
+void MAMONode::SetObjectsMAPFHash(const size_t& hash_val)
 {
 	if (!m_hash_set_S)
 	{
@@ -588,7 +588,7 @@ void MAMONode::SaveNode(unsigned int my_id,	unsigned int parent_id)
 		DATA << m_agents.size() << '\n';
 		for (size_t oidx = 0; oidx < m_agents.size(); ++oidx)
 		{
-			auto invalid_l = m_planner->GetLocallyInvalidPushes(this->GetConstraintHash(), m_agents.at(oidx)->GetID());
+			auto invalid_l = m_planner->GetLocallyInvalidPushes(this->GetObjectsHash(), m_agents.at(oidx)->GetID());
 			DATA << m_agents.at(oidx)->GetID() << '\n';
 			if (invalid_l != nullptr)
 			{
