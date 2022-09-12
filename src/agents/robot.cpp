@@ -947,17 +947,38 @@ void Robot::getTrajSpheres(
 	const trajectory_msgs::JointTrajectory& traj,
 	std::set<std::vector<double> >& spheres)
 {
+	double ox, oy, oz, sx, sy, sz;
+	m_sim->GetShelfParams(ox, oy, oz, sx, sy, sz);
+
 	spheres.clear();
 	for (const auto &wp: traj.points)
 	{
 		auto markers = m_cc_i->getCollisionModelVisualization(wp.positions);
-		for (auto& marker : markers) {
+		for (auto& marker : markers)
+		{
+			double mx = marker.pose.position[0];
+			double my = marker.pose.position[1];
+			double mz = marker.pose.position[2];
+			double mr = boost::get<smpl::visual::Ellipse>(marker.shape).axis_x - RES;
+			if (mx < ox && (mx + mr + 0.05 < ox)) {
+				continue;
+			}
+			if (my < oy && (my + mr + 0.05 < oy)) {
+				continue;
+			}
+			if (mz < oz && (mz + mr + 0.05 < oz)) {
+				continue;
+			}
+			if (mz > oz + sz && (mz - mr - 0.05 > oz + sz)) {
+				continue;
+			}
+
 			spheres.emplace(
 				std::initializer_list<double>{
-					std::ceil(marker.pose.position[0] * 100.0) / 100.0,
-					std::ceil(marker.pose.position[1] * 100.0) / 100.0,
-					std::ceil(marker.pose.position[2] * 100.0) / 100.0,
-					std::ceil((boost::get<smpl::visual::Ellipse>(marker.shape).axis_x - RES) * 100.0) / 100.0 });
+					std::ceil(mx * 100.0) / 100.0,
+					std::ceil(my * 100.0) / 100.0,
+					std::ceil(mz * 100.0) / 100.0,
+					std::ceil(mr * 100.0) / 100.0 });
 		}
 	}
 }
