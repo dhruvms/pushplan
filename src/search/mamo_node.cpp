@@ -420,15 +420,10 @@ void MAMONode::computePriorityFactors(
 	float ngr_size = float(ngr.size());
 	std::set<Coord, coord_compare> agent_voxels;
 	std::vector<Coord> intersection;
-	for (size_t i = 0; i < m_mapf_solution.size(); ++i)
+	for (size_t i = 0; i < m_object_states.size(); ++i)
 	{
-		const auto& moved = m_mapf_solution.at(i);
-		if (moved.second.size() == 1 || moved.second.front().coord == moved.second.back().coord) {
-			continue;
-		}
-
-		m_agents.at(m_agent_map[moved.first])->GetVoxels(
-					m_object_states.at(m_agent_map[moved.first]).cont_pose(),
+		m_agents.at(m_agent_map[m_object_states.at(i).id()])->GetVoxels(
+					m_object_states.at(i).cont_pose(),
 					agent_voxels);
 
 		intersection.clear();
@@ -441,7 +436,7 @@ void MAMONode::computePriorityFactors(
 		{
 			++num_objs;
 			percent_ngr += (intersection.size()/ngr_size) * 100;
-			percent_objs += (intersection.size()/agent_voxels.size()) * 100;
+			percent_objs += (intersection.size()/float(agent_voxels.size())) * 100;
 		}
 	}
 }

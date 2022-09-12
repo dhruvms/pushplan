@@ -53,8 +53,7 @@ bool MAMOSearch::CreateRoot()
 bool MAMOSearch::Solve()
 {
 	double t1 = GetTime();
-	m_root_search->f = 0;
-	m_root_search->depth = 0;
+	m_root_search->priority = m_root_node->ComputeMAMOPriority();
 	m_root_search->actions = 0;
 	m_root_search->noops = 0;
 	m_root_search->m_OPEN_h = m_OPEN.push(m_root_search);
@@ -68,7 +67,7 @@ bool MAMOSearch::Solve()
 		}
 
 		auto next = m_OPEN.top();
-		SMPL_WARN("Select %d, f-value = %u", next->state_id, next->f);
+		SMPL_WARN("Select %d, priority = %u", next->state_id, next->priority);
 		if (done(next))
 		{
 			SMPL_INFO("Final plan found!");
@@ -256,13 +255,12 @@ void MAMOSearch::createSuccs(
 		{
 			old_id = m_hashtable.GetStateID(succ);
 			prev_search_state = getSearchState(old_id);
-			old_f = prev_search_state->f;
+			old_f = prev_search_state->priority;
 		}
 
 		unsigned int succ_actions = parent_search_state->actions + (1 - (duplicate_successor && i == num_succs - 1));
 		unsigned int succ_noops = parent_search_state->noops + (duplicate_successor && i == num_succs - 1);
-		if (prev_search_state != nullptr && (prev_search_state->closed ||
-				prev_search_state->actions <= succ_actions || prev_search_state->noops <= succ_noops))
+		if (prev_search_state != nullptr && (prev_search_state->closed || prev_search_state->actions <= succ_actions))
 		{
 			// previously visited this mamo state with fewer actions, move on
 			delete succ;
@@ -290,11 +288,10 @@ void MAMOSearch::createSuccs(
 
 				m_hashtable.UpdateState(succ);
 				prev_search_state->bp = parent_search_state;
-				prev_search_state->depth = parent_search_state->depth + 1;
 				prev_search_state->actions = succ_actions;
 				prev_search_state->noops = succ_noops;
 				m_OPEN.update(prev_search_state->m_OPEN_h);
-				SMPL_WARN("Update %d, new f-value = %u (previously %u)", old_id, old_f, prev_search_state->f);
+				SMPL_WARN("Update %d, new priority = %u (previously %u)", old_id, old_f, prev_search_state->priority);
 			}
 			else
 			{
@@ -302,14 +299,12 @@ void MAMOSearch::createSuccs(
 				unsigned int succ_id = m_hashtable.GetStateIDForceful(succ);
 				auto succ_search_state = getSearchState(succ_id);
 				succ_search_state->bp = parent_search_state;
-				succ_search_state->f = succ->ComputeMAMOPriority();
-				succ_search_state->depth = parent_search_state->depth + 1;
+				succ_search_state->priority = succ->ComputeMAMOPriority();
 				succ_search_state->actions = succ_actions;
 				succ_search_state->noops = succ_noops;
 				succ_search_state->m_OPEN_h = m_OPEN.push(succ_search_state);
 
-				SMPL_WARN("Generate %d, f-value = %u", succ_id, succ_search_state->f);
-				succ->SaveNode(succ_id, parent_search_state->state_id);
+				SMPL_WARN("Generate %d, priority = %u", succ_id, succ_search_state->priority);
 			}
 			parent_node->AddChild(succ);
 			m_search_nodes.push_back(succ);
@@ -340,8 +335,7 @@ MAMOSearchState* MAMOSearch::createSearchState(unsigned int state_id)
 
 void MAMOSearch::initSearchState(MAMOSearchState *state)
 {
-	state->f = std::numeric_limits<unsigned int>::max();
-	state->depth = -1;
+	state->priority = std::numeric_limits<unsigned int>::max();
 	state->actions = -1;
 	state->noops = -1;
 	state->closed = false;
