@@ -30,6 +30,17 @@
 namespace clutter
 {
 
+Planner::~Planner()
+{
+	m_cc->ReleaseRobot();
+	if (m_mamo_search)
+	{
+		m_cbs->ReleaseRobot();
+		m_mamo_search->Cleanup();
+	}
+	m_robot.reset();
+}
+
 bool Planner::Init(const std::string& scene_file, int scene_id, bool ycb)
 {
 	m_scene_file = scene_file;

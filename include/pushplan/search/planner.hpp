@@ -33,6 +33,8 @@ public:
 				m_ph("~"), m_replan(true),
 				m_plan_success(false), m_sim_success(false),
 				m_push_input(false), m_rng(m_dev()), m_grasp_at(-1) {};
+	~Planner();
+
 	bool Init(const std::string& scene_file, int scene_id, bool ycb);
 	bool Alive();
 	bool SetupNGR();

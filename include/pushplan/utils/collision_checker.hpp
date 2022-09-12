@@ -109,6 +109,8 @@ public:
 		Agent* a, const LatticeState& s, fcl::CollisionObject* o,
 		const int& priority, bool goal_check);
 
+	void ReleaseRobot() { m_robot.reset(); };
+
 private:
 	Planner* m_planner = nullptr;
 

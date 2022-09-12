@@ -34,6 +34,8 @@ public:
 	bool UpdateStats(std::map<std::string, double>& stats);
 	HighLevelNode* GetSolution() const { return m_goal; };
 
+	void ReleaseRobot() { m_robot.reset(); };
+
 protected:
 	std::shared_ptr<CollisionChecker> m_cc;
 	std::shared_ptr<Robot> m_robot;
