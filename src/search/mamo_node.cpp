@@ -1,6 +1,7 @@
 #include <pushplan/search/mamo_node.hpp>
 #include <pushplan/search/planner.hpp>
 #include <pushplan/utils/discretisation.hpp>
+#include <pushplan/utils/helpers.hpp>
 
 #include <algorithm>
 
@@ -69,24 +70,24 @@ void MAMONode::GetSuccs(
 	std::vector<comms::ObjectsPoses> *succ_objects,
 	std::vector<trajectory_msgs::JointTrajectory> *succ_trajs,
 	std::vector<std::tuple<State, State, int> > *debug_pushes,
-	bool *close)
+	bool *close,
+	double *mapf_time,
+	double *push_planner_time)
 {
-	if (m_fully_evaluated)
+	*close = false;
+	*mapf_time = GetTime();
+	if (!this->RunMAPF() && m_successful_pushes.empty())
 	{
-		// // do something different here to ensure we search over
-		// // all rearrangement locations for an object for which
-		// // a successful push was found already
-		// const auto& successful_push = m_successful_pushes.back();
-		// trajectory_msgs::JointTrajectory dummy_traj;
-		// succ_object_centric_actions->emplace(succ_object_centric_actions->begin(), successful_push.first, -1);
-		// succ_objects->insert(succ_objects->begin(), m_all_objects);
-		// succ_trajs->insert(succ_trajs->begin(), dummy_traj);
-		// debug_pushes->emplace(debug_pushes->begin(), -1, -1);
-		// return;
+		*mapf_time = GetTime() - *mapf_time;
+		// I have no more possible successors, please CLOSE me
+		*close = true;
+		return;
 	}
+	*mapf_time = GetTime() - *mapf_time;
 
 	bool duplicate_successor = false;
-	std::vector<std::tuple<State, State, int> > duplicate_successor_debug_pushes;
+	std::vector<std::tuple<State, State, int> > invalid_push_samples;
+	*push_planner_time = GetTime();
 	for (size_t i = 0; i < m_mapf_solution.size(); ++i)
 	{
 		const auto& moved = m_mapf_solution.at(i);
@@ -96,8 +97,22 @@ void MAMONode::GetSuccs(
 		// 	// ignore and move on, i.e. no successor generated since the scene cannot and should not change
 		// 	continue;
 		// }
+
+		// agent does not move in MAPF solution
 		if (moved.second.size() == 1 || moved.second.front().coord == moved.second.back().coord) {
 			continue;
+		}
+
+		// check if we have seen this push before
+		int samples = m_agents.at(m_agent_map[moved.first])->InvalidPushCount(moved.second.back().coord);
+		if (samples >= SAMPLES) {
+			continue; // known invalid push, do not compute
+		}
+		else if (samples == 0) {
+			samples = SAMPLES; // never before seen push, must compute
+		}
+		else {
+			samples = 1; // seen valid push before, lookup from DB
 		}
 
 		// get push location
@@ -118,7 +133,7 @@ void MAMONode::GetSuccs(
 
 		int p = 0;
 		bool globally_invalid = false;
-		for (; p < SAMPLES; ++p)
+		for (; p < samples; ++p)
 		{
 			// plan to push location
 			// m_robot->PlanPush creates the planner internally, because it might
@@ -133,11 +148,15 @@ void MAMONode::GetSuccs(
 				succ_objects->push_back(std::move(result));
 				succ_trajs->push_back(m_robot->GetLastPlan());
 				debug_pushes->push_back(std::move(debug_push));
-				m_successful_pushes.push_back(std::make_pair(moved.first, moved.second.back().coord));
+				if (samples == SAMPLES) {
+					m_successful_pushes.push_back(std::make_pair(moved.first, moved.second.back().coord));
+				}
+
 				break;
 			}
 			else
 			{
+				assert(samples == SAMPLES);
 				// SMPL_INFO("Tried pushing object %d. Return value = %d", moved.first, push_failure);
 				switch (push_failure)
 				{
@@ -154,29 +173,32 @@ void MAMONode::GetSuccs(
 					// case 6: // SMPL_ERROR("Push action did not collide with intended object."); break;
 					// case 0: // SMPL_ERROR("Valid push computed! Failed in simulation."); break;
 					// case -1: SMPL_INFO("Push succeeded in simulation!"); break;
-					default: SMPL_WARN("Unknown push failure cause.");
+					// default: SMPL_WARN("Unknown push failure cause.");
 				}
-				duplicate_successor_debug_pushes.push_back(std::move(debug_push));
-				if (!duplicate_successor) {
-					duplicate_successor = true;
-				}
+				invalid_push_samples.push_back(std::move(debug_push));
 				if (globally_invalid) {
 					break;
 				}
 			}
 		}
 
-		if (globally_invalid) {
-			p = SAMPLES; // automatic maximum penalty
-		}
-		if (p > 0)
+		if (samples == SAMPLES) // this was a new push I was considering
 		{
-			// treat this action to have p invalid samples
-			m_planner->AddLocallyInvalidPush(
-				this->GetObjectsHash(),
-				moved.first,
-				moved.second.back().coord,
-				p);
+			if (globally_invalid) {
+				p = SAMPLES; // automatic maximum penalty
+			}
+			if (p == SAMPLES && !duplicate_successor) {
+				duplicate_successor = true; // failed to find a push, must add new constraint to this state
+			}
+			if (p > 0)
+			{
+				// treat this action to have p invalid samples
+				m_planner->AddLocallyInvalidPush(
+					this->GetObjectsHash(),
+					moved.first,
+					moved.second.back().coord,
+					p);
+			}
 		}
 	}
 
@@ -187,15 +209,10 @@ void MAMONode::GetSuccs(
 		succ_objects->push_back(m_all_objects);
 		succ_trajs->push_back(dummy_traj);
 		debug_pushes->insert(debug_pushes->end(),
-					duplicate_successor_debug_pushes.begin(), duplicate_successor_debug_pushes.end());
+					invalid_push_samples.begin(), invalid_push_samples.end());
+		m_new_constraints = true;
 	}
-
-	// exhausted push sample budget for all (object, MAPF path) tuples from this node
-	// future expansions should generate successors corresponding to hallucinated invalid goals
-	// i.e. hallucinate a previously valid goal (successful push) as being invalid
-	// to search over all rearrangements of each object moved from this node
-	m_fully_evaluated = true;
-	*close = m_successful_pushes.empty();
+	*push_planner_time = GetTime() - *push_planner_time;
 }
 
 unsigned int MAMONode::ComputeMAMOPriority()

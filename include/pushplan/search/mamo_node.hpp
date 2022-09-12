@@ -40,7 +40,9 @@ public:
 		std::vector<comms::ObjectsPoses> *succ_objects,
 		std::vector<trajectory_msgs::JointTrajectory> *succ_trajs,
 		std::vector<std::tuple<State, State, int> > *debug_pushes,
-		bool *close);
+		bool *close,
+		double *mapf_time,
+		double *push_planner_time);
 	unsigned int ComputeMAMOPriority();
 	void SaveNode(unsigned int my_id,	unsigned int parent_id);
 
