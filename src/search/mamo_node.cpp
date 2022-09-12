@@ -36,6 +36,10 @@ std::vector<double>* MAMONode::GetCurrentStartState()
 
 bool MAMONode::RunMAPF()
 {
+	if (!m_new_constraints && m_successful_pushes.empty()) {
+		return false;
+	}
+
 	for (size_t i = 0; i < m_agents.size(); ++i)
 	{
 		assert(m_agents.at(i)->GetID() == m_object_states.at(i).id());
@@ -45,6 +49,14 @@ bool MAMONode::RunMAPF()
 		m_agents.at(i)->ResetInvalidPushes(
 			m_planner->GetGloballyInvalidPushes(),
 			m_planner->GetLocallyInvalidPushes(this->GetObjectsHash(), m_agents.at(i)->GetID()));
+	}
+
+	if (!m_new_constraints)
+	{
+		// add hallucinated constraint
+		const auto &valid_push = m_successful_pushes.back();
+		m_agents.at(m_agent_map[valid_push.first])->AddHallucinatedConstraint(valid_push.second);
+		m_successful_pushes.pop_back();
 	}
 
 	// set/update/init necessary components
@@ -61,6 +73,7 @@ bool MAMONode::RunMAPF()
 			m_agents.at(i)->ResetObject(); // in preparation for push evaluation
 		}
 	}
+	m_new_constraints = false;
 
 	return result;
 }
@@ -433,6 +446,11 @@ const std::vector<std::pair<int, Trajectory> >& MAMONode::kmapf_soln() const
 bool MAMONode::has_traj() const
 {
 	return !m_robot_traj.points.empty();
+}
+
+bool MAMONode::has_mapf_soln() const
+{
+	return !m_mapf_solution.empty();
 }
 
 void MAMONode::addAgent(

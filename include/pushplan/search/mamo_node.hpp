@@ -75,6 +75,7 @@ public:
 	std::pair<int, int> object_centric_action() const;
 	const std::vector<std::pair<int, Trajectory> >& kmapf_soln() const;
 	bool has_traj() const;
+	bool has_mapf_soln() const;
 
 private:
 	comms::ObjectsPoses m_all_objects; // all object poses at node
@@ -91,6 +92,7 @@ private:
 	std::vector<std::pair<int, Trajectory> > m_mapf_solution; // mapf solution found at this node
 	std::list<std::pair<int, Coord> > m_successful_pushes;
 	std::vector<int> m_relevant_ids;
+	bool m_new_constraints = true;
 
 	Planner *m_planner;
 	std::shared_ptr<CBS> m_cbs;
