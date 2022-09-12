@@ -28,23 +28,13 @@ bool MAMOSearch::CreateRoot()
 	m_root_node->SetCBS(m_planner->GetCBS());
 	m_root_node->SetCC(m_planner->GetCC());
 	m_root_node->SetRobot(m_planner->GetRobot());
-
-	m_root_node->InitAgents(m_planner->GetAllAgents(), m_planner->GetStartObjects()); // inits required fields for hashing
 	m_root_node->SetEdgeTo(-1, -1);
 
-	// 1. run MAPF
-	double t2 = GetTime();
-	bool mapf_solved = m_root_node->RunMAPF();
-	m_stats["mapf_time"] += GetTime() - t2;
-	if (!mapf_solved) {
-		return false;
-	}
+	m_root_node->InitAgents(m_planner->GetAllAgents(), m_planner->GetStartObjects()); // inits required fields for hashing
 
 	m_root_id = m_hashtable.GetStateIDForceful(m_root_node);
 	m_root_search = getSearchState(m_root_id);
 	m_search_nodes.push_back(m_root_node);
-
-	m_root_node->SaveNode(m_root_id, 0);
 	m_stats["total_time"] += GetTime() - t1;
 
 	return true;
@@ -73,10 +63,10 @@ bool MAMOSearch::Solve()
 			SMPL_INFO("Final plan found!");
 
 			auto node = m_hashtable.GetState(next->state_id);
-			auto parent_id = next->bp == nullptr ? 0 : next->bp->state_id;
 			double t2 = GetTime();
 			node->RunMAPF();
 			m_stats["mapf_time"] += GetTime() - t2;
+			node->SaveNode(next->state_id, next->bp == nullptr ? 0 : next->bp->state_id);
 
 			m_solved_node = node;
 			m_solved_search = next;
@@ -113,30 +103,54 @@ void MAMOSearch::SaveStats()
 	{
 		STATS << "UID,"
 				<< "Solved?,SolveTime,MAPFTime,PushPlannerTime,"
-				<< "Expansions,OnlyDuplicate,NoDuplicate\n";
+				<< "Expansions,OnlyDuplicate,NoDuplicate,NoSuccs\n";
 	}
 
 	STATS << m_planner->GetSceneID() << ','
 			<< (int)m_solved << ','
 			<< m_stats["total_time"] << ',' << m_stats["mapf_time"] << ',' << m_stats["push_planner_time"] << ','
-			<< m_stats["expansions"] << ',' << m_stats["only_duplicate"] << ',' << m_stats["no_duplicate"] << '\n';
+			<< m_stats["expansions"] << ',' << m_stats["only_duplicate"] << ',' << m_stats["no_duplicate"] << ','
+			<< m_stats["no_succs"] << '\n';
 	STATS.close();
+}
+
+void MAMOSearch::Cleanup()
+{
+	for (auto& node: m_search_nodes)
+	{
+		if (node != nullptr)
+		{
+			delete node;
+			node = nullptr;
+		}
+	}
+
+	for (auto& state: m_search_states)
+	{
+		if (state != nullptr)
+		{
+			delete state;
+			state = nullptr;
+		}
+	}
+
+	m_hashtable.Reset();
 }
 
 bool MAMOSearch::expand(MAMOSearchState *state)
 {
-	SMPL_WARN("Expand %d, f-value = %u", state->state_id, state->f);
+	SMPL_WARN("Expand %d, priority = %u", state->state_id, state->priority);
 	auto node = m_hashtable.GetState(state->state_id);
 
-	// 2. generate appropriate successor states
 	std::vector<std::pair<int, int> > succ_object_centric_actions;
 	std::vector<comms::ObjectsPoses> succ_objects;
 	std::vector<trajectory_msgs::JointTrajectory> succ_trajs;
 	std::vector<std::tuple<State, State, int> > debug_pushes;
 	bool close;
-	double t = GetTime();
-	node->GetSuccs(&succ_object_centric_actions, &succ_objects, &succ_trajs, &debug_pushes, &close);
-	m_stats["push_planner_time"] += GetTime() - t;
+	double mapf_time = 0.0, push_planner_time = 0.0;
+	node->GetSuccs(&succ_object_centric_actions, &succ_objects, &succ_trajs, &debug_pushes, &close, &mapf_time, &push_planner_time);
+	m_stats["push_planner_time"] += push_planner_time;
+	m_stats["mapf_time"] += mapf_time;
 
 	assert(succ_object_centric_actions.size() == succ_objects.size());
 	assert(succ_objects.size() == succ_trajs.size());
@@ -146,11 +160,11 @@ bool MAMOSearch::expand(MAMOSearchState *state)
 	{
 		state->closed = true;
 		m_OPEN.erase(state->m_OPEN_h);
+		return true;
 	}
 
-	// 3. add successor states to search graph
+	node->SaveNode(state->state_id, state->bp == nullptr ? 0 : state->bp->state_id);
 	createSuccs(node, state, &succ_object_centric_actions, &succ_objects, &succ_trajs, &debug_pushes);
-
 	return true;
 }
 
@@ -208,20 +222,17 @@ void MAMOSearch::createSuccs(
 	std::vector<std::tuple<State, State, int> > *debug_pushes)
 {
 	size_t num_succs = succ_object_centric_actions->size();
+	if (num_succs == 0)
+	{
+		m_stats["no_succs"] += 1;
+		parent_search_state->closed = true;
+		m_OPEN.erase(parent_search_state->m_OPEN_h);
+		return;
+	}
 	bool duplicate_successor = succ_object_centric_actions->back() == std::make_pair(-1, -1);
 
-	// if (num_succs == 0)
-	// {
-	// 	m_stats["no_succs"] += 1;
-	// 	parent_search_state->closed = true;
-	// 	m_OPEN.erase(parent_search_state->m_OPEN_h);
-	// 	return;
-	// }
-	if (duplicate_successor && num_succs == 1)
-	{
+	if (duplicate_successor && num_succs == 1) {
 		m_stats["only_duplicate"] += 1;
-		// parent_search_state->closed = true;
-		// m_OPEN.erase(parent_search_state->m_OPEN_h);
 	}
 	if (!duplicate_successor) {
 		m_stats["no_duplicate"] += 1;
@@ -234,19 +245,9 @@ void MAMOSearch::createSuccs(
 		succ->SetCBS(m_planner->GetCBS());
 		succ->SetCC(m_planner->GetCC());
 		succ->SetRobot(m_planner->GetRobot());
-
-		succ->InitAgents(m_planner->GetAllAgents(), succ_objects->at(i)); // inits required fields for hashing
 		succ->SetEdgeTo(succ_object_centric_actions->at(i).first, succ_object_centric_actions->at(i).second);
 
-		// run MAPF
-		double t = GetTime();
-		bool mapf_solved = succ->RunMAPF();
-		m_stats["mapf_time"] += GetTime() - t;
-		if (!mapf_solved)
-		{
-			delete succ;
-			continue;
-		}
+		succ->InitAgents(m_planner->GetAllAgents(), succ_objects->at(i)); // inits required fields for hashing
 
 		// check if we have visited this mamo state before
 		unsigned int old_id, old_f;
