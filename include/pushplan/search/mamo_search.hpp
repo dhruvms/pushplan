@@ -67,7 +67,7 @@ private:
 	MAMOSearchState *m_root_search = nullptr, *m_solved_search = nullptr;
 	bool m_solved = false;
 	unsigned int m_root_id;
-	HashManager<HashObjectsMAPF, EqualsObjectsMAPF> m_hashtable;
+	HashManager<HashObjects, EqualsObjects> m_hashtable;
 	std::map<std::string, double> m_stats;
 
 	std::vector<trajectory_msgs::JointTrajectory> m_rearrangements;

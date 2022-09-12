@@ -211,8 +211,8 @@ unsigned int MAMONode::ComputeMAMOPriority()
 
 size_t MAMONode::GetObjectsHash() const
 {
-	if (m_hash_set_C) {
-		return m_hash_C;
+	if (m_hash_set_l1) {
+		return m_hash_l1;
 	}
 
 	size_t hash_val = 0;
@@ -240,47 +240,79 @@ size_t MAMONode::GetObjectsHash() const
 	return hash_val;
 }
 
-size_t MAMONode::GetObjectsMAPFHash() const
-{
-	if (m_hash_set_S) {
-		return m_hash_S;
-	}
-
-	size_t hash_val = GetObjectsHash();
-	for (const auto &movable : m_mapf_solution)
-	{
-		hash_val ^= std::hash<int>()(movable.first);
-		for (const auto &wp : movable.second) {
-			boost::hash_combine(hash_val, boost::hash_range(wp.coord.begin(), wp.coord.begin() + 2));
-		}
-	}
-
-	return hash_val;
-}
-
 void MAMONode::SetObjectsHash(const size_t& hash_val)
 {
-	if (!m_hash_set_C)
+	if (!m_hash_set_l1)
 	{
-		m_hash_C = hash_val;
-		m_hash_set_C = true;
+		m_hash_l1 = hash_val;
+		m_hash_set_l1 = true;
 	}
 	else {
-		assert(m_hash_C == hash_val);
+		assert(m_hash_l1 == hash_val);
 	}
 }
 
-void MAMONode::SetObjectsMAPFHash(const size_t& hash_val)
-{
-	if (!m_hash_set_S)
-	{
-		m_hash_S = hash_val;
-		m_hash_set_S = true;
-	}
-	else {
-		assert(m_hash_S == hash_val);
-	}
-}
+// size_t MAMONode::GetObjectsMAPFHash() const
+// {
+// 	if (m_hash_set_l2) {
+// 		return m_hash_l2;
+// 	}
+
+// 	size_t hash_val = GetObjectsHash();
+// 	for (const auto &movable : m_mapf_solution)
+// 	{
+// 		boost::hash_combine(hash_val, movable.first);
+// 		for (const auto &wp : movable.second) {
+// 			boost::hash_combine(hash_val, boost::hash_range(wp.coord.begin(), wp.coord.begin() + 2));
+// 		}
+// 	}
+
+// 	return hash_val;
+// }
+
+// void MAMONode::SetObjectsMAPFHash(const size_t& hash_val)
+// {
+// 	if (!m_hash_set_l2)
+// 	{
+// 		m_hash_l2 = hash_val;
+// 		m_hash_set_l2 = true;
+// 	}
+// 	else {
+// 		assert(m_hash_l2 == hash_val);
+// 	}
+// }
+
+// size_t MAMONode::GetObjectsConstraintsHash() const
+// {
+// 	if (m_hash_set_l2) {
+// 		return m_hash_l2;
+// 	}
+
+// 	size_t hash_val = GetObjectsHash();
+// 	for (const auto &movable : m_mapf_constraints)
+// 	{
+// 		boost::hash_combine(hash_val, movable.first); // constrained object
+// 		for (const auto &c : movable.second)
+// 		{
+// 			boost::hash_combine(hash_val, boost::hash_range(c.first.begin(), c.first.begin() + 2)); // constrained coord
+// 			boost::hash_combine(hash_val, c.second); // number of samples
+// 		}
+// 	}
+
+// 	return hash_val;
+// }
+
+// void MAMONode::SetObjectsConstraintsHash(const size_t& hash_val)
+// {
+// 	if (!m_hash_set_l2)
+// 	{
+// 		m_hash_l2 = hash_val;
+// 		m_hash_set_l2 = true;
+// 	}
+// 	else {
+// 		assert(m_hash_l2 == hash_val);
+// 	}
+// }
 
 void MAMONode::SetParent(MAMONode *parent)
 {
@@ -295,7 +327,6 @@ void MAMONode::SetRobotTrajectory(const trajectory_msgs::JointTrajectory& robot_
 void MAMONode::AddDebugPush(const std::tuple<State, State, int>& debug_push)
 {
 	m_debug_pushes.push_back(debug_push);
-	m_have_debug_pushes = true;
 }
 
 void MAMONode::SetPlanner(Planner *planner)
@@ -402,12 +433,12 @@ void MAMONode::addAgent(
 	m_object_states.emplace_back(o->desc.id, o->Symmetric(), pose);
 }
 
-void MAMONode::identifyRelevantMovables()
-{
-	// may potentially need to SetObjectPose for agents
-	m_relevant_ids.clear();
-	m_robot->IdentifyReachableMovables(m_agents, m_relevant_ids);
-}
+// void MAMONode::identifyRelevantMovables()
+// {
+// 	// may potentially need to SetObjectPose for agents
+// 	m_relevant_ids.clear();
+// 	m_robot->IdentifyReachableMovables(m_agents, m_relevant_ids);
+// }
 
 void MAMONode::computePriorityFactors(
 	unsigned int &percent_ngr, unsigned int &percent_objs, unsigned int &num_objs)

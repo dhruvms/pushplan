@@ -25,10 +25,10 @@ class MAMONode
 public:
 	MAMONode() :
 		m_parent(nullptr), m_oidx(-1), m_aidx(-1),
-		m_hash_set_C(false), m_hash_set_S(false) {} ;
+		m_hash_set_l1(false), m_hash_set_l2(false) {} ;
 	MAMONode(int oidx, int aidx) :
 		m_parent(nullptr), m_oidx(oidx), m_aidx(oidx),
-		m_hash_set_C(false), m_hash_set_S(false) {} ;
+		m_hash_set_l1(false), m_hash_set_l2(false) {} ;
 
 	void InitAgents(
 		const std::vector<std::shared_ptr<Agent> >& agents,
@@ -45,9 +45,11 @@ public:
 	void SaveNode(unsigned int my_id,	unsigned int parent_id);
 
 	size_t GetObjectsHash() const;
-	size_t GetObjectsMAPFHash() const;
 	void SetObjectsHash(const size_t& hash_val);
-	void SetObjectsMAPFHash(const size_t& hash_val);
+	// size_t GetObjectsMAPFHash() const;
+	// void SetObjectsMAPFHash(const size_t& hash_val);
+	// size_t GetObjectsConstraintsHash() const;
+	// void SetObjectsConstraintsHash(const size_t& hash_val);
 
 	void SetParent(MAMONode *parent);
 	void SetRobotTrajectory(const trajectory_msgs::JointTrajectory& robot_traj);
@@ -80,13 +82,11 @@ private:
 	int m_oidx, m_aidx; // object-to-move id, action-to-use id
 	trajectory_msgs::JointTrajectory m_robot_traj; // robot trajectory from parent to this node
 	std::vector<std::tuple<State, State, int> > m_debug_pushes; // push start and end for viz purposes
-	bool m_have_debug_pushes = false;
 
 	MAMONode *m_parent; // parent node in tree
 	std::vector<MAMONode*> m_children; // children nodes in tree
 
 	std::vector<std::pair<int, Trajectory> > m_mapf_solution; // mapf solution found at this node
-	bool m_fully_evaluated = false;
 	std::list<std::pair<int, Coord> > m_successful_pushes;
 	std::vector<int> m_relevant_ids;
 
@@ -95,13 +95,13 @@ private:
 	std::shared_ptr<CollisionChecker> m_cc;
 	std::shared_ptr<Robot> m_robot;
 
-	size_t m_hash_C, m_hash_S;
-	bool m_hash_set_C, m_hash_set_S;
+	size_t m_hash_l1, m_hash_l2;
+	bool m_hash_set_l1, m_hash_set_l2;
 
 	void addAgent(
 		const std::shared_ptr<Agent>& agent,
 		const size_t& pidx);
-	void identifyRelevantMovables();
+	// void identifyRelevantMovables();
 	void computePriorityFactors(
 		unsigned int &percent_ngr, unsigned int &percent_objs, unsigned int &num_objs);
 
@@ -124,17 +124,29 @@ struct EqualsObjects
 	}
 };
 
-struct EqualsObjectsMAPF
-{
-	bool operator()(MAMONode *a, MAMONode *b) const
-	{
-		EqualsObjects checkObjects;
-		if (!checkObjects(a, b)) {
-			return false;
-		}
-		return a->kmapf_soln() == b->kmapf_soln();
-	}
-};
+// struct EqualsObjectsMAPF
+// {
+// 	bool operator()(MAMONode *a, MAMONode *b) const
+// 	{
+// 		EqualsObjects checkObjects;
+// 		if (!checkObjects(a, b)) {
+// 			return false;
+// 		}
+// 		return a->kmapf_soln() == b->kmapf_soln();
+// 	}
+// };
+
+// struct EqualsObjectsConstraints
+// {
+// 	bool operator()(MAMONode *a, MAMONode *b) const
+// 	{
+// 		EqualsObjects checkObjects;
+// 		if (!checkObjects(a, b)) {
+// 			return false;
+// 		}
+// 		return a->kmapf_constraints() == b->kmapf_constraints();
+// 	}
+// };
 
 ///////////////////////////
 // Hash Function Structs //
@@ -149,14 +161,23 @@ struct HashObjects {
 	}
 };
 
-struct HashObjectsMAPF {
-	size_t operator()(MAMONode *hashable_node) const
-	{
-		auto hash_val = hashable_node->GetObjectsMAPFHash();
-		hashable_node->SetObjectsMAPFHash(hash_val);
-		return hash_val;
-	}
-};
+// struct HashObjectsMAPF {
+// 	size_t operator()(MAMONode *hashable_node) const
+// 	{
+// 		auto hash_val = hashable_node->GetObjectsMAPFHash();
+// 		hashable_node->SetObjectsMAPFHash(hash_val);
+// 		return hash_val;
+// 	}
+// };
+
+// struct HashObjectsConstraints {
+// 	size_t operator()(MAMONode *hashable_node) const
+// 	{
+// 		auto hash_val = hashable_node->GetObjectsConstraintsHash();
+// 		hashable_node->SetObjectsConstraintsHash(hash_val);
+// 		return hash_val;
+// 	}
+// };
 
 } // namespace clutter
 
