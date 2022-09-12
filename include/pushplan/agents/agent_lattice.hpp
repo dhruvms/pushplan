@@ -35,6 +35,8 @@ public:
 		const std::vector<std::pair<Coord, Coord> >* invalids_G,
 		const std::map<Coord, int, coord_compare>* invalids_L);
 	// const bgi::rtree<value, bgi::quadratic<8> >& GetInvalidPushes() const;
+	void AddHallucinatedConstraint(const Coord &c);
+	int InvalidPushCount(const Coord &c);
 
 	void GetSuccs(
 		int state_id,
@@ -97,7 +99,7 @@ private:
 
 	int conflictHeuristic(const LatticeState& state);
 	bool goalConflict(const LatticeState& state);
-	bool checkNNCost(const Coord& c, double& cost);
+	unsigned int checkNNCost(const Coord& c);
 
 	LatticeState* getHashEntry(int state_id) const;
 	int getHashEntry(

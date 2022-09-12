@@ -154,6 +154,16 @@ void Agent::ResetInvalidPushes(
 // 	return m_lattice->GetInvalidPushes();
 // }
 
+void Agent::AddHallucinatedConstraint(const Coord &c)
+{
+	m_lattice->AddHallucinatedConstraint(c);
+}
+
+int Agent::InvalidPushCount(const Coord &c)
+{
+	return m_lattice->InvalidPushCount(c);
+}
+
 bool Agent::SatisfyPath(
 	HighLevelNode* ct_node,
 	Trajectory** sol_path,

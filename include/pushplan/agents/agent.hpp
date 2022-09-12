@@ -58,6 +58,8 @@ public:
 		const std::vector<std::pair<Coord, Coord> >* invalids_G,
 		const std::map<Coord, int, coord_compare>* invalids_L);
 	// const bgi::rtree<value, bgi::quadratic<8> >& GetInvalidPushes() const;
+	void AddHallucinatedConstraint(const Coord &c);
+	int InvalidPushCount(const Coord &c);
 
 	bool SatisfyPath(
 		HighLevelNode* ct_node,

@@ -3,6 +3,8 @@
 #include <pushplan/utils/discretisation.hpp>
 #include <pushplan/utils/geometry.hpp>
 
+#include <boost/foreach.hpp>
+
 auto std::hash<clutter::LatticeState>::operator()(
 	const argument_type& s) const -> result_type
 {
@@ -112,6 +114,30 @@ void AgentLattice::ResetInvalidPushes(
 // 	return m_invalid_pushes;
 // }
 
+void AgentLattice::AddHallucinatedConstraint(const Coord &c)
+{
+	point p(c.at(0), c.at(1));
+	m_invalid_pushes.insert(std::make_pair(p, 1));
+}
+
+int AgentLattice::InvalidPushCount(const Coord &c)
+{
+	point p(c.at(0), c.at(1));
+	int count = m_invalid_pushes.count(p);
+
+	if (count == 0) {
+		return count;
+	}
+
+	std::vector<value> nns;
+	m_invalid_pushes.query(bgi::nearest(p, count), std::back_inserter(nns));
+	count = 0;
+	BOOST_FOREACH(const value &v, nns) {
+		count = std::max(count, v.second);
+	}
+	return count;
+}
+
 void AgentLattice::GetSuccs(
 	int state_id,
 	std::vector<int>* succ_ids,
@@ -167,16 +193,9 @@ bool AgentLattice::CheckGoalCost(
 	{
 		// need to compute pseudo-edge cost for valid goal state
 		LatticeState* s = getHashEntry(state_id);
-
-		double cost = 0.0;
-		if (checkNNCost(s->coord, cost))
-		{
-			succ_ids->push_back(m_goal_ids.back()); // pseudogoal
-			costs->push_back(cost);
-		}
-		else {
-			return false;
-		}
+		unsigned int cost = checkNNCost(s->coord);
+		succ_ids->push_back(m_goal_ids.back()); // pseudogoal
+		costs->push_back(cost);
 	}
 
 	return true;
@@ -192,14 +211,6 @@ bool AgentLattice::IsGoal(int state_id)
 	assert(state_id >= 0);
 	LatticeState* s = getHashEntry(state_id);
 	assert(s);
-
-	// if (!m_invalid_pushes.empty())
-	// {
-	// 	double cost = 0.0;
-	// 	if (!checkNNCost(s->coord, cost)) {
-	// 		return false;
-	// 	}
-	// }
 
 	bool constrained = false, conflict = false, ngr = false;
 	ngr = m_agent->OutsideNGR(*s);
@@ -601,34 +612,32 @@ bool AgentLattice::goalConflict(const LatticeState& state)
 	return false;
 }
 
-bool AgentLattice::checkNNCost(const Coord& c, double& cost)
+unsigned int AgentLattice::checkNNCost(const Coord& c)
 {
 	std::vector<value> nns;
 	point query(c.at(0), c.at(1));
-	bg::model::box<point> b(point(c.at(0) - 2, c.at(1) - 2), point(c.at(0) + 2, c.at(1) + 2));
+	bg::model::box<point> b(point(c.at(0) - 3, c.at(1) - 3), point(c.at(0) + 3, c.at(1) + 3));
 	m_invalid_pushes.query(bgi::within(b), std::back_inserter(nns));
 
-	if (nns.empty())
-	{
-		// why did we end here?
-		SMPL_WARN("Invalid pushes rtree is not empty, but no NNs found.");
-		return false;
+	if (nns.empty()) {
+		return 1;
 	}
 
-	cost = 0.0;
-	for (const auto &nn : nns)
+	double cost = 0.0;
+	BOOST_FOREACH(const value &v, nns)
 	{
-		double d = bg::distance(nn.first, query);
+		double d = bg::distance(v.first, query);
 		if (d < 1) {
-			return false;
+			cost += SAMPLES * 2; // max penalty if query is known invalid goal
 		}
-
-		cost += nn.second/double(d);
+		else {
+			cost += v.second/std::ceil(d);
+		}
 	}
 	// // exponential between (1, 2) and (5, 10)
 	// double cost = 25.831 * std::exp(-0.256 * dist);
 	// cost = std::max(std::min(20.0, cost), 2.0);
-	return true;
+	return std::ceil(cost);
 }
 
 // Return a pointer to the data for the input the state id
