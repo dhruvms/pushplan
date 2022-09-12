@@ -175,20 +175,23 @@ bool MAMOSearch::done(MAMOSearchState *state)
 		return false;
 	}
 
-	bool mapf_done = true;
-	const auto& mapf_soln = node->kmapf_soln();
-	for (size_t i = 0; i < mapf_soln.size(); ++i)
+	if (node->has_mapf_soln())
 	{
-		const auto& moved = mapf_soln.at(i);
-		if (moved.second.size() == 1 || moved.second.front().coord == moved.second.back().coord) {
-			continue;
+		bool mapf_done = true;
+		const auto& mapf_soln = node->kmapf_soln();
+		for (size_t i = 0; i < mapf_soln.size(); ++i)
+		{
+			const auto& moved = mapf_soln.at(i);
+			if (moved.second.size() == 1 || moved.second.front().coord == moved.second.back().coord) {
+				continue;
+			}
+			mapf_done = false;
+			break;
 		}
-		mapf_done = false;
-		break;
-	}
 
-	if (mapf_done) {
-		return true;
+		if (mapf_done) {
+			return true;
+		}
 	}
 
 	auto start_state = node->GetCurrentStartState();
