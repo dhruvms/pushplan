@@ -3,6 +3,15 @@
 namespace clutter
 {
 
+// bool operator==(
+// 	const std::map<Coord, int, coord_compare> &lhs,
+// 	const std::map<Coord, int, coord_compare> &rhs)
+// {
+// 	return lhs.size() == rhs.size() &&
+// 			std::equal(lhs.begin(), lhs.end(), rhs.begin(),
+// 					  [] (const auto &a, const auto &b) { return a.first == b.first; });
+// }
+
 bool operator==(const LatticeState& a, const LatticeState& b)
 {
 	return (

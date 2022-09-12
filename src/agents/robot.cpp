@@ -1062,11 +1062,15 @@ bool Robot::PlanRetrieval(const std::vector<Object*>& movable_obstacles, bool fi
 	// Plan approach //
 	///////////////////
 
+	// ProcessObstacles({ m_ooi });
 	std::vector<std::vector<double> > dummy;
 	moveit_msgs::MotionPlanResponse res_a;
-	if (!planApproach(dummy, res_a, movable_obstacles, finalise, start_state)) {
+	if (!planApproach(dummy, res_a, movable_obstacles, finalise, start_state))
+	{
+		// ProcessObstacles({ m_ooi }, true);
 		return false;
 	}
+	// ProcessObstacles({ m_ooi }, true);
 
 	m_traj = res_a.trajectory.joint_trajectory;
 
@@ -1642,7 +1646,7 @@ bool Robot::PlanPush(
 
 	if (push_in_db)
 	{
-		ROS_INFO("Push found in DB in %f seconds", GetTime() - start_time);
+		// ROS_INFO("Push found in DB in %f seconds", GetTime() - start_time);
 		++m_stats["push_found_in_db"];
 
 		push_start_pose = m_rm->computeFK(new_action.points.front().positions);
@@ -1692,7 +1696,7 @@ bool Robot::PlanPush(
 			m_traj = push_traj;
 			++m_stats["push_db_successes"];
 			m_stats["push_db_total_time"] += GetTime() - start_time;
-			ROS_INFO("Push evaluation sans simulation using DB took %f seconds", GetTime() - start_time);
+			// ROS_INFO("Push evaluation sans simulation using DB took %f seconds", GetTime() - start_time);
 			return true;
 		}
 		++m_stats["push_db_failures"];
@@ -1864,7 +1868,7 @@ bool Robot::PlanPush(
 
 	++m_stats["push_sim_successes"];
 	m_traj = m_push_trajs.at(pidx);
-	SMPL_INFO("Computed and simulated new push in %f seconds!", GetTime() - start_time);
+	// SMPL_INFO("Computed and simulated new push in %f seconds!", GetTime() - start_time);
 
 	addPushToDB(
 		object->GetObject(), obj_traj->back().coord, aidx,

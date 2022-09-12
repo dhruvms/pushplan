@@ -34,7 +34,7 @@ robot:
     qz: 0.0
     qw: 1.0
   pushing:
-    samples: 10
+    samples: 5
     plan_time: 0.2
     control:
       dt: 0.01
@@ -49,7 +49,7 @@ robot:
   semi_minor: 0.05
   speed: 0.1
   interpolate: false
-  runs: 1
+  runs: 5
   study: 1
   yoshikawa_tries: 10
   push_ik_yaws: 50

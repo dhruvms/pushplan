@@ -522,6 +522,10 @@ void MAMONode::SaveNode(unsigned int my_id,	unsigned int parent_id)
 		filename = filename.substr(0, found + 1) + "../../dat/txt/";
 
 		std::stringstream ss;
+		auto t = std::time(nullptr);
+		auto tm = *std::localtime(&t);
+		ss << std::put_time(&tm, "%d-%m-%Y-%H-%M-%S");
+		ss << "_";
 		// ss << std::setw(4) << std::setfill('0') << node->m_expand;
 		// ss << "_";
 		// ss << std::setw(4) << std::setfill('0') << node->m_depth;
@@ -535,9 +539,6 @@ void MAMONode::SaveNode(unsigned int my_id,	unsigned int parent_id)
 		ss << std::setw(6) << std::setfill('0') << parent_id;
 		ss << "_";
 
-		auto t = std::time(nullptr);
-		auto tm = *std::localtime(&t);
-		ss << std::put_time(&tm, "%d-%m-%Y-%H-%M-%S");
 
 		std::string s = ss.str();
 

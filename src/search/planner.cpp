@@ -215,14 +215,16 @@ bool Planner::SetupNGR()
 
 bool Planner::Plan(bool& done)
 {
+	done = false;
 	bool result = m_mamo_search->Solve();
 	m_mamo_search->SaveStats();
 	if (result)
 	{
 		m_mamo_search->GetRearrangements(m_rearrangements, m_grasp_at);
 		done = true;
-		return true;
 	}
+
+	return done;
 }
 
 bool Planner::FinalisePlan(
@@ -387,11 +389,11 @@ std::uint32_t Planner::RunSolution()
 
 std::uint32_t Planner::RunSim(bool save)
 {
-	m_timer = GetTime();
-	if (!runSim()) {
-		SMPL_ERROR("Simulation failed!");
-	}
-	m_stats["sim_time"] += GetTime() - m_timer;
+	// m_timer = GetTime();
+	// if (!runSim()) {
+	// 	SMPL_ERROR("Simulation failed!");
+	// }
+	// m_stats["sim_time"] += GetTime() - m_timer;
 
 	if (save) {
 		writeState("SOLUTION");
@@ -1204,7 +1206,11 @@ void Planner::writeState(const std::string& prefix)
 	filename = filename.substr(0, found + 1) + "../../dat/txt/";
 
 	std::stringstream ss;
-	ss << prefix << "_" << m_scene_id;
+	ss << prefix << "_" << m_scene_id << "_";
+	auto t = std::time(nullptr);
+	auto tm = *std::localtime(&t);
+	ss << std::put_time(&tm, "%d-%m-%Y-%H-%M-%S");
+	ss << "_";
 	std::string s = ss.str();
 
 	filename += s;

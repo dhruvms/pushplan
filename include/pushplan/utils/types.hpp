@@ -49,6 +49,10 @@ struct coord_hash
 	}
 };
 
+// bool operator==(
+// 	const std::map<Coord, int, coord_compare> &lhs,
+// 	const std::map<Coord, int, coord_compare> &rhs);
+
 struct LatticeState
 {
 	Coord coord;

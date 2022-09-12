@@ -138,9 +138,9 @@ for (int i = 0; i < runs; ++i)
 				if (p.Plan(done))
 				{
 					p.RunSim(SAVE);
-					if (SAVE) {
-						p.SaveData();
-					}
+					// if (SAVE) {
+					// 	p.SaveData();
+					// }
 				}
 			}
 
