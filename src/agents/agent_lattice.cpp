@@ -104,8 +104,8 @@ void AgentLattice::ResetInvalidPushes(
 			bg::set<0>(p, it->first.at(0));
 			bg::set<1>(p, it->first.at(1));
 			m_invalid_pushes.insert(std::make_pair(p, it->second));
+			// m_invalid_pushes.insert(it->first);
 		}
-		// m_invalid_pushes.insert(invalids_L->begin(), invalids_L->end());
 	}
 }
 
@@ -118,6 +118,7 @@ void AgentLattice::AddHallucinatedConstraint(const Coord &c)
 {
 	point p(c.at(0), c.at(1));
 	m_invalid_pushes.insert(std::make_pair(p, 1));
+	// m_invalid_pushes.insert(c);
 }
 
 int AgentLattice::InvalidPushCount(const Coord &c)
@@ -136,6 +137,13 @@ int AgentLattice::InvalidPushCount(const Coord &c)
 		count = std::max(count, v.second);
 	}
 	return count;
+	// const auto it = m_invalid_pushes.find(c);
+	// if (it != m_invalid_pushes.end()) {
+	// 	return 1;
+	// }
+	// else {
+	// 	return 0;
+	// }
 }
 
 void AgentLattice::GetSuccs(
@@ -211,6 +219,13 @@ bool AgentLattice::IsGoal(int state_id)
 	assert(state_id >= 0);
 	LatticeState* s = getHashEntry(state_id);
 	assert(s);
+
+	// if (!m_invalid_pushes.empty())
+	// {
+	// 	if (std::find(m_invalid_pushes.begin(), m_invalid_pushes.end(), s->coord) != m_invalid_pushes.end()) {
+	// 		return false;
+	// 	}
+	// }
 
 	bool constrained = false, conflict = false, ngr = false;
 	ngr = m_agent->OutsideNGR(*s);
