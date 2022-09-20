@@ -1,14 +1,14 @@
 initial_configuration:
   joint_state:
     # Above table:
-    - { name: torso_lift_joint,       position: 0.1 }
-    - { name: r_shoulder_pan_joint,   position: -1.68651 }
-    - { name: r_shoulder_lift_joint,  position: -0.184315 }
-    - { name: r_upper_arm_roll_joint, position: -1.67611 }
-    - { name: r_elbow_flex_joint,     position: -1.66215 } # limit: -0.2 }
-    - { name: r_forearm_roll_joint,   position: 0.285096 }
-    - { name: r_wrist_flex_joint,     position: -0.658798 } # limit: -0.2 }
-    - { name: r_wrist_roll_joint,     position: 1.41563 }
+    - { name: torso_lift_joint,       position: 0.3 }
+    - { name: r_shoulder_pan_joint,   position: -0.18667 }
+    - { name: r_shoulder_lift_joint,  position: 0.162202 }
+    - { name: r_upper_arm_roll_joint, position: 0.513357 }
+    - { name: r_elbow_flex_joint,     position: -2.05254 } # limit: -0.2 }
+    - { name: r_forearm_roll_joint,   position: -2.60046 }
+    - { name: r_wrist_flex_joint,     position: -2 } # limit: -0.2 }
+    - { name: r_wrist_roll_joint,     position: 2.80144 }
 
 goal:
   x: 0.7
@@ -23,6 +23,7 @@ goal:
   save: true
   cc_2d: true
   cc_3d: false
+  uid: 100900
 
 robot:
   start:
@@ -49,11 +50,11 @@ robot:
   semi_minor: 0.05
   speed: 0.1
   interpolate: false
-  runs: 3
+  runs: 1
   study: 1
   yoshikawa_tries: 10
   push_ik_yaws: 50
-  replay: false
+  replay: true
 
 mapf:
   res: 0.01

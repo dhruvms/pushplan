@@ -95,7 +95,7 @@ class BulletSim:
 			if not self.fridge:
 				self.sim_datas[i]['table_id'] = [1]
 			else:
-				self.sim_datas[i]['table_id'] = [1, 2, 3, 4, 5]
+				self.sim_datas[i]['table_id'] = [1, 2, 3, 4, 5, 6]
 			self.sim_datas[i]['robot_id'] = -1
 			self.sim_datas[i]['objs'] = {}
 			self.sim_datas[i]['num_objs'] = 0

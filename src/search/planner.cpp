@@ -128,6 +128,9 @@ bool Planner::Init(const std::string& scene_file, int scene_id, bool ycb)
 	m_C = 25;
 	m_ph.getParam("robot/pushing/input", m_push_input);
 
+	m_controller = std::make_unique<RobotController>();
+	m_controller->InitControllers();
+
 	return true;
 }
 
@@ -368,7 +371,11 @@ std::uint32_t Planner::RunSim(bool save)
 std::uint32_t Planner::RunSolution()
 {
 	read_solution();
-	return RunSim(false);
+	// return RunSim(false);
+	// RunSim(false);
+	ROS_ERROR("SHOULD I EXECUTE???");
+	getchar();
+	return Execute();
 }
 
 bool Planner::TryExtract()
@@ -1385,16 +1392,29 @@ void Planner::writeState(const std::string& prefix, std::set<Coord, coord_compar
 	{
 		DATA << 'S' << '\n';
 		DATA << traj.points.size() << '\n';
-		for (const auto& p: traj.points)
+		DATA 	<< traj.points[0].positions[0] << ','
+				<< traj.points[0].positions[1] << ','
+				<< traj.points[0].positions[2] << ','
+				<< traj.points[0].positions[3] << ','
+				<< traj.points[0].positions[4] << ','
+				<< traj.points[0].positions[5] << ','
+				<< traj.points[0].positions[6] << ','
+				<< traj.points[0].time_from_start.toSec() << '\n';
+		double t_prev = traj.points[0].time_from_start.toSec();
+		for (size_t i = 1; i < traj.points.size(); ++i)
 		{
-			DATA 	<< p.positions[0] << ','
-					<< p.positions[1] << ','
-					<< p.positions[2] << ','
-					<< p.positions[3] << ','
-					<< p.positions[4] << ','
-					<< p.positions[5] << ','
-					<< p.positions[6] << ','
-					<< p.time_from_start.toSec() << '\n';
+			if ((i < traj.points.size() -1) && std::abs(traj.points[i].time_from_start.toSec() - t_prev) < 0.25) {
+				continue;
+			}
+			DATA 	<< traj.points[i].positions[0] << ','
+					<< traj.points[i].positions[1] << ','
+					<< traj.points[i].positions[2] << ','
+					<< traj.points[i].positions[3] << ','
+					<< traj.points[i].positions[4] << ','
+					<< traj.points[i].positions[5] << ','
+					<< traj.points[i].positions[6] << ','
+					<< traj.points[i].time_from_start.toSec() << '\n';
+			t_prev = traj.points[i].time_from_start.toSec();
 		}
 	}
 
@@ -1413,6 +1433,113 @@ void Planner::writeState(const std::string& prefix, std::set<Coord, coord_compar
 	}
 
 	DATA.close();
+}
+
+bool Planner::Execute()
+{
+	ROS_WARN("moveToStartState");
+	moveToStartState();
+
+	for (const auto& traj: m_rearrangements) {
+		ROS_WARN("executeTraj PUSH");
+		executeTraj(traj, false);
+	}
+
+	ROS_WARN("executeTraj GRASP + EXTRACT");
+	executeTraj(m_exec);
+}
+
+bool Planner::executeTraj(const trajectory_msgs::JointTrajectory& traj, bool grasping)
+{
+	ROS_WARN("CloseGripper");
+	m_controller->CloseGripper();
+
+	trajectory_msgs::JointTrajectory traj_piece;
+	traj_piece.header = traj.header;
+	traj_piece.joint_names = traj.joint_names;
+
+	traj_piece.points.clear();
+	if (!grasping) {
+		traj_piece.points.insert(traj_piece.points.begin(), traj.points.begin(), traj.points.end());
+	}
+	else {
+		traj_piece.points.insert(traj_piece.points.begin(), traj.points.begin(), traj.points.begin() + m_grasp_at);
+	}
+
+	ROS_WARN("ExecArmTrajectory");
+	m_controller->ExecArmTrajectory(m_controller->PR2TrajFromMsg(traj_piece));
+	while (!m_controller->GetArmState().isDone() && ros::ok())
+	{
+		usleep(50000);
+	}
+
+	if (!grasping) {
+		return true;
+	}
+
+	ROS_WARN("OpenGripper");
+	if (!m_controller->OpenGripper()) {
+		return false;
+	}
+
+	traj_piece.points.clear();
+	traj_piece.points.insert(traj_piece.points.begin(), traj.points.begin() + m_grasp_at, traj.points.begin() + m_grasp_at + 1);
+	// auto skip = traj_piece.points.begin()->time_from_start;
+	// traj_piece.points.begin()->time_from_start -= skip;
+	// for (auto itr = traj_piece.points.begin(); itr != traj_piece.points.end(); ++itr) {
+	// 	itr->time_from_start += ros::Duration(2);
+	// }
+	ROS_WARN("ExecArmTrajectory");
+	m_controller->ExecArmTrajectory(m_controller->PR2TrajFromMsg(traj_piece));
+	while (!m_controller->GetArmState().isDone() && ros::ok())
+	{
+		usleep(50000);
+	}
+
+	ROS_WARN("CloseGripper");
+	m_controller->CloseGripper();
+
+	traj_piece.points.clear();
+	traj_piece.points.insert(traj_piece.points.begin(), traj.points.begin() + m_grasp_at + 1, traj.points.end());
+	// skip = traj_piece.points.begin()->time_from_start;
+	// traj_piece.points.begin()->time_from_start -= skip;
+	// for (auto itr = traj_piece.points.begin(); itr != traj_piece.points.end(); ++itr) {
+	// 	itr->time_from_start += ros::Duration(2);
+	// }
+	ROS_WARN("ExecArmTrajectory");
+	m_controller->ExecArmTrajectory(m_controller->PR2TrajFromMsg(traj_piece));
+	while (!m_controller->GetArmState().isDone() && ros::ok())
+	{
+		usleep(50000);
+	}
+
+	return true;
+}
+
+void Planner::moveToStartState()
+{
+	auto start_state = m_robot->GetStartState();
+	auto it = std::find(start_state->joint_state.name.begin(), start_state->joint_state.name.end(), "torso_lift_joint");
+	// double torso_start = start_state->joint_state.position.at(it - start_state->joint_state.name.begin());
+	// ROS_WARN("RaiseTorso");
+	// m_controller->RaiseTorso(torso_start);
+	// while (!m_controller->GetTorsoState().isDone() && ros::ok()) {
+	// 	usleep(50000);
+	// }
+	// ROS_WARN("RaiseTorso DONE");
+
+	// m_controller->MoveLeftArmToRest();
+	// while (!m_controller->GetArmState(true).isDone() && ros::ok()) {
+	// 	usleep(50000);
+	// }
+
+	ROS_WARN("MoveToStartState");
+	m_controller->MoveToStartState(start_state->joint_state);
+	ROS_WARN("sent command to MoveToStartState");
+	while (!m_controller->GetArmState().isDone() && ros::ok()) {
+		usleep(50000);
+	}
+	ROS_WARN("MoveToStartState DONE");
 }
 
 } // namespace clutter

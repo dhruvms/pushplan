@@ -5,6 +5,7 @@
 #include <pushplan/agents/robot.hpp>
 #include <pushplan/utils/bullet_sim.hpp>
 #include <pushplan/utils/collision_checker.hpp>
+#include <pushplan/utils/controller.hpp>
 #include <pushplan/utils/types.hpp>
 #include <comms/ObjectsPoses.h>
 
@@ -46,6 +47,7 @@ public:
 	void AnimateSolution();
 	bool RunRRT();
 	void RunStudy(int study);
+	bool Execute();
 
 	Agent* GetAgent(const int& id) {
 		assert(id > 0); // 0 is robot
@@ -124,6 +126,7 @@ private:
 	std::shared_ptr<BulletSim> m_sim;
 	std::shared_ptr<CBS> m_cbs;
 	std::shared_ptr<sampling::SamplingPlanner> m_sampling_planner;
+	std::unique_ptr<RobotController> m_controller;
 	bool m_replan, m_plan_success, m_sim_success, m_push_input;
 
 	int m_num_objs, m_scene_id;
@@ -181,6 +184,9 @@ private:
 	std::vector<size_t> m_priorities;
 	void prioritise();
 	void writeState(const std::string& prefix, std::set<Coord, coord_compare> ngr={});
+
+	bool executeTraj(const trajectory_msgs::JointTrajectory& traj, bool grasping=true);
+	void moveToStartState();
 };
 
 } // namespace clutter

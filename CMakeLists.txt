@@ -2,11 +2,11 @@ cmake_minimum_required(VERSION 3.5.1)
 project(pushplan)
 
 if(NOT CMAKE_BUILD_TYPE)
-	# set(CMAKE_BUILD_TYPE Debug)
-	set(CMAKE_BUILD_TYPE Release)
+	set(CMAKE_BUILD_TYPE Debug)
+	# set(CMAKE_BUILD_TYPE Release)
 endif()
-# set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -std=c++14 -fmax-errors=5")
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14 -fmax-errors=5")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -std=c++14 -fmax-errors=5")
+# set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14 -fmax-errors=5")
 
 
 find_package(Boost REQUIRED)
@@ -58,6 +58,7 @@ add_library(
 	src/sampling/tcrrt.cpp
 	src/sampling/ompl.cpp
 	src/utils/collision_checker.cpp
+	src/utils/controller.cpp
 	src/agents/object.cpp
 	src/agents/agent_lattice.cpp
 	src/agents/agent.cpp
@@ -80,3 +81,9 @@ target_link_libraries(study ${catkin_LIBRARIES} smpl::smpl PUSHPLAN)
 add_executable(run_ompl test/run_ompl.cpp)
 target_include_directories(run_ompl SYSTEM PRIVATE ${OMPL_INCLUDE_DIRS})
 target_link_libraries(run_ompl ${catkin_LIBRARIES} ${OMPL_LIBRARIES} smpl::smpl PUSHPLAN)
+
+add_executable(dummy test/dummy.cpp)
+target_link_libraries(dummy ${catkin_LIBRARIES} smpl::smpl PUSHPLAN)
+
+add_executable(raise_torso test/raise_torso.cpp)
+target_link_libraries(raise_torso ${catkin_LIBRARIES} smpl::smpl PUSHPLAN)

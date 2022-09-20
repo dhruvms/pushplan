@@ -7,7 +7,7 @@
     <param name="robot_description" command="$(find xacro)/xacro.py '$(find pushplan)/config/urdf/pr2_description/robots/pr2.urdf.xacro'"/>
 
     <param name="fridge" type="bool" value="true"/>
-    <node pkg="pushplan" type="coop_plan" name="coop_plan" output="screen" respawn="false">
+    <node pkg="pushplan" type="raise_torso" name="raise_torso" output="screen" respawn="false">
         <!-- launch-prefix="gdb - -args" -->
         <param name="planning_frame" value="odom_combined"/>
 
@@ -54,9 +54,9 @@
         <param name="allowed_planning_time" value="2.0"/>
     </node>
 
-    <node name="joint_state_publisher" pkg="joint_state_publisher" type="joint_state_publisher"/>
+    <!-- <node name="joint_state_publisher" pkg="joint_state_publisher" type="joint_state_publisher"/>
     <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher"/>
-    <node name="static_transform_publisher" pkg="tf" type="static_transform_publisher" args="0 0 0 0 0 0 1 odom_combined base_footprint 100"/>
+    <node name="static_transform_publisher" pkg="tf" type="static_transform_publisher" args="0 0 0 0 0 0 1 odom_combined base_footprint 100"/> -->
 
     <!-- <node name="rviz" pkg="rviz" type="rviz" args="-d $(find pushplan)/config/smpl.rviz" /> -->
 

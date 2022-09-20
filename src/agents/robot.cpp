@@ -1815,7 +1815,7 @@ bool Robot::PlanPush(
 
 	if (pidx == -1)
 	{
-		// SMPL_WARN("Failed to find a good push for the object! Simulating took %f seconds.", time_spent);
+		SMPL_WARN("Failed to find a good push for the object! Simulating took %f seconds.", GetTime() - start_time);
 		return false;
 	}
 
@@ -1829,7 +1829,7 @@ bool Robot::PlanPush(
 		-99.0,
 		-99.0,
 		6.0});
-	// SMPL_INFO("Found good push traj of length %d!", m_traj.points.size());
+	SMPL_INFO("Found good push traj of length %d!", m_traj.points.size());
 	return true;
 }
 

@@ -1095,20 +1095,21 @@ std::string BulletSim::getPartialFilename(int id)
 	auto found = filename.find_last_of("/\\");
 	filename = filename.substr(0, found + 1) + "../../../../../simplan/src/simplan/data/clutter_scenes/";
 
-	if (id < 100000) {
-		level = "0";
-		// ROS_WARN("Planning for a scene with no movable objects!");
-	}
-	else if (id < 200000) {
-		level = "5";
-	}
-	else if (id < 300000) {
-		level = "10";
-	}
-	else {
-		level = "15";
-	}
-	filename += level + "/plan_";
+	// if (id < 100000) {
+	// 	level = "0";
+	// 	// ROS_WARN("Planning for a scene with no movable objects!");
+	// }
+	// else if (id < 200000) {
+	// 	level = "5";
+	// }
+	// else if (id < 300000) {
+	// 	level = "10";
+	// }
+	// else {
+	// 	level = "15";
+	// }
+	// filename += level + "/plan_";
+	filename += "dummy/plan_";
 
 	std::stringstream ss;
 	ss << std::setw(6) << std::setfill('0') << id;
