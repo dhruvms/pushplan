@@ -87,41 +87,33 @@ void RobotController::MoveToStartState(const sensor_msgs::JointState& start_stat
 	goal.trajectory.joint_names.clear();
 
 	int joints = 0;
-	ROS_WARN("Read start state joint name!");
 	for (size_t i = 0; i < start_state.name.size(); ++i)
 	{
-		if (start_state.name.at(i).compare("torso_lift_joint") == 0)
+		if (start_state.name.at(i).compare("torso_lift_joint") == 0) {
 			continue;
-
-		ROS_WARN("joint name %d = %s", i, start_state.name.at(i).c_str());
+		}
 
 		goal.trajectory.joint_names.push_back(start_state.name.at(i));
 		joints++;
 	}
 
-	ROS_WARN("Read start state joint positions!");
 	goal.trajectory.points.resize(1);
-	for (int i = 0; i < 1; ++i)
+	goal.trajectory.points[0].positions.resize(joints);
+	goal.trajectory.points[0].velocities.resize(joints);
+
+	int c = 0;
+	for (size_t j = 0; j < start_state.name.size(); ++j)
 	{
-		goal.trajectory.points[i].positions.resize(joints);
-		goal.trajectory.points[i].velocities.resize(joints);
-
-		int c = 0;
-		for (size_t j = 0; j < start_state.name.size(); ++j)
-		{
-			if (start_state.name.at(j).compare("torso_lift_joint") == 0) {
-				c++;
-				continue;
-			}
-
-			ROS_WARN("joint position %d (wp %d) = %f", j, i, start_state.position.at(j));
-			goal.trajectory.points[i].positions[j-c] = start_state.position.at(j)/(2.0 - i);
-			goal.trajectory.points[i].velocities[j-c] = 0.0;
+		if (start_state.name.at(j).compare("torso_lift_joint") == 0) {
+			c++;
+			continue;
 		}
 
-		goal.trajectory.points[i].time_from_start = ros::Duration(1.0) * (1.0 + (4.0 * i));
+		goal.trajectory.points[0].positions[j-c] = start_state.position.at(j);
+		goal.trajectory.points[0].velocities[j-c] = 0.0;
 	}
 
+	goal.trajectory.points[0].time_from_start = ros::Duration(1.0);
 	goal.trajectory.header.stamp = ros::Time::now() + ros::Duration(1.0);
 	m_r_arm_controller->sendGoal(goal);
 }
