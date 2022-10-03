@@ -26,6 +26,9 @@ find_package(catkin REQUIRED COMPONENTS
 	sensor_msgs
 	trajectory_msgs
 	comms
+	moveit_core
+	moveit_ros_planning_interface
+	pr2_moveit_config
 )
 find_package(smpl REQUIRED)
 find_package(comms REQUIRED)

@@ -22,6 +22,9 @@
 #include <ros/ros.h>
 #include <boost/optional.hpp>
 
+#include <moveit/robot_model_loader/robot_model_loader.h>
+#include <moveit/trajectory_processing/iterative_time_parameterization.h>
+
 #include <string>
 #include <memory>
 #include <random>
@@ -91,7 +94,8 @@ public:
 		bool input=false);
 	trajectory_msgs::JointTrajectory GetLastPlanProfiled()
 	{
-		m_planner->ProfilePath(m_rm.get(), m_traj);
+		// m_planner->ProfilePath(m_rm.get(), m_traj);
+		profileTrajectoryMoveIt(m_traj);
 		return m_traj;
 	};
 	trajectory_msgs::JointTrajectory GetLastPlan() {
@@ -367,6 +371,12 @@ private:
 
 	std::vector<std::vector<double> > m_push_debug_data;
 	void createVirtualTable();
+
+	// for moveit profiling
+	moveit::core::RobotModelPtr m_moveit_robot_model;
+	moveit::core::RobotStatePtr m_moveit_robot_state;
+	robot_trajectory::RobotTrajectoryPtr m_moveit_trajectory_ptr;
+	void profileTrajectoryMoveIt(trajectory_msgs::JointTrajectory& traj);
 };
 
 } // namespace clutter

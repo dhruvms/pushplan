@@ -1125,7 +1125,7 @@ bool Robot::PlanRetrieval(const std::vector<Object*>& movable_obstacles, bool fi
 
 	m_grasp_at = grasp_at;
 	auto extract_start_time = m_traj.points.back().time_from_start;
-	for (size_t i = 0; i < res_r.trajectory.joint_trajectory.points.size(); ++i)
+	for (size_t i = 1; i < res_r.trajectory.joint_trajectory.points.size(); ++i)
 	{
 		auto& wp = res_r.trajectory.joint_trajectory.points[i];
 		wp.time_from_start += extract_start_time;
@@ -1581,6 +1581,23 @@ bool Robot::computePushAction(
 	return false;
 }
 
+void Robot::profileTrajectoryMoveIt(trajectory_msgs::JointTrajectory& traj)
+{
+	robot_model_loader::RobotModelLoader robot_model_loader("/robot_description");
+	m_moveit_robot_model = robot_model_loader.getModel();
+	m_moveit_robot_state.reset(new moveit::core::RobotState(m_moveit_robot_model));
+	m_moveit_trajectory_ptr.reset(new robot_trajectory::RobotTrajectory(m_moveit_robot_model, "right_arm"));
+
+	// Moveit Profiling
+	m_moveit_trajectory_ptr->setRobotTrajectoryMsg(*m_moveit_robot_state, traj);
+
+	trajectory_processing::IterativeParabolicTimeParameterization iptp;
+	bool success = iptp.computeTimeStamps(*m_moveit_trajectory_ptr, 0.05, 1.0);
+	moveit_msgs::RobotTrajectory trajectory_msg;
+	m_moveit_trajectory_ptr->getRobotTrajectoryMsg(trajectory_msg);
+	traj = trajectory_msg.joint_trajectory;
+}
+
 bool Robot::PlanPush(
 	const std::vector<double>& start_state,
 	Agent* object, const std::vector<double>& push,
@@ -1670,6 +1687,8 @@ bool Robot::PlanPush(
 			continue;
 		}
 		++m_stats["push_samples_found"];
+		// m_planner->ProfilePath(m_rm.get(), push_traj);
+		profileTrajectoryMoveIt(push_traj);
 
 		if (added)
 		{
@@ -1754,6 +1773,17 @@ bool Robot::PlanPush(
 				5.0});
 			push_reward = 1;
 
+			double t_prev = push_traj.points.back().time_from_start.toSec();
+			size_t half_size = push_action.points.size();
+			for (size_t i = 1; i < half_size; ++i)
+			{
+				if ((i < half_size - 1) && std::abs(push_action.points[i].time_from_start.toSec() - t_prev) < 0.3) {
+					continue;
+				}
+				push_traj.points.push_back(push_action.points[i]);
+				t_prev = push_action.points[i].time_from_start.toSec();
+			}
+
 			// append waypoints to retract to push start pose
 			auto push_action_copy = push_action;
 			auto t_reverse = push_action_copy.points.rbegin()->time_from_start;
@@ -1764,10 +1794,18 @@ bool Robot::PlanPush(
 				t_reverse = itr->time_from_start;
 			}
 
-			m_planner->ProfilePath(m_rm.get(), push_traj);
-			for (auto itr = push_action.points.begin() + 1; itr != push_action.points.end(); ++itr) {
-				push_traj.points.push_back(*itr);
+			t_prev = push_traj.points.back().time_from_start.toSec();
+			size_t full_size = push_action.points.size();
+			for (size_t i = half_size + 1; i < full_size; ++i)
+			{
+				if ((i < full_size - 1) && std::abs(push_action.points[i].time_from_start.toSec() - t_prev) < 0.3) {
+					continue;
+				}
+				push_traj.points.push_back(push_action.points[i]);
+				t_prev = push_action.points[i].time_from_start.toSec();
 			}
+
+			profileTrajectoryMoveIt(push_traj);
 
 			m_push_actions.push_back(std::move(push_action));
 			m_push_trajs.push_back(std::move(push_traj));
@@ -2892,6 +2930,7 @@ bool Robot::initPlanner()
 	m_planning_params.addParam("bfs_inflation_radius", 0.02);
 	m_planning_params.addParam("bfs_cost_per_cell", 100);
 	m_ph.getParam("robot/interpolate", m_planning_params.interpolate_path);
+	m_ph.getParam("robot/shortcut", m_planning_params.shortcut_path);
 
 	if (!createPlanner(m_planning_params.interpolate_path))
 	{

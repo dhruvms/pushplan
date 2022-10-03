@@ -50,6 +50,7 @@ robot:
   semi_minor: 0.05
   speed: 0.1
   interpolate: false
+  shortcut: true
   runs: 1
   study: 1
   yoshikawa_tries: 10
