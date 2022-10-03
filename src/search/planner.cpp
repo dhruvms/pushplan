@@ -905,6 +905,12 @@ void Planner::read_solution()
 							if (count < 7) {
 								p.positions.push_back(std::stod(split));
 							}
+							else if (count < 14) {
+								p.velocities.push_back(std::stod(split));
+							}
+							else if (count < 21) {
+								p.accelerations.push_back(std::stod(split));
+							}
 							else {
 								p.time_from_start = ros::Duration(std::stod(split));
 							}
@@ -942,6 +948,12 @@ void Planner::read_solution()
 						getline(ssp, split, ',');
 						if (count < 7) {
 							p.positions.push_back(std::stod(split));
+						}
+						else if (count < 14) {
+							p.velocities.push_back(std::stod(split));
+						}
+						else if (count < 21) {
+							p.accelerations.push_back(std::stod(split));
 						}
 						else {
 							p.time_from_start = ros::Duration(std::stod(split));
@@ -1392,20 +1404,8 @@ void Planner::writeState(const std::string& prefix, std::set<Coord, coord_compar
 	{
 		DATA << 'S' << '\n';
 		DATA << traj.points.size() << '\n';
-		DATA 	<< traj.points[0].positions[0] << ','
-				<< traj.points[0].positions[1] << ','
-				<< traj.points[0].positions[2] << ','
-				<< traj.points[0].positions[3] << ','
-				<< traj.points[0].positions[4] << ','
-				<< traj.points[0].positions[5] << ','
-				<< traj.points[0].positions[6] << ','
-				<< traj.points[0].time_from_start.toSec() << '\n';
-		double t_prev = traj.points[0].time_from_start.toSec();
-		for (size_t i = 1; i < traj.points.size(); ++i)
+		for (size_t i = 0; i < traj.points.size(); ++i)
 		{
-			if ((i < traj.points.size() -1) && std::abs(traj.points[i].time_from_start.toSec() - t_prev) < 0.25) {
-				continue;
-			}
 			DATA 	<< traj.points[i].positions[0] << ','
 					<< traj.points[i].positions[1] << ','
 					<< traj.points[i].positions[2] << ','
@@ -1413,8 +1413,21 @@ void Planner::writeState(const std::string& prefix, std::set<Coord, coord_compar
 					<< traj.points[i].positions[4] << ','
 					<< traj.points[i].positions[5] << ','
 					<< traj.points[i].positions[6] << ','
+					<< traj.points[i].velocities[0] << ','
+					<< traj.points[i].velocities[1] << ','
+					<< traj.points[i].velocities[2] << ','
+					<< traj.points[i].velocities[3] << ','
+					<< traj.points[i].velocities[4] << ','
+					<< traj.points[i].velocities[5] << ','
+					<< traj.points[i].velocities[6] << ','
+					<< traj.points[i].accelerations[0] << ','
+					<< traj.points[i].accelerations[1] << ','
+					<< traj.points[i].accelerations[2] << ','
+					<< traj.points[i].accelerations[3] << ','
+					<< traj.points[i].accelerations[4] << ','
+					<< traj.points[i].accelerations[5] << ','
+					<< traj.points[i].accelerations[6] << ','
 					<< traj.points[i].time_from_start.toSec() << '\n';
-			t_prev = traj.points[i].time_from_start.toSec();
 		}
 	}
 
@@ -1429,6 +1442,20 @@ void Planner::writeState(const std::string& prefix, std::set<Coord, coord_compar
 				<< p.positions[4] << ','
 				<< p.positions[5] << ','
 				<< p.positions[6] << ','
+				<< p.velocities[0] << ','
+				<< p.velocities[1] << ','
+				<< p.velocities[2] << ','
+				<< p.velocities[3] << ','
+				<< p.velocities[4] << ','
+				<< p.velocities[5] << ','
+				<< p.velocities[6] << ','
+				<< p.accelerations[0] << ','
+				<< p.accelerations[1] << ','
+				<< p.accelerations[2] << ','
+				<< p.accelerations[3] << ','
+				<< p.accelerations[4] << ','
+				<< p.accelerations[5] << ','
+				<< p.accelerations[6] << ','
 				<< p.time_from_start.toSec() << '\n';
 	}
 
@@ -1484,11 +1511,13 @@ bool Planner::executeTraj(const trajectory_msgs::JointTrajectory& traj, bool gra
 
 	traj_piece.points.clear();
 	traj_piece.points.insert(traj_piece.points.begin(), traj.points.begin() + m_grasp_at, traj.points.begin() + m_grasp_at + 1);
+	
 	// auto skip = traj_piece.points.begin()->time_from_start;
 	// traj_piece.points.begin()->time_from_start -= skip;
 	// for (auto itr = traj_piece.points.begin(); itr != traj_piece.points.end(); ++itr) {
 	// 	itr->time_from_start += ros::Duration(2);
 	// }
+	
 	ROS_WARN("ExecArmTrajectory");
 	m_controller->ExecArmTrajectory(m_controller->PR2TrajFromMsg(traj_piece));
 	while (!m_controller->GetArmState().isDone() && ros::ok())
@@ -1501,6 +1530,7 @@ bool Planner::executeTraj(const trajectory_msgs::JointTrajectory& traj, bool gra
 
 	traj_piece.points.clear();
 	traj_piece.points.insert(traj_piece.points.begin(), traj.points.begin() + m_grasp_at + 1, traj.points.end());
+	
 	// skip = traj_piece.points.begin()->time_from_start;
 	// traj_piece.points.begin()->time_from_start -= skip;
 	// for (auto itr = traj_piece.points.begin(); itr != traj_piece.points.end(); ++itr) {
@@ -1519,7 +1549,7 @@ bool Planner::executeTraj(const trajectory_msgs::JointTrajectory& traj, bool gra
 void Planner::moveToStartState()
 {
 	auto start_state = m_robot->GetStartState();
-	auto it = std::find(start_state->joint_state.name.begin(), start_state->joint_state.name.end(), "torso_lift_joint");
+	// auto it = std::find(start_state->joint_state.name.begin(), start_state->joint_state.name.end(), "torso_lift_joint");
 	// double torso_start = start_state->joint_state.position.at(it - start_state->joint_state.name.begin());
 	// ROS_WARN("RaiseTorso");
 	// m_controller->RaiseTorso(torso_start);

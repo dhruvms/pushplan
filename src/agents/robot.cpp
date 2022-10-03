@@ -186,7 +186,7 @@ bool Robot::Setup()
 	m_ph.getParam("robot/grasping/tries", m_grasp_tries);
 	m_ph.getParam("robot/grasping/lift", m_grasp_lift);
 	m_vis_pub = m_nh.advertise<visualization_msgs::Marker>( "/visualization_marker", 10);
-	createVirtualTable();
+	// createVirtualTable();
 
 	return true;
 }

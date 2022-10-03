@@ -151,10 +151,13 @@ pr2_controllers_msgs::JointTrajectoryGoal RobotController::PR2TrajFromMsg(const 
 	{
 		goal.trajectory.points[i].positions.resize(num_joints);
 		goal.trajectory.points[i].velocities.resize(num_joints);
+		goal.trajectory.points[i].accelerations.resize(num_joints);
 		for (size_t j = 0; j < num_joints; ++j)
 		{
-			goal.trajectory.points[i].positions[j] = smpl::angles::normalize_angle(trajectory.points[i].positions[j]);
-			goal.trajectory.points[i].velocities[j] = 0.0;
+			goal.trajectory.points[i].positions[j] = trajectory.points[i].positions[j]; // smpl::angles::normalize_angle(trajectory.points[i].positions[j]);
+			goal.trajectory.points[i].velocities[j] = trajectory.points[i].velocities[j];
+			goal.trajectory.points[i].accelerations[j] = trajectory.points[i].accelerations[j];
+			
 			// if (i > 0) {
 			// 	double angle_diff = smpl::angles::shortest_angle_diff(trajectory.points[i].positions[j], trajectory.points[i-1].positions[j]);
 			// 	double time_diff = trajectory.points[i].time_from_start.toSec() - trajectory.points[i-1].time_from_start.toSec();
