@@ -2,6 +2,7 @@
 import numpy as np
 import os, glob, random # for random textures to objects
 import time
+import math
 import collections
 import multiprocessing as mp
 import copy
@@ -90,7 +91,8 @@ class BulletSim:
 			sim.resetSimulation()
 			sim.setGravity(0,0,-9.81)
 			self.sim_datas[i]['ground_plane_id'] = sim.loadURDF("plane.urdf")
-			sim.setRealTimeSimulation(0)
+			# sim.setRealTimeSimulation(0)
+			sim.setTimeStep(1.0/HZ)
 
 			if not self.fridge:
 				self.sim_datas[i]['table_id'] = [1]
@@ -494,12 +496,12 @@ class BulletSim:
 						targetPositions=[0.2]*len(gripper_joints))
 
 			prev_timestep = curr_timestep
-			curr_timestep = point.time_from_start.to_sec()
-			time_diff = (curr_timestep - prev_timestep) * 1
-			duration = time_diff * 240
 			prev_pose = get_joint_positions(robot_id, arm_joints, sim=sim)
+			curr_timestep = point.time_from_start.to_sec()
 			curr_pose = np.asarray(point.positions)
+			time_diff = (curr_timestep - prev_timestep) * 1
 			target_vel = shortest_angle_diff(curr_pose, prev_pose)/time_diff
+			duration = math.ceil(time_diff * int(HZ))
 
 			sim.setJointMotorControlArray(
 					robot_id, arm_joints,
@@ -545,7 +547,7 @@ class BulletSim:
 
 			objs_curr = self.getObjects(sim_id)
 			action_interactions = []
-			for i in range(480):
+			for i in range(2 * int(HZ)):
 				sim.stepSimulation()
 
 				interactions, _ = self.checkInteractions(sim_id, objs_curr)
@@ -652,12 +654,12 @@ class BulletSim:
 						targetPositions=[0.2]*len(gripper_joints))
 
 				prev_timestep = curr_timestep
-				curr_timestep = point.time_from_start.to_sec()
-				time_diff = (curr_timestep - prev_timestep) * 1
-				duration = time_diff * 240
 				prev_pose = get_joint_positions(robot_id, arm_joints, sim=sim)
+				curr_timestep = point.time_from_start.to_sec()
 				curr_pose = np.asarray(point.positions)
+				time_diff = (curr_timestep - prev_timestep) * 1
 				target_vel = shortest_angle_diff(curr_pose, prev_pose)/time_diff
+				duration = math.ceil(time_diff * int(HZ))
 
 				sim.setJointMotorControlArray(
 						robot_id, arm_joints,
@@ -702,7 +704,7 @@ class BulletSim:
 
 			objs_curr = self.getObjects(sim_id)
 			action_interactions = []
-			for i in range(480):
+			for i in range(2 * int(HZ)):
 				sim.stepSimulation()
 
 				interactions, contacts = self.checkInteractions(sim_id, objs_curr)
@@ -973,7 +975,7 @@ class BulletSim:
 				robot_id, gripper_joints,
 				controlMode=sim.VELOCITY_CONTROL,
 				targetVelocities=target_vel)
-		for i in range(240):
+		for i in range(int(HZ)):
 			sim.stepSimulation()
 
 		if open_g:
@@ -982,7 +984,7 @@ class BulletSim:
 					controlMode=sim.VELOCITY_CONTROL,
 					targetVelocities=target_vel*0)
 
-			# for i in range(240):
+			# for i in range(int(HZ)):
 			# 	sim.stepSimulation()
 
 	def grasped(self, ooi, sim_id):
@@ -1027,7 +1029,8 @@ class BulletSim:
 		sim.setAdditionalSearchPath(pybullet_data.getDataPath())
 		sim.setGravity(0,0,-9.81)
 		ground_plane_id = sim.loadURDF("plane.urdf")
-		sim.setRealTimeSimulation(0)
+		# sim.setRealTimeSimulation(0)
+		sim.setTimeStep(1.0/HZ)
 		info = {'ground_plane_id': ground_plane_id}
 
 		sim.configureDebugVisualizer(sim.COV_ENABLE_GUI, False)
