@@ -513,7 +513,7 @@ class BulletSim:
 			for i in range(int(duration)):
 				sim.stepSimulation()
 
-				interactions, _ = self.checkInteractions(sim_id, objs_curr)
+				interactions = self.checkInteractions(sim_id, objs_curr)
 				action_interactions += interactions
 				action_interactions = list(np.unique(np.array(action_interactions)))
 				action_interactions[:] = [idx for idx in action_interactions if idx != req.ooi]
@@ -550,7 +550,7 @@ class BulletSim:
 			for i in range(2 * int(HZ)):
 				sim.stepSimulation()
 
-				interactions, _ = self.checkInteractions(sim_id, objs_curr)
+				interactions = self.checkInteractions(sim_id, objs_curr)
 				action_interactions += interactions
 				action_interactions = list(np.unique(np.array(action_interactions)))
 				action_interactions[:] = [idx for idx in action_interactions if idx != req.ooi]
@@ -642,7 +642,6 @@ class BulletSim:
 			start_objs = self.getObjects(sim_id)
 			violation_flag = False
 			cause = 0
-			robot_contacts = []
 			oid_start_xyz = None
 			if (req.oid != -1):
 				oid_start_xyz, _ = self.sims[sim_id].getBasePositionAndOrientation(req.oid)
@@ -671,21 +670,18 @@ class BulletSim:
 				for i in range(int(duration)):
 					sim.stepSimulation()
 
-					interactions, contacts = self.checkInteractions(sim_id, objs_curr)
+					interactions = self.checkInteractions(sim_id, objs_curr)
 					action_interactions += interactions
 					action_interactions = list(np.unique(np.array(action_interactions)))
-					robot_contacts += contacts
-					robot_contacts = list(np.unique(np.array(robot_contacts)))
 
 					topple = self.checkPoseConstraints(sim_id)
 					immovable = any([not sim_data['objs'][x]['movable'] for x in action_interactions])
 					table = self.checkTableCollision(sim_id)
 					velocity = self.checkVelConstraints(sim_id)
-					contact_error = False # len(robot_contacts) > 1
 
-					violation_flag = topple or immovable or table or velocity or contact_error
+					violation_flag = topple or immovable or table or velocity
 					if (violation_flag):
-						# cause = 'push violation: ' + topple*'topple' + immovable*'immovable' + table*'table' + velocity*'velocity' + contact_error*'contact_error'
+						# cause = 'push violation: ' + topple*'topple' + immovable*'immovable' + table*'table' + velocity*'velocity'
 						# print(cause)
 						break
 
@@ -707,21 +703,18 @@ class BulletSim:
 			for i in range(2 * int(HZ)):
 				sim.stepSimulation()
 
-				interactions, contacts = self.checkInteractions(sim_id, objs_curr)
+				interactions = self.checkInteractions(sim_id, objs_curr)
 				action_interactions += interactions
 				action_interactions = list(np.unique(np.array(action_interactions)))
-				robot_contacts += contacts
-				robot_contacts = list(np.unique(np.array(robot_contacts)))
 
 				topple = self.checkPoseConstraints(sim_id)
 				immovable = any([not sim_data['objs'][x]['movable'] for x in action_interactions])
 				table = self.checkTableCollision(sim_id)
 				velocity = self.checkVelConstraints(sim_id)
-				contact_error = False # len(robot_contacts) != 1
 
-				violation_flag = topple or immovable or table or velocity or contact_error
+				violation_flag = topple or immovable or table or velocity
 				if (violation_flag):
-					# cause = 'push violation: ' + topple*'topple' + immovable*'immovable' + table*'table' + velocity*'velocity' + contact_error*'contact_error'
+					# cause = 'push violation: ' + topple*'topple' + immovable*'immovable' + table*'table' + velocity*'velocity'
 					# print(cause)
 					break
 
@@ -883,7 +876,6 @@ class BulletSim:
 		table_id = self.sim_datas[sim_id]['table_id']
 
 		interactions = []
-		robot_contacts = []
 		for obj1 in objects:
 			obj1_id = obj1.id
 			if(obj1_id in table_id): # check id
@@ -892,7 +884,6 @@ class BulletSim:
 			contacts = self.sims[sim_id].getContactPoints(obj1_id, robot_id)
 			if any(pt[8] < CONTACT_THRESH for pt in contacts):
 				interactions.append(obj1_id)
-				robot_contacts.append(obj1_id)
 			contacts = tuple()
 
 			if(not self.sim_datas[sim_id]['objs'][obj1_id]['movable']):
@@ -906,7 +897,7 @@ class BulletSim:
 			if any(pt[8] < CONTACT_THRESH for pt in contacts):
 				interactions.append(obj1_id)
 
-		return interactions, robot_contacts
+		return interactions
 
 	def checkPoseConstraints(self, sim_id, grasp_at=-1, ooi=-1):
 		sim_data = self.sim_datas[sim_id]
@@ -939,7 +930,28 @@ class BulletSim:
 				continue
 
 			vel_xyz, vel_rpy = self.sims[sim_id].getBaseVelocity(obj_id)
-			if(abs(vel_rpy[0]) > 0.95 * FALL_VEL_THRESH or abs(vel_rpy[1]) > 0.95 * FALL_VEL_THRESH):
+			# obj_pos, obj_orn = self.sims[sim_id].getBasePositionAndOrientation(obj_id)
+			# obj_orn_euler = self.sims[sim_id].getEulerFromQuaternion(obj_orn)
+			# roll, pitch, yaw = obj_orn_euler
+			# rot_around_z = np.array(
+			# 	[[np.cos(-yaw), -np.sin(-yaw), 0],
+			# 	[np.sin(-yaw), np.cos(-yaw), 0],
+			# 	[		0,			 0, 1]]
+			# )
+			# rot_around_y = np.array(
+			# 	[[np.cos(pitch), 0, np.sin(pitch)],
+			# 	[0, 1, 0],
+			# 	[-np.sin(pitch), 0, np.cos(pitch)]]
+			# )
+			# rot_around_x = np.array(
+			# 	[[1, 0, 0],
+			# 	[0, np.cos(roll), -np.sin(roll)],
+			# 	[0, np.sin(roll), np.cos(roll)]]
+			# )
+			# R = np.dot(rot_around_z, np.dot(rot_around_y, rot_around_x))
+			# wx, wy, wz = np.dot(R.transpose(), vel_rpy)
+			# if(abs(wx) > 0.95 * FALL_VEL_THRESH or abs(wy) > 0.95 * FALL_VEL_THRESH):
+			if(any(np.abs(np.array(vel_xyz)) > 0.95 * FALL_VEL_THRESH)):
 				return True
 		return False
 
