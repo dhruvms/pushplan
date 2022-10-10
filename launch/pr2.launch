@@ -5,6 +5,7 @@
     <env name="SMPL_CONSOLE_CONFIG_FILE" value="$(find pushplan)/config/smpl.console"/>
 
     <param name="robot_description" command="$(find xacro)/xacro.py '$(find pushplan)/config/urdf/pr2_description/robots/pr2.urdf.xacro'"/>
+    <param name="robot_description_semantic" textfile="$(find pr2_moveit_config)/config/pr2.srdf"/>
 
     <param name="fridge" type="bool" value="true"/>
     <node pkg="pushplan" type="coop_plan" name="coop_plan" output="screen" respawn="false">

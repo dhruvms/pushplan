@@ -22,6 +22,9 @@
     <depend>sensor_msgs</depend>
     <depend>trajectory_msgs</depend>
     <depend>comms</depend>
+    <depend>moveit_core</depend>
+    <depend>moveit_ros_planning_interface</depend>
+    <depend>pr2_moveit_config</depend>
 
     <build_depend>message_generation</build_depend>
     <exec_depend>message_runtime</exec_depend>
