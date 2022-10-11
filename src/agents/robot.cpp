@@ -1667,7 +1667,7 @@ bool Robot::PlanPush(
 		++m_stats["push_found_in_db"];
 
 		push_start_pose = m_rm->computeFK(new_action.points.front().positions);
-		push_end_pose = m_rm->computeFK(new_action.points.back().positions);
+		push_end_pose = m_rm->computeFK(new_action.points.at(new_action.points.size() - 2).positions);
 		debug_push_start = { push_start_pose.translation().x(), push_start_pose.translation().y() };
 		debug_push_end = { push_end_pose.translation().x(), push_end_pose.translation().y() };
 
@@ -1697,14 +1697,13 @@ bool Robot::PlanPush(
 		ProcessObstacles(other_movables, true);
 		if (success)
 		{
-			m_planner->ProfilePath(m_rm.get(), push_traj);
-			new_action.points.front().time_from_start = push_traj.points.back().time_from_start + ros::Duration(m_dt);
-			for (size_t i = 1; i < new_action.points.size(); ++i) {
-				new_action.points.at(i).time_from_start = new_action.points.at(i-1).time_from_start + ros::Duration(m_dt);
-			}
-
-			for (auto itr = new_action.points.begin() + 1; itr != new_action.points.end(); ++itr) {
-				push_traj.points.push_back(*itr);
+			profileTrajectoryMoveIt(push_traj);
+			auto t_prev = push_traj.points.back().time_from_start;
+			for (size_t i = 1; i < new_action.points.size(); ++i)
+			{
+				push_traj.points.push_back(new_action.points[i]);
+				push_traj.points.back().time_from_start = t_prev + (new_action.points[i].time_from_start - new_action.points[i-1].time_from_start);
+				t_prev = push_traj.points.back().time_from_start;
 			}
 
 			result = new_scene;
