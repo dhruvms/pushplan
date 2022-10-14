@@ -218,6 +218,7 @@ bool Planner::Plan(bool& done)
 	done = false;
 	bool result = m_mamo_search->Solve();
 	m_mamo_search->SaveStats();
+	m_mamo_search->SaveNBData();
 	if (result)
 	{
 		m_mamo_search->GetRearrangements(m_rearrangements, m_grasp_at);

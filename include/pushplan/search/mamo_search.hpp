@@ -17,7 +17,7 @@ struct MAMOSearchState
 	unsigned int state_id;
 	// unsigned int g, h, f;
 	unsigned int priority, actions, noops;
-	bool closed;
+	bool closed, soln_node;
 	MAMOSearchState *bp;
 
 	struct OPENCompare
@@ -25,19 +25,20 @@ struct MAMOSearchState
 		// lower => higher priority
 		bool operator()(const MAMOSearchState *p, const MAMOSearchState *q) const
 		{
-			if (p->actions == q->actions)
-			{
-				if (p->noops == q->noops)
-				{
-					if (p->priority == q->priority)
-					{
-						return rand() % 2;
-					}
-					return p->priority > q->priority;
-				}
-				return p->noops < q->noops;
-			}
-			return p->actions < q->actions;
+			// if (p->actions == q->actions)
+			// {
+			// 	if (p->noops == q->noops)
+			// 	{
+			// 		if (p->priority == q->priority)
+			// 		{
+			// 			return rand() % 2;
+			// 		}
+			// 		return p->priority > q->priority;
+			// 	}
+			// 	return p->noops < q->noops;
+			// }
+			// return p->actions < q->actions;
+			return p->state_id < q->state_id;
 		}
 	};
 	boost::heap::fibonacci_heap<MAMOSearchState*, boost::heap::compare<MAMOSearchState::OPENCompare> >::handle_type m_OPEN_h;
@@ -55,6 +56,7 @@ public:
 	bool Solve();
 	void GetRearrangements(std::vector<trajectory_msgs::JointTrajectory>& rearrangements, int& grasp_at);
 	void SaveStats();
+	void SaveNBData();
 	void Cleanup();
 
 private:

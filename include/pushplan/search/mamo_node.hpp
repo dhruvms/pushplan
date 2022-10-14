@@ -76,6 +76,8 @@ public:
 	const std::vector<std::pair<int, Trajectory> >& kmapf_soln() const;
 	bool has_traj() const;
 	bool has_mapf_soln() const;
+	void priority_factors(
+		float& percent_ngr, float& percent_objs, unsigned int& num_objs) const;
 
 private:
 	comms::ObjectsPoses m_all_objects; // all object poses at node
@@ -101,13 +103,14 @@ private:
 
 	size_t m_hash_l1, m_hash_l2;
 	bool m_hash_set_l1, m_hash_set_l2;
+	float m_percent_ngr, m_percent_objs;
+	unsigned int m_num_objs;
 
 	void addAgent(
 		const std::shared_ptr<Agent>& agent,
 		const size_t& pidx);
 	// void identifyRelevantMovables();
-	void computePriorityFactors(
-		unsigned int &percent_ngr, unsigned int &percent_objs, unsigned int &num_objs);
+	void computePriorityFactors();
 
 	void resetAgents();
 };
