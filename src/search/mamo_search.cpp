@@ -94,7 +94,7 @@ void MAMOSearch::SaveStats()
 {
 	std::string filename(__FILE__);
 	auto found = filename.find_last_of("/\\");
-	filename = filename.substr(0, found + 1) + "../../dat/MAMO.csv";
+	filename = filename.substr(0, found + 1) + "../../dat/MAMO-no-db.csv";
 
 	bool exists = FileExists(filename);
 	std::ofstream STATS;

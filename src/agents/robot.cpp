@@ -1654,70 +1654,70 @@ bool Robot::PlanPush(
 	double start_time = GetTime();
 	++m_stats["plan_push_calls"];
 
-	comms::ObjectsPoses new_scene;
-	trajectory_msgs::JointTrajectory new_action;
-	bool push_in_db = lookupPushInDB(
-						object->GetObject(), obj_traj->back().coord, aidx, curr_scene,
-						new_scene, new_action);
-	m_stats["push_db_lookup_time"] += GetTime() - start_time;
+	// comms::ObjectsPoses new_scene;
+	// trajectory_msgs::JointTrajectory new_action;
+	// bool push_in_db = lookupPushInDB(
+	// 					object->GetObject(), obj_traj->back().coord, aidx, curr_scene,
+	// 					new_scene, new_action);
+	// m_stats["push_db_lookup_time"] += GetTime() - start_time;
 
-	if (push_in_db)
-	{
-		// ROS_INFO("Push found in DB in %f seconds", GetTime() - start_time);
-		++m_stats["push_found_in_db"];
+	// if (push_in_db)
+	// {
+	// 	// ROS_INFO("Push found in DB in %f seconds", GetTime() - start_time);
+	// 	++m_stats["push_found_in_db"];
 
-		push_start_pose = m_rm->computeFK(new_action.points.front().positions);
-		push_end_pose = m_rm->computeFK(new_action.points.at(new_action.points.size() - 2).positions);
-		debug_push_start = { push_start_pose.translation().x(), push_start_pose.translation().y() };
-		debug_push_end = { push_end_pose.translation().x(), push_end_pose.translation().y() };
+	// 	push_start_pose = m_rm->computeFK(new_action.points.front().positions);
+	// 	push_end_pose = m_rm->computeFK(new_action.points.at(new_action.points.size() - 2).positions);
+	// 	debug_push_start = { push_start_pose.translation().x(), push_start_pose.translation().y() };
+	// 	debug_push_end = { push_end_pose.translation().x(), push_end_pose.translation().y() };
 
-		ProcessObstacles(pushed_obj);
-		ProcessObstacles(other_movables);
+	// 	ProcessObstacles(pushed_obj);
+	// 	ProcessObstacles(other_movables);
 
-		bool success = true;
-		if (!m_cc_i->isStateValid(push_start_joints))
-		{
-			push_failure = 1;
-			debug_push = std::make_tuple(debug_push_start, debug_push_end, push_failure);
+	// 	bool success = true;
+	// 	if (!m_cc_i->isStateValid(push_start_joints))
+	// 	{
+	// 		push_failure = 1;
+	// 		debug_push = std::make_tuple(debug_push_start, debug_push_end, push_failure);
 
-			success = false;
-		}
+	// 		success = false;
+	// 	}
 
-		trajectory_msgs::JointTrajectory push_traj;
-		if (success && !planToPoseGoal(push_start_state, push_start_pose, push_traj))
-		{
-			push_failure = 2;
-			debug_push = std::make_tuple(debug_push_start, debug_push_end, push_failure);
+	// 	trajectory_msgs::JointTrajectory push_traj;
+	// 	if (success && !planToPoseGoal(push_start_state, push_start_pose, push_traj))
+	// 	{
+	// 		push_failure = 2;
+	// 		debug_push = std::make_tuple(debug_push_start, debug_push_end, push_failure);
 
-			success = false;
-		}
+	// 		success = false;
+	// 	}
 
-		// remove all movable objects from immovable collision space
-		ProcessObstacles(pushed_obj, true);
-		ProcessObstacles(other_movables, true);
-		if (success)
-		{
-			profileTrajectoryMoveIt(push_traj);
-			auto t_prev = push_traj.points.back().time_from_start;
-			for (size_t i = 1; i < new_action.points.size(); ++i)
-			{
-				push_traj.points.push_back(new_action.points[i]);
-				push_traj.points.back().time_from_start = t_prev + (new_action.points[i].time_from_start - new_action.points[i-1].time_from_start);
-				t_prev = push_traj.points.back().time_from_start;
-			}
+	// 	// remove all movable objects from immovable collision space
+	// 	ProcessObstacles(pushed_obj, true);
+	// 	ProcessObstacles(other_movables, true);
+	// 	if (success)
+	// 	{
+	// 		profileTrajectoryMoveIt(push_traj);
+	// 		auto t_prev = push_traj.points.back().time_from_start;
+	// 		for (size_t i = 1; i < new_action.points.size(); ++i)
+	// 		{
+	// 			push_traj.points.push_back(new_action.points[i]);
+	// 			push_traj.points.back().time_from_start = t_prev + (new_action.points[i].time_from_start - new_action.points[i-1].time_from_start);
+	// 			t_prev = push_traj.points.back().time_from_start;
+	// 		}
 
-			result = new_scene;
-			push_failure = -1;
-			debug_push = std::make_tuple(debug_push_start, debug_push_end, push_failure);
-			m_traj = push_traj;
-			++m_stats["push_db_successes"];
-			m_stats["push_db_total_time"] += GetTime() - start_time;
-			// ROS_INFO("Push evaluation sans simulation using DB took %f seconds", GetTime() - start_time);
-			return true;
-		}
-		++m_stats["push_db_failures"];
-		m_stats["push_db_total_time"] += GetTime() - start_time;
-	}
+	// 		result = new_scene;
+	// 		push_failure = -1;
+	// 		debug_push = std::make_tuple(debug_push_start, debug_push_end, push_failure);
+	// 		m_traj = push_traj;
+	// 		++m_stats["push_db_successes"];
+	// 		m_stats["push_db_total_time"] += GetTime() - start_time;
+	// 		// ROS_INFO("Push evaluation sans simulation using DB took %f seconds", GetTime() - start_time);
+	// 		return true;
+	// 	}
+	// 	++m_stats["push_db_failures"];
+	// 	m_stats["push_db_total_time"] += GetTime() - start_time;
+	// }
 
 	m_push_trajs.clear();
 	m_push_actions.clear();
@@ -1894,9 +1894,9 @@ bool Robot::PlanPush(
 	m_traj = m_push_trajs.at(pidx);
 	// SMPL_INFO("Computed and simulated new push in %f seconds!", GetTime() - start_time);
 
-	addPushToDB(
-		object->GetObject(), obj_traj->back().coord, aidx,
-		curr_scene, result, relevant_ids, m_push_actions.at(pidx));
+	// addPushToDB(
+	// 	object->GetObject(), obj_traj->back().coord, aidx,
+	// 	curr_scene, result, relevant_ids, m_push_actions.at(pidx));
 
 	return true;
 }

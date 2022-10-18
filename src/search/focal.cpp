@@ -191,8 +191,8 @@ int Focal::replan(
 		m_FOCAL.pop();
 		m_OPEN.erase(s->m_OPEN_h);
 
-		if (s->state_id == m_goal_ids.back())
-		// if (is_goal(s->state_id))
+		// if (s->state_id == m_goal_ids.back())
+		if (is_goal(s->state_id))
 		{
 			extract_path(s, *solution_path, *solution_cost);
 			m_search_time += GetTime() - expand_time;
@@ -216,13 +216,13 @@ void Focal::expand(LowLevelNode* s)
 
 	std::vector<int> succ_ids;
 	std::vector<unsigned int> costs;
-	if (!m_agent->CheckGoalCost(s->state_id, &succ_ids, &costs))
-	{
-		succ_ids.clear();
-		costs.clear();
-		m_agent->GetSuccs(s->state_id, &succ_ids, &costs);
-	}
-	// m_agent->GetSuccs(s->state_id, &succ_ids, &costs);
+	// if (!m_agent->CheckGoalCost(s->state_id, &succ_ids, &costs))
+	// {
+	// 	succ_ids.clear();
+	// 	costs.clear();
+	// 	m_agent->GetSuccs(s->state_id, &succ_ids, &costs);
+	// }
+	m_agent->GetSuccs(s->state_id, &succ_ids, &costs);
 
 	for (size_t sidx = 0; sidx < succ_ids.size(); ++sidx)
 	{
@@ -346,8 +346,8 @@ void Focal::extract_path(
 	solution.clear();
 
 	// s->state_id == m_goal_id == 0 should be true
-	for (LowLevelNode* state = s->bp; state; state = state->bp) {
-	// for (LowLevelNode* state = s; state; state = state->bp) {
+	// for (LowLevelNode* state = s->bp; state; state = state->bp) {
+	for (LowLevelNode* state = s; state; state = state->bp) {
 		solution.push_back(state->state_id);
 	}
 	std::reverse(solution.begin(), solution.end());
