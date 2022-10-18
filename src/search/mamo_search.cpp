@@ -66,7 +66,7 @@ bool MAMOSearch::Solve()
 			double t2 = GetTime();
 			node->RunMAPF();
 			m_stats["mapf_time"] += GetTime() - t2;
-			// node->SaveNode(next->state_id, next->bp == nullptr ? 0 : next->bp->state_id);
+			node->SaveNode(next->state_id, next->bp == nullptr ? 0 : next->bp->state_id);
 
 			m_solved_node = node;
 			m_solved_search = next;
@@ -111,48 +111,6 @@ void MAMOSearch::SaveStats()
 			<< m_stats["total_time"] << ',' << m_stats["mapf_time"] << ',' << m_stats["push_planner_time"] << ','
 			<< m_stats["expansions"] << ',' << m_stats["only_duplicate"] << ',' << m_stats["no_duplicate"] << ','
 			<< m_stats["no_succs"] << '\n';
-	STATS.close();
-}
-
-void MAMOSearch::SaveNBData()
-{
-	std::string filename(__FILE__);
-	auto found = filename.find_last_of("/\\");
-	filename = filename.substr(0, found + 1) + "../../dat/EM4M-NB.csv";
-
-	bool exists = FileExists(filename);
-	std::ofstream STATS;
-	STATS.open(filename, std::ofstream::out | std::ofstream::app);
-	if (!exists)
-	{
-		STATS << "StateID,SolnNode,"
-				<< "SuccessfulPushes,UnsuccessfulPushes,"
-				<< "PercentNGR,NumObjs,PercentObjs\n";
-	}
-
-	for (const auto& state: m_search_states)
-	{
-		if (state != nullptr)
-		{
-			if (!state->closed && done(state))
-			{
-				for (MAMOSearchState *s = state; s; s = s->bp) {
-					s->soln_node = true;
-				}
-			}
-
-			float percent_ngr, percent_objs;
-			unsigned int num_objs;
-			auto node = m_hashtable.GetState(state->state_id);
-			node->priority_factors(percent_ngr, percent_objs, num_objs);
-			node->SaveNode(state->state_id, state->bp == nullptr ? 0 : state->bp->state_id);
-
-			STATS << state->state_id << ',' << state->soln_node << ','
-					<< state->actions << ',' << state->noops << ','
-					<< percent_ngr << ',' << num_objs << ',' << percent_objs << '\n';
-		}
-	}
-
 	STATS.close();
 }
 
@@ -205,7 +163,7 @@ bool MAMOSearch::expand(MAMOSearchState *state)
 		return true;
 	}
 
-	// node->SaveNode(state->state_id, state->bp == nullptr ? 0 : state->bp->state_id);
+	node->SaveNode(state->state_id, state->bp == nullptr ? 0 : state->bp->state_id);
 	createSuccs(node, state, &succ_object_centric_actions, &succ_objects, &succ_trajs, &debug_pushes);
 	return true;
 }
@@ -247,7 +205,6 @@ void MAMOSearch::extractRearrangements()
 	ROS_WARN("Solution path state ids (from goal to start):");
 	for (MAMOSearchState *state = m_solved_search; state; state = state->bp)
 	{
-		state->soln_node = true;
 		auto node = m_hashtable.GetState(state->state_id);
 		if (node->has_traj())
 		{
@@ -386,7 +343,6 @@ void MAMOSearch::initSearchState(MAMOSearchState *state)
 	state->actions = -1;
 	state->noops = -1;
 	state->closed = false;
-	state->soln_node = false;
 	state->bp = nullptr;
 }
 

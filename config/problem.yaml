@@ -50,7 +50,7 @@ robot:
   speed: 0.1
   interpolate: false
   shortcut: true
-  runs: 3
+  runs: 5
   study: 1
   yoshikawa_tries: 10
   push_ik_yaws: 50

@@ -230,12 +230,13 @@ void MAMONode::GetSuccs(
 
 unsigned int MAMONode::ComputeMAMOPriority()
 {
-	computePriorityFactors();
+	unsigned int percent_ngr, percent_objs, num_objs;
+	computePriorityFactors(percent_ngr, percent_objs, num_objs);
 
-	if (m_num_objs == 0) {
-		return m_percent_ngr * 100;
+	if (num_objs == 0) {
+		return percent_ngr;
 	}
-	return (100 * m_percent_objs/m_num_objs) + (100 * m_percent_ngr);
+	return (percent_objs/num_objs) + percent_ngr;
 }
 
 size_t MAMONode::GetObjectsHash() const
@@ -452,14 +453,6 @@ bool MAMONode::has_mapf_soln() const
 	return !m_mapf_solution.empty();
 }
 
-void MAMONode::priority_factors(
-		float& percent_ngr, float& percent_objs, unsigned int& num_objs) const
-{
-	percent_ngr = m_percent_ngr;
-	percent_objs = m_percent_objs;
-	num_objs = m_num_objs;
-}
-
 void MAMONode::addAgent(
 	const std::shared_ptr<Agent>& agent,
 	const size_t& pidx)
@@ -482,11 +475,12 @@ void MAMONode::addAgent(
 // 	m_robot->IdentifyReachableMovables(m_agents, m_relevant_ids);
 // }
 
-void MAMONode::computePriorityFactors()
+void MAMONode::computePriorityFactors(
+	unsigned int &percent_ngr, unsigned int &percent_objs, unsigned int &num_objs)
 {
-	m_percent_ngr = 0.0;
-	m_percent_objs = 0.0;
-	m_num_objs = 0;
+	percent_ngr = 0;
+	percent_objs = 0;
+	num_objs = 0;
 
 	const auto& ngr = m_planner->GetNGR();
 	float ngr_size = float(ngr.size());
@@ -506,9 +500,9 @@ void MAMONode::computePriorityFactors()
 
 		if (intersection.size() > 0)
 		{
-			++m_num_objs;
-			m_percent_ngr += intersection.size()/ngr_size;
-			m_percent_objs += intersection.size()/float(agent_voxels.size());
+			++num_objs;
+			percent_ngr += (intersection.size()/ngr_size) * 100;
+			percent_objs += (intersection.size()/float(agent_voxels.size())) * 100;
 		}
 	}
 }
