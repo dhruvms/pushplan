@@ -1203,7 +1203,7 @@ void Planner::writeState(const std::string& prefix)
 {
 	std::string filename(__FILE__);
 	auto found = filename.find_last_of("/\\");
-	filename = filename.substr(0, found + 1) + "../../dat/txt/without-neg-and-pos-db/";
+	filename = filename.substr(0, found + 1) + "../../dat/txt/";
 
 	std::stringstream ss;
 	ss << prefix << "_" << m_scene_id << "_";

@@ -121,11 +121,11 @@ void MAMONode::GetSuccs(
 		if (samples >= SAMPLES) {
 			continue; // known invalid push, do not compute
 		}
-		// else if (samples == 0) {
-		// 	samples = SAMPLES; // never before seen push, must compute
-		// }
+		else if (samples == 0) {
+			samples = SAMPLES; // never before seen push, must compute
+		}
 		else {
-			samples = SAMPLES - samples;
+			samples = 1; // seen valid push before, lookup from DB
 		}
 
 		// get push location
@@ -519,7 +519,7 @@ void MAMONode::SaveNode(unsigned int my_id,	unsigned int parent_id)
 	{
 		std::string filename(__FILE__);
 		auto found = filename.find_last_of("/\\");
-		filename = filename.substr(0, found + 1) + "../../dat/txt/without-neg-and-pos-db/";
+		filename = filename.substr(0, found + 1) + "../../dat/txt/";
 
 		std::stringstream ss;
 		auto t = std::time(nullptr);

@@ -53,9 +53,9 @@ int AgentLattice::PushGoal(const Coord& p)
 	int goal_id = getOrCreateState(p);
 	m_goal_ids.push_back(goal_id);
 
-	// Coord pseudogoal = { -99, -99 };
-	// goal_id = getOrCreateState(pseudogoal);
-	// m_goal_ids.push_back(goal_id);
+	Coord pseudogoal = { -99, -99 };
+	goal_id = getOrCreateState(pseudogoal);
+	m_goal_ids.push_back(goal_id);
 	return goal_id;
 }
 
@@ -183,31 +183,31 @@ void AgentLattice::GetSuccs(
 	}
 }
 
-// bool AgentLattice::CheckGoalCost(
-// 	int state_id,
-// 	std::vector<int>* succ_ids,
-// 	std::vector<unsigned int>* costs)
-// {
-// 	if (!this->IsGoal(state_id)) {
-// 		return false;
-// 	}
+bool AgentLattice::CheckGoalCost(
+	int state_id,
+	std::vector<int>* succ_ids,
+	std::vector<unsigned int>* costs)
+{
+	if (!this->IsGoal(state_id)) {
+		return false;
+	}
 
-// 	if (m_invalid_pushes.empty()) // state is a valid goal, and there are no invalid goals
-// 	{
-// 		succ_ids->push_back(m_goal_ids.back()); // pseudogoal
-// 		costs->push_back(1);
-// 	}
-// 	else
-// 	{
-// 		// need to compute pseudo-edge cost for valid goal state
-// 		LatticeState* s = getHashEntry(state_id);
-// 		unsigned int cost = checkNNCost(s->coord);
-// 		succ_ids->push_back(m_goal_ids.back()); // pseudogoal
-// 		costs->push_back(cost);
-// 	}
+	if (m_invalid_pushes.empty()) // state is a valid goal, and there are no invalid goals
+	{
+		succ_ids->push_back(m_goal_ids.back()); // pseudogoal
+		costs->push_back(1);
+	}
+	else
+	{
+		// need to compute pseudo-edge cost for valid goal state
+		LatticeState* s = getHashEntry(state_id);
+		unsigned int cost = checkNNCost(s->coord);
+		succ_ids->push_back(m_goal_ids.back()); // pseudogoal
+		costs->push_back(cost);
+	}
 
-// 	return true;
-// }
+	return true;
+}
 
 // As long as I am not allowed to be in this location at some later time,
 // I have not reached a valid goal state
@@ -220,11 +220,11 @@ bool AgentLattice::IsGoal(int state_id)
 	LatticeState* s = getHashEntry(state_id);
 	assert(s);
 
-	point p(s->coord.at(0), s->coord.at(1));
-	int count = m_invalid_pushes.count(p);
-	if (count > 0) {
-		return false;
-	}
+	// point p(s->coord.at(0), s->coord.at(1));
+	// int count = m_invalid_pushes.count(p);
+	// if (count > 0) {
+	// 	return false;
+	// }
 
 	bool constrained = false, conflict = false, ngr = false;
 	ngr = m_agent->OutsideNGR(*s);
@@ -626,33 +626,33 @@ bool AgentLattice::goalConflict(const LatticeState& state)
 	return false;
 }
 
-// unsigned int AgentLattice::checkNNCost(const Coord& c)
-// {
-// 	std::vector<value> nns;
-// 	point query(c.at(0), c.at(1));
-// 	bg::model::box<point> b(point(c.at(0) - 3, c.at(1) - 3), point(c.at(0) + 3, c.at(1) + 3));
-// 	m_invalid_pushes.query(bgi::within(b), std::back_inserter(nns));
+unsigned int AgentLattice::checkNNCost(const Coord& c)
+{
+	std::vector<value> nns;
+	point query(c.at(0), c.at(1));
+	bg::model::box<point> b(point(c.at(0) - 3, c.at(1) - 3), point(c.at(0) + 3, c.at(1) + 3));
+	m_invalid_pushes.query(bgi::within(b), std::back_inserter(nns));
 
-// 	if (nns.empty()) {
-// 		return 1;
-// 	}
+	if (nns.empty()) {
+		return 1;
+	}
 
-// 	double cost = 0.0;
-// 	BOOST_FOREACH(const value &v, nns)
-// 	{
-// 		double d = bg::distance(v.first, query);
-// 		if (d < 1) {
-// 			cost += SAMPLES * 2; // max penalty if query is known invalid goal
-// 		}
-// 		else {
-// 			cost += v.second/std::ceil(d);
-// 		}
-// 	}
-// 	// // exponential between (1, 2) and (5, 10)
-// 	// double cost = 25.831 * std::exp(-0.256 * dist);
-// 	// cost = std::max(std::min(20.0, cost), 2.0);
-// 	return std::ceil(cost);
-// }
+	double cost = 0.0;
+	BOOST_FOREACH(const value &v, nns)
+	{
+		double d = bg::distance(v.first, query);
+		if (d < 1) {
+			cost += SAMPLES * 2; // max penalty if query is known invalid goal
+		}
+		else {
+			cost += v.second/std::ceil(d);
+		}
+	}
+	// // exponential between (1, 2) and (5, 10)
+	// double cost = 25.831 * std::exp(-0.256 * dist);
+	// cost = std::max(std::min(20.0, cost), 2.0);
+	return std::ceil(cost);
+}
 
 // Return a pointer to the data for the input the state id
 // if it exists, else return nullptr
