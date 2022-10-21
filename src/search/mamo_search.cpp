@@ -194,7 +194,12 @@ bool MAMOSearch::done(MAMOSearchState *state)
 		}
 	}
 
+	if (state->try_finalise) {
+		return false;
+	}
+
 	auto start_state = node->GetCurrentStartState();
+	state->try_finalise = true;
 	return m_planner->FinalisePlan(node->kobject_states(), start_state, m_exec_traj);
 }
 
@@ -343,6 +348,7 @@ void MAMOSearch::initSearchState(MAMOSearchState *state)
 	state->actions = -1;
 	state->noops = -1;
 	state->closed = false;
+	state->try_finalise = false;
 	state->bp = nullptr;
 }
 

@@ -17,7 +17,7 @@ struct MAMOSearchState
 	unsigned int state_id;
 	// unsigned int g, h, f;
 	unsigned int priority, actions, noops;
-	bool closed;
+	bool closed, try_finalise;
 	MAMOSearchState *bp;
 
 	struct OPENCompare
