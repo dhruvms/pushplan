@@ -163,8 +163,8 @@ bool MAMOSearch::expand(MAMOSearchState *state)
 		return true;
 	}
 
-	node->SaveNode(state->state_id, state->bp == nullptr ? 0 : state->bp->state_id);
 	createSuccs(node, state, &succ_object_centric_actions, &succ_objects, &succ_trajs, &debug_pushes);
+	node->SaveNode(state->state_id, state->bp == nullptr ? 0 : state->bp->state_id);
 	return true;
 }
 
@@ -248,6 +248,8 @@ void MAMOSearch::createSuccs(
 
 	for (size_t i = 0; i < num_succs; ++i)
 	{
+		bool at_duplicate = duplicate_successor && i == num_succs - 1;
+
 		auto succ = new MAMONode;
 		succ->SetPlanner(m_planner);
 		succ->SetCBS(m_planner->GetCBS());
@@ -258,18 +260,17 @@ void MAMOSearch::createSuccs(
 		succ->InitAgents(m_planner->GetAllAgents(), succ_objects->at(i)); // inits required fields for hashing
 
 		// check if we have visited this mamo state before
-		unsigned int old_id, old_f;
+		unsigned int old_id;
 		MAMOSearchState *prev_search_state = nullptr;
 		if (m_hashtable.Exists(succ))
 		{
 			old_id = m_hashtable.GetStateID(succ);
 			prev_search_state = getSearchState(old_id);
-			old_f = prev_search_state->priority;
 		}
 
-		unsigned int succ_actions = parent_search_state->actions + (1 - (duplicate_successor && i == num_succs - 1));
-		unsigned int succ_noops = parent_search_state->noops + (duplicate_successor && i == num_succs - 1);
-		if (prev_search_state != nullptr && (prev_search_state->closed || prev_search_state->actions <= succ_actions))
+		unsigned int succ_actions = parent_search_state->actions + (1 - at_duplicate);
+		unsigned int succ_noops = at_duplicate ? parent_search_state->noops + 1 : 0;
+		if (prev_search_state != nullptr && (prev_search_state->closed || prev_search_state->actions < succ_actions))
 		{
 			// previously visited this mamo state with fewer actions, move on
 			delete succ;
@@ -277,46 +278,51 @@ void MAMOSearch::createSuccs(
 		}
 		else
 		{
-			succ->SetRobotTrajectory(succ_trajs->at(i));
-			succ->SetParent(parent_node);
-			if (duplicate_successor && i == num_succs - 1)
+			if (at_duplicate)
 			{
+				delete succ;
 				for (auto it = debug_pushes->begin() + i; it != debug_pushes->end(); ++it) {
-					succ->AddDebugPush(*it);
+					parent_node->AddDebugPush(*it);
 				}
-			}
-			else {
-				succ->AddDebugPush(debug_pushes->at(i));
-			}
-
-			if (prev_search_state != nullptr)
-			{
-				// update search state in open list
-				auto old_succ = m_hashtable.GetState(old_id);
-				old_succ->parent()->RemoveChild(old_succ);
-
-				m_hashtable.UpdateState(succ);
-				prev_search_state->bp = parent_search_state;
-				prev_search_state->actions = succ_actions;
-				prev_search_state->noops = succ_noops;
-				m_OPEN.update(prev_search_state->m_OPEN_h);
-				SMPL_WARN("Update %d, new priority = %u (previously %u)", old_id, old_f, prev_search_state->priority);
+				parent_search_state->noops = succ_noops;
+				m_OPEN.update(parent_search_state->m_OPEN_h);
+				SMPL_WARN("Update duplicate %d, priority = %u", old_id, parent_search_state->priority);
 			}
 			else
 			{
-				// add search state to open list
-				unsigned int succ_id = m_hashtable.GetStateIDForceful(succ);
-				auto succ_search_state = getSearchState(succ_id);
-				succ_search_state->bp = parent_search_state;
-				succ_search_state->priority = succ->ComputeMAMOPriority();
-				succ_search_state->actions = succ_actions;
-				succ_search_state->noops = succ_noops;
-				succ_search_state->m_OPEN_h = m_OPEN.push(succ_search_state);
+				succ->SetRobotTrajectory(succ_trajs->at(i));
+				succ->SetParent(parent_node);
+				succ->AddDebugPush(debug_pushes->at(i));
 
-				SMPL_WARN("Generate %d, priority = %u", succ_id, succ_search_state->priority);
+				if (prev_search_state != nullptr)
+				{
+					// update search state in open list
+					auto old_succ = m_hashtable.GetState(old_id);
+					old_succ->parent()->RemoveChild(old_succ);
+
+					m_hashtable.UpdateState(succ);
+					prev_search_state->bp = parent_search_state;
+					prev_search_state->actions = succ_actions;
+					prev_search_state->noops = succ_noops;
+					m_OPEN.update(prev_search_state->m_OPEN_h);
+					SMPL_WARN("Update %d, priority = %u ", old_id, prev_search_state->priority);
+				}
+				else
+				{
+					// add search state to open list
+					unsigned int succ_id = m_hashtable.GetStateIDForceful(succ);
+					auto succ_search_state = getSearchState(succ_id);
+					succ_search_state->bp = parent_search_state;
+					succ_search_state->priority = succ->ComputeMAMOPriority();
+					succ_search_state->actions = succ_actions;
+					succ_search_state->noops = succ_noops;
+					succ_search_state->m_OPEN_h = m_OPEN.push(succ_search_state);
+
+					SMPL_WARN("Generate %d, priority = %u", succ_id, succ_search_state->priority);
+				}
+				parent_node->AddChild(succ);
+				m_search_nodes.push_back(succ);
 			}
-			parent_node->AddChild(succ);
-			m_search_nodes.push_back(succ);
 		}
 	}
 }
