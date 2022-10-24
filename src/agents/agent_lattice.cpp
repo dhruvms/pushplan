@@ -220,11 +220,11 @@ bool AgentLattice::IsGoal(int state_id)
 	LatticeState* s = getHashEntry(state_id);
 	assert(s);
 
-	// point p(s->coord.at(0), s->coord.at(1));
-	// int count = m_invalid_pushes.count(p);
-	// if (count > 0) {
-	// 	return false;
-	// }
+	point p(s->coord.at(0), s->coord.at(1));
+	int count = m_invalid_pushes.count(p);
+	if (count > 0) {
+		return false;
+	}
 
 	bool constrained = false, conflict = false, ngr = false;
 	ngr = m_agent->OutsideNGR(*s);

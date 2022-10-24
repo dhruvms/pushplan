@@ -53,9 +53,19 @@ bool MAMONode::RunMAPF()
 
 	if (!m_new_constraints)
 	{
-		// add hallucinated constraint
 		const auto &valid_push = m_successful_pushes.back();
+
+		// add all past hallucinated constraints for this object
+		for (const auto& p: m_successful_pushes_invalidated)
+		{
+			if (p.first == valid_push.first) {
+				m_agents.at(m_agent_map[p.first])->AddHallucinatedConstraint(p.second);
+			}
+		}
+
+		// add latest hallucinated constraint
 		m_agents.at(m_agent_map[valid_push.first])->AddHallucinatedConstraint(valid_push.second);
+		m_successful_pushes_invalidated.push_back(m_successful_pushes.back());
 		m_successful_pushes.pop_back();
 	}
 

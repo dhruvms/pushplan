@@ -92,7 +92,7 @@ private:
 	std::vector<MAMONode*> m_children; // children nodes in tree
 
 	std::vector<std::pair<int, Trajectory> > m_mapf_solution; // mapf solution found at this node
-	std::list<std::pair<int, Coord> > m_successful_pushes;
+	std::list<std::pair<int, Coord> > m_successful_pushes, m_successful_pushes_invalidated;
 	std::vector<int> m_relevant_ids;
 	bool m_new_constraints = true;
 
