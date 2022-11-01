@@ -273,7 +273,7 @@ bool AgentLattice::IsGoal(int state_id)
 unsigned int AgentLattice::GetGoalHeuristic(int state_id)
 {
 	return 0;
-	if (m_agent->PP()) {
+	if (state_id == m_goal_ids.back() || m_agent->PP()) {
 		return 0;
 	}
 	// TODO: RRA* informed backwards Dijkstra's heuristic

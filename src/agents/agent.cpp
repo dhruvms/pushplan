@@ -488,73 +488,52 @@ void Agent::GetVoxels(const ContPose& pose, std::set<Coord, coord_compare>& voxe
 bool Agent::computeGoal()
 {
 	m_goal = m_init.coord;
-
-	// VisualiseState(m_goal, "goal_state", 20);
 	return true;
 
-	// if (stateOutsideNGR(m_init))
-	// {
-	// 	m_goal = m_init.coord;
+	if (stateOutsideNGR(m_init))
+	{
+		m_goal = m_init.coord;
+		return true;
+	}
+	else
+	{
+		// VisualiseState(m_init, "init_state", 20);
 
-	// 	// VisualiseState(m_goal, "goal_state", 20);
-	// 	return true;
-	// }
-	// else
-	// {
-	// 	Eigen::Affine3d T = Eigen::Translation3d(m_obj_desc.o_x, m_obj_desc.o_y, m_obj_desc.o_z) *
-	// 					Eigen::AngleAxisd(m_obj_desc.o_yaw, Eigen::Vector3d::UnitZ()) *
-	// 					Eigen::AngleAxisd(m_obj_desc.o_pitch, Eigen::Vector3d::UnitY()) *
-	// 					Eigen::AngleAxisd(m_obj_desc.o_roll, Eigen::Vector3d::UnitX());
-	// 	m_obj.updateVoxelsState(T);
-	// 	auto voxels_state = m_obj.VoxelsState();
+		double best_dist = m_ngr_grid->getDistanceFromPoint(m_obj_desc.o_x, m_obj_desc.o_y, m_obj_desc.o_z);
+		double ox = m_obj_desc.o_x, oy = m_obj_desc.o_y, nx, ny;
 
-	// 	double best_pos_dist = std::numeric_limits<double>::max(), dist;
-	// 	Eigen::Vector3i best_outside_pos, pos;
-	// 	bool inside = false, outside = false;
+		std::random_device dev;
+		std::mt19937 rng(dev());
+		std::uniform_real_distribution<> D(0.01, 0.02);
 
-	// 	double wx, wy, wz;
-	// 	auto ngr_df = m_ngr_grid->getDistanceField();
-	// 	for (const Eigen::Vector3d& v : voxels_state->voxels)
-	// 	{
-	// 		auto cell = dynamic_cast<smpl::PropagationDistanceField&>(*ngr_df).getNearestCell(v[0], v[1], v[2], dist, pos);
+		LatticeState curr = m_init;
+		curr.coord.clear();
+		curr.coord.resize(2, 0);
+		int tries = 0;
+		while (tries < 25 && !stateOutsideNGR(curr))
+		{
+			++tries;
+			nx = D(rng) * (D(rng) > 0.015 ? 1 : -1);
+			ny = D(rng) * (D(rng) > 0.015 ? 1 : -1);
+			double new_dist = m_ngr_grid->getDistanceFromPoint(ox + nx, oy + ny, m_obj_desc.o_z);
+			if (new_dist > best_dist)
+			{
+				ox += nx;
+				oy += ny;
+				curr.state[0] = ox;
+				curr.state[1] = oy;
+				best_dist = new_dist;
+			}
+		}
 
-	// 		if (dist > 0) {
-	// 			outside = true;
-	// 		}
-	// 		else if (dist < 0)
-	// 		{
-	// 			if (!inside) {
-	// 				inside = true;
-	// 			}
+		curr.coord[0] = DiscretisationManager::ContXToDiscX(curr.state[0]);
+		curr.coord[1] = DiscretisationManager::ContYToDiscY(curr.state[1]);
 
-	// 			m_ngr_grid->gridToWorld(pos[0], pos[1], pos[2], wx, wy, wz);
-	// 			Eigen::Vector3d posd(wx, wy, wz);
-	// 			double dist_to_outside = (posd - v).norm();
-	// 			if (dist_to_outside < best_pos_dist)
-	// 			{
-	// 				best_pos_dist = dist_to_outside;
-	// 				best_outside_pos = pos;
-	// 			}
-	// 		}
-	// 	}
-	// 	if (!inside) {
-	// 		SMPL_ERROR("m_init !stateOutsideNGR and !inside?");
-	// 		m_goal = m_init.coord;
+		// VisualiseState(curr, "goal_state", 150);
 
-	// 		// VisualiseState(m_goal, "goal_state", 20);
-	// 		return true;
-	// 	}
-
-	// 	m_ngr_grid->gridToWorld(best_outside_pos[0], best_outside_pos[1], best_outside_pos[2], wx, wy, wz);
-
-	// 	m_goal.clear();
-	// 	m_goal.resize(2, 0);
-	// 	m_goal.at(0) = DiscretisationManager::ContXToDiscX(wx);
-	// 	m_goal.at(1) = DiscretisationManager::ContYToDiscY(wy);
-
-	// 	// VisualiseState(m_goal, "goal_state", 20);
-	// 	return true;
-	// }
+		m_goal = curr.coord;
+		return true;
+	}
 }
 
 bool Agent::createLatticeAndSearch()
