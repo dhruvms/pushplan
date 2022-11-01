@@ -176,7 +176,7 @@ bool Planner::SetupNGR()
 	m_stats["robot_planner_time"] = GetTime() - m_timer;
 	m_robot->ProcessObstacles({ m_ooi->GetObject() });
 
-	m_robot->UpdateNGR();
+	m_robot->UpdateNGR(false);
 	m_exec = m_robot->GetLastPlanProfiled();
 
 	double ox, oy, oz, sx, sy, sz;
@@ -210,7 +210,7 @@ bool Planner::SetupNGR()
 		}
 	}
 
-	m_first_traj_success = TryExtract();
+	// m_first_traj_success = TryExtract();
 
 	return true;
 }
