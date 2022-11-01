@@ -32,6 +32,14 @@ int Object::Shape() const
 	}
 }
 
+double Object::Height() const
+{
+	if (this->Shape() == 0) {
+		return desc.z_size * 2;
+	}
+	return desc.z_size;
+}
+
 bool Object::Symmetric() const
 {
 	if (!desc.ycb)
