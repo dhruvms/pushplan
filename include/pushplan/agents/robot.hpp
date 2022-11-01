@@ -131,6 +131,7 @@ public:
 
 	State GetEEState(const State& state);
 	const moveit_msgs::RobotState* GetStartState() { return &m_start_state; };
+	smpl::RobotState* GetHomeState() { return &m_home_state; };
 
 	void AnimateSolution();
 	void PrintFK(const trajectory_msgs::JointTrajectory& traj)

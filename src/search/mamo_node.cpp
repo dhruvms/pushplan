@@ -28,7 +28,7 @@ std::vector<double>* MAMONode::GetCurrentStartState()
 	}
 
 	if (m_parent == nullptr) {
-		return nullptr;
+		return m_robot->GetHomeState();
 	}
 
 	return m_parent->GetCurrentStartState();
