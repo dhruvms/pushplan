@@ -208,9 +208,9 @@ void MAMONode::GetSuccs(
 		if (samples == SAMPLES) // this was a new push I was considering
 		{
 			if (globally_invalid) {
-				p = SAMPLES; // automatic maximum penalty
+				p = SAMPLES * 2; // automatic maximum penalty
 			}
-			if (p == SAMPLES && !duplicate_successor) {
+			if (p >= SAMPLES && !duplicate_successor) {
 				duplicate_successor = true; // failed to find a push, must add new constraint to this state
 			}
 			if (p > 0)
@@ -462,12 +462,14 @@ bool MAMONode::has_mapf_soln() const
 	return !m_mapf_solution.empty();
 }
 
-void MAMONode::priority_factors(
-		float& percent_ngr, float& percent_objs, unsigned int& num_objs) const
+const float& MAMONode::percent_ngr() const
 {
-	percent_ngr = m_percent_ngr;
-	percent_objs = m_percent_objs;
-	num_objs = m_num_objs;
+	return m_percent_ngr;
+}
+
+const std::vector<std::vector<double> >& MAMONode::obj_priority_data() const
+{
+	return m_obj_priority_data;
 }
 
 void MAMONode::addAgent(
@@ -518,7 +520,13 @@ void MAMONode::computePriorityFactors()
 		{
 			++m_num_objs;
 			m_percent_ngr += (intersection.size()/ngr_size);
-			m_percent_objs += (intersection.size()/float(agent_voxels.size()));
+
+			double percent_obj = (intersection.size()/double(agent_voxels.size()));
+			auto obj = m_agents.at(m_agent_map[m_object_states.at(i).id()])->GetObject();
+			m_percent_objs += percent_obj;
+
+			std::vector<double> priority_props = {percent_obj, obj->Height(), obj->desc.mass, obj->desc.mu};
+			m_obj_priority_data.push_back(std::move(priority_props));
 		}
 	}
 }
