@@ -71,6 +71,7 @@ public:
 	const int& GetSceneID() const;
 	const int& GetOoIID() const;
 	const std::set<Coord, coord_compare>& GetNGR() const;
+	const bool& GetFirstTrajSuccess() const;
 
 	// For KPIECE/RRT
 	bool StateValidityChecker(const smpl::RobotState& state) {
@@ -143,7 +144,7 @@ private:
 	std::uniform_int_distribution<> m_distI;
 
 	int m_scene_id, m_grasp_at, m_moved;
-	bool m_replan, m_plan_success, m_sim_success, m_push_input;
+	bool m_replan, m_plan_success, m_sim_success, m_push_input, m_first_traj_success;
 	double m_plan_budget, m_sim_budget, m_total_budget, m_timer;
 	std::uint32_t m_violation;
 

@@ -210,6 +210,8 @@ bool Planner::SetupNGR()
 		}
 	}
 
+	m_first_traj_success = TryExtract();
+
 	return true;
 }
 
@@ -1096,6 +1098,11 @@ const int& Planner::GetOoIID() const
 const std::set<Coord, coord_compare>& Planner::GetNGR() const
 {
 	return m_ngr;
+}
+
+const bool& Planner::GetFirstTrajSuccess() const
+{
+	return m_first_traj_success;
 }
 
 //////////////////////////
