@@ -305,19 +305,7 @@ void Agent::VisualiseState(const Coord& c, const std::string& ns, int hue)
 auto Agent::VisualiseState(const LatticeState& s, const std::string& ns, int hue, bool vis)
 	-> std::vector<smpl::visual::Marker>
 {
-	double r = 0.0, p = 0.0, y = 0.0;
-	if (s.state.size() == 6)
-	{
-		r = s.state[3];
-		p = s.state[4];
-		y = s.state[5];
-	}
-	Eigen::Affine3d T = Eigen::Translation3d(s.state[0], s.state[1], m_obj_desc.o_z) *
-						Eigen::AngleAxisd(y, Eigen::Vector3d::UnitZ()) *
-						Eigen::AngleAxisd(p, Eigen::Vector3d::UnitY()) *
-						Eigen::AngleAxisd(r, Eigen::Vector3d::UnitX());
-
-	m_obj.SetTransform(T);
+	updateObjectTransform(s);
 
 	std::vector<std::vector<double>> sphere_positions;
 	std::vector<double> sphere_radii;
@@ -599,8 +587,7 @@ bool Agent::stateObsCollision(const LatticeState& s)
 	return m_cc->ImmovableCollision(m_obj.GetFCLObject());
 }
 
-// return false => collide with NGR
-bool Agent::stateOutsideNGR(const LatticeState& s)
+bool Agent::updateObjectTransform(const LatticeState& s)
 {
 	double r = 0.0, p = 0.0, y = 0.0;
 	if (s.state.size() == 6)
@@ -616,12 +603,25 @@ bool Agent::stateOutsideNGR(const LatticeState& s)
 						Eigen::AngleAxisd(r, Eigen::Vector3d::UnitX());
 
 	m_obj.SetTransform(T);
+}
+
+// return false => collide with NGR
+bool Agent::stateOutsideNGR(const LatticeState& s, double &dist)
+{
+	updateObjectTransform(s);
 	std::vector<const smpl::collision::CollisionSphereState*> q = {
 									m_obj.SpheresState()->spheres.root() };
 
-	double padding = 0.0, dist = -1.0;
+	dist = -1.0;
+	double padding = 0.0;
 	return smpl::collision::CheckVoxelsCollisions(
 							m_obj, q, *(m_ngr_grid.get()), padding, dist);
+}
+
+bool Agent::stateOutsideNGR(const LatticeState& s)
+{
+	double dist;
+	return stateOutsideNGR(s, dist);
 }
 
 auto Agent::makePathVisualization()

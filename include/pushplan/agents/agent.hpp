@@ -149,7 +149,10 @@ private:
 
 	// check collisions with static obstacles
 	bool stateObsCollision(const LatticeState& s);
+
+	bool updateObjectTransform(const LatticeState& s);
 	// check collisions with NGR
+	bool stateOutsideNGR(const LatticeState& s, double &dist);
 	bool stateOutsideNGR(const LatticeState& s);
 
 	auto makePathVisualization()
