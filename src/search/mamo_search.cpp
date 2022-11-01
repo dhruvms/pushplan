@@ -114,6 +114,43 @@ void MAMOSearch::SaveStats()
 	STATS.close();
 }
 
+void MAMOSearch::SaveNBData()
+{
+	std::string filename(__FILE__);
+	auto found = filename.find_last_of("/\\");
+	filename = filename.substr(0, found + 1) + "../../dat/EM4M-NB.csv";
+
+	bool exists = FileExists(filename);
+	std::ofstream STATS;
+	STATS.open(filename, std::ofstream::out | std::ofstream::app);
+	if (!exists)
+	{
+		STATS << "SceneID,Solved,FirstTrajSuccess,"
+				<< "SuccessfulPushes,UnsuccessfulPushes,"
+				<< "PercentNGR,NumObjs,ObjDatas\n";
+	}
+
+	STATS << m_planner->GetSceneID() << ','
+			<< (int)m_solved << ',' << m_planner->GetFirstTrajSuccess() << ','
+			<< m_root_search->actions << ',' << m_root_search->noops << ','
+			<< m_root_node->percent_ngr() << ',';
+
+	const auto odata = m_root_node->obj_priority_data();
+	STATS << odata.size() << ',';
+	for (size_t i = 0; i < odata.size(); ++i)
+	{
+		// we store four elements for each object inside the ngr:
+		// percentage of object volume inside, object height, object mass, object friction
+		STATS << odata[i][0] << ',' << odata[i][1] << ',' << odata[i][2] << ',' << odata[i][3];
+		if (i != odata.size()) {
+			STATS << ',';
+		}
+	}
+	STATS << '\n';
+
+	STATS.close();
+}
+
 void MAMOSearch::Cleanup()
 {
 	for (auto& node: m_search_nodes)

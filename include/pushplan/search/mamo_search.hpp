@@ -55,6 +55,7 @@ public:
 	bool Solve();
 	void GetRearrangements(std::vector<trajectory_msgs::JointTrajectory>& rearrangements, int& grasp_at);
 	void SaveStats();
+	void SaveNBData();
 	void Cleanup();
 
 private:
