@@ -50,7 +50,7 @@ bool MAMOSearch::Solve()
 
 	while (!m_OPEN.empty())
 	{
-		if (GetTime() - t1 > 600.0)
+		if (GetTime() - t1 > 300.0)
 		{
 			SMPL_ERROR("MAMO Search took more than 5 minutes!");
 			break;
