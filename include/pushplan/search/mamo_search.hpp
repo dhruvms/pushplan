@@ -1,11 +1,12 @@
 #ifndef MAMO_SEARCH_HPP
 #define MAMO_SEARCH_HPP
 
-
 #include <pushplan/search/mamo_node.hpp>
 #include <pushplan/utils/hash_manager.hpp>
 
 #include <boost/heap/fibonacci_heap.hpp>
+#include <boost/math/distributions/beta.hpp>
+#include <boost/math/distributions/exponential.hpp>
 
 #include <unordered_map>
 
@@ -16,28 +17,30 @@ struct MAMOSearchState
 {
 	unsigned int state_id;
 	// unsigned int g, h, f;
-	unsigned int priority, actions, noops;
+	unsigned int actions, noops;
+	double priority;
 	bool closed, try_finalise;
 	MAMOSearchState *bp;
 
 	struct OPENCompare
 	{
-		// lower => higher priority
+		// return true if p goes before q
 		bool operator()(const MAMOSearchState *p, const MAMOSearchState *q) const
 		{
-			if (p->actions == q->actions)
-			{
-				if (p->noops == q->noops)
-				{
-					if (p->priority == q->priority)
-					{
-						return rand() % 2;
-					}
-					return p->priority > q->priority;
-				}
-				return p->noops < q->noops;
-			}
-			return p->actions < q->actions;
+			// if (p->actions == q->actions)
+			// {
+			// 	if (p->noops == q->noops)
+			// 	{
+			// 		if (p->priority == q->priority)
+			// 		{
+			// 			return rand() % 2;
+			// 		}
+			// 		return p->priority > q->priority;
+			// 	}
+			// 	return p->noops < q->noops;
+			// }
+			// return p->actions < q->actions;
+			return p->priority < q->priority;
 		}
 	};
 	boost::heap::fibonacci_heap<MAMOSearchState*, boost::heap::compare<MAMOSearchState::OPENCompare> >::handle_type m_OPEN_h;
@@ -90,6 +93,14 @@ private:
 	MAMOSearchState *getSearchState(unsigned int state_id);
 	MAMOSearchState *createSearchState(unsigned int state_id);
 	void initSearchState(MAMOSearchState *state);
+
+	const double solvable_prior = 0.3084358524;
+	boost::math::beta_distribution<> D_percent_ngr;
+	boost::math::exponential_distribution<> D_num_objs;
+	boost::math::exponential_distribution<> D_noops;
+	boost::math::exponential_distribution<> D_odata;
+	double computeMAMOPriority(MAMOSearchState *state);
+	void createDists();
 };
 
 } // namespace clutter

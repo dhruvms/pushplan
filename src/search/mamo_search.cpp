@@ -22,6 +22,8 @@ bool MAMOSearch::CreateRoot()
 	m_stats["push_planner_time"] = 0.0;
 	m_stats["total_time"] = 0.0;
 
+	createDists();
+
 	double t1 = GetTime();
 	m_root_node = new MAMONode;
 	m_root_node->SetPlanner(m_planner);
@@ -43,9 +45,11 @@ bool MAMOSearch::CreateRoot()
 bool MAMOSearch::Solve()
 {
 	double t1 = GetTime();
-	m_root_search->priority = m_root_node->ComputeMAMOPriority();
 	m_root_search->actions = 0;
 	m_root_search->noops = 0;
+	// m_root_search->priority = m_root_node->ComputeMAMOPriorityOrig();
+	m_root_node->ComputePriorityFactors();
+	computeMAMOPriority(m_root_search);
 	m_root_search->m_OPEN_h = m_OPEN.push(m_root_search);
 
 	while (!m_OPEN.empty())
@@ -57,7 +61,7 @@ bool MAMOSearch::Solve()
 		}
 
 		auto next = m_OPEN.top();
-		SMPL_WARN("Select %d, priority = %u", next->state_id, next->priority);
+		SMPL_WARN("Select %d, priority = %.2e", next->state_id, next->priority);
 		if (done(next))
 		{
 			SMPL_INFO("Final plan found!");
@@ -94,7 +98,7 @@ void MAMOSearch::SaveStats()
 {
 	std::string filename(__FILE__);
 	auto found = filename.find_last_of("/\\");
-	filename = filename.substr(0, found + 1) + "../../dat/MAMO.csv";
+	filename = filename.substr(0, found + 1) + "../../dat/PRIORITY.csv";
 
 	bool exists = FileExists(filename);
 	std::ofstream STATS;
@@ -176,7 +180,7 @@ void MAMOSearch::Cleanup()
 
 bool MAMOSearch::expand(MAMOSearchState *state)
 {
-	SMPL_WARN("Expand %d, priority = %u", state->state_id, state->priority);
+	SMPL_WARN("Expand %d, priority = %.2e", state->state_id, state->priority);
 	auto node = m_hashtable.GetState(state->state_id);
 
 	std::vector<std::pair<int, int> > succ_object_centric_actions;
@@ -321,9 +325,10 @@ void MAMOSearch::createSuccs(
 				for (auto it = debug_pushes->begin() + i; it != debug_pushes->end(); ++it) {
 					parent_node->AddDebugPush(*it);
 				}
+				parent_search_state->priority = parent_search_state->priority * (boost::math::pdf(D_noops, succ_noops) / boost::math::pdf(D_noops, parent_search_state->noops));
 				parent_search_state->noops = succ_noops;
 				m_OPEN.update(parent_search_state->m_OPEN_h);
-				SMPL_WARN("Update duplicate %d, priority = %u", old_id, parent_search_state->priority);
+				SMPL_WARN("Update duplicate %d, priority = %.2e", old_id, parent_search_state->priority);
 			}
 			else
 			{
@@ -340,9 +345,11 @@ void MAMOSearch::createSuccs(
 					m_hashtable.UpdateState(succ);
 					prev_search_state->bp = parent_search_state;
 					prev_search_state->actions = succ_actions;
-					prev_search_state->noops = succ_noops;
-					m_OPEN.update(prev_search_state->m_OPEN_h);
-					SMPL_WARN("Update %d, priority = %u ", old_id, prev_search_state->priority);
+					// prev_search_state->noops = succ_noops;
+					// // priority update unaffected by visiting the same state as before
+					// computeMAMOPriority(prev_search_state);
+					// m_OPEN.update(prev_search_state->m_OPEN_h);
+					// SMPL_WARN("Update %d, priority = %.2e ", old_id, prev_search_state->priority);
 				}
 				else
 				{
@@ -350,12 +357,14 @@ void MAMOSearch::createSuccs(
 					unsigned int succ_id = m_hashtable.GetStateIDForceful(succ);
 					auto succ_search_state = getSearchState(succ_id);
 					succ_search_state->bp = parent_search_state;
-					succ_search_state->priority = succ->ComputeMAMOPriority();
 					succ_search_state->actions = succ_actions;
 					succ_search_state->noops = succ_noops;
+					// succ_search_state->priority = succ->ComputeMAMOPriorityOrig();
+					succ->ComputePriorityFactors();
+					computeMAMOPriority(succ_search_state);
 					succ_search_state->m_OPEN_h = m_OPEN.push(succ_search_state);
 
-					SMPL_WARN("Generate %d, priority = %u", succ_id, succ_search_state->priority);
+					SMPL_WARN("Generate %d, priority = %.2e", succ_id, succ_search_state->priority);
 				}
 				parent_node->AddChild(succ);
 				m_search_nodes.push_back(succ);
@@ -387,12 +396,41 @@ MAMOSearchState* MAMOSearch::createSearchState(unsigned int state_id)
 
 void MAMOSearch::initSearchState(MAMOSearchState *state)
 {
-	state->priority = std::numeric_limits<unsigned int>::max();
+	state->priority = std::numeric_limits<double>::lowest();
 	state->actions = -1;
 	state->noops = -1;
 	state->closed = false;
 	state->try_finalise = false;
 	state->bp = nullptr;
+}
+
+void MAMOSearch::createDists()
+{
+	D_percent_ngr = boost::math::beta_distribution<>(0.3403101839, 45.0750087432);
+	D_num_objs = boost::math::exponential_distribution<>(1.5634743875);
+	D_noops = boost::math::exponential_distribution<>(0.4526209677);
+	D_odata = boost::math::exponential_distribution<>(32.1092604858);
+}
+
+double MAMOSearch::computeMAMOPriority(MAMOSearchState *state)
+{
+	auto node = m_hashtable.GetState(state->state_id);
+	const auto odata = node->obj_priority_data();
+
+	ROS_WARN("exp dist at 0 = %f", boost::math::pdf(D_num_objs, 0));
+	if (node->percent_ngr() == 0) {
+		state->priority = std::numeric_limits<double>::max();
+	}
+	else
+	{
+		state->priority = solvable_prior *
+							boost::math::pdf(D_percent_ngr, node->percent_ngr()) *
+							boost::math::pdf(D_num_objs, odata.size()) *
+							boost::math::pdf(D_noops, state->noops);
+		for (size_t i = 0; i < odata.size(); ++i) {
+			state->priority *= boost::math::pdf(D_odata, odata[i][0] * odata[i][2] * odata[i][3]);
+		}
+	}
 }
 
 } // namespace clutter

@@ -238,14 +238,51 @@ void MAMONode::GetSuccs(
 	*push_planner_time = GetTime() - *push_planner_time;
 }
 
-unsigned int MAMONode::ComputeMAMOPriority()
+unsigned int MAMONode::ComputeMAMOPriorityOrig()
 {
-	computePriorityFactors();
+	ComputePriorityFactors();
 
 	if (m_num_objs == 0) {
 		return 0;
 	}
 	return 100 * (m_percent_objs * m_num_objs + m_percent_ngr);
+}
+
+void MAMONode::ComputePriorityFactors()
+{
+	m_percent_ngr = 0.0;
+	m_percent_objs = 0.0;
+	m_num_objs = 0;
+
+	const auto& ngr = m_planner->GetNGR();
+	float ngr_size = float(ngr.size());
+	std::set<Coord, coord_compare> agent_voxels;
+	std::vector<Coord> intersection;
+	for (size_t i = 0; i < m_object_states.size(); ++i)
+	{
+		m_agents.at(m_agent_map[m_object_states.at(i).id()])->GetVoxels(
+					m_object_states.at(i).cont_pose(),
+					agent_voxels);
+
+		intersection.clear();
+		std::set_intersection(
+				ngr.begin(), ngr.end(),
+				agent_voxels.begin(), agent_voxels.end(),
+				std::back_inserter(intersection));
+
+		if (intersection.size() > 0)
+		{
+			++m_num_objs;
+			m_percent_ngr += (intersection.size()/ngr_size);
+
+			double percent_obj = (intersection.size()/double(agent_voxels.size()));
+			auto obj = m_agents.at(m_agent_map[m_object_states.at(i).id()])->GetObject();
+			m_percent_objs += percent_obj;
+
+			std::vector<double> priority_props = {percent_obj, obj->Height(), obj->desc.mass, obj->desc.mu};
+			m_obj_priority_data.push_back(std::move(priority_props));
+		}
+	}
 }
 
 size_t MAMONode::GetObjectsHash() const
@@ -493,43 +530,6 @@ void MAMONode::addAgent(
 // 	m_relevant_ids.clear();
 // 	m_robot->IdentifyReachableMovables(m_agents, m_relevant_ids);
 // }
-
-void MAMONode::computePriorityFactors()
-{
-	m_percent_ngr = 0.0;
-	m_percent_objs = 0.0;
-	m_num_objs = 0;
-
-	const auto& ngr = m_planner->GetNGR();
-	float ngr_size = float(ngr.size());
-	std::set<Coord, coord_compare> agent_voxels;
-	std::vector<Coord> intersection;
-	for (size_t i = 0; i < m_object_states.size(); ++i)
-	{
-		m_agents.at(m_agent_map[m_object_states.at(i).id()])->GetVoxels(
-					m_object_states.at(i).cont_pose(),
-					agent_voxels);
-
-		intersection.clear();
-		std::set_intersection(
-				ngr.begin(), ngr.end(),
-				agent_voxels.begin(), agent_voxels.end(),
-				std::back_inserter(intersection));
-
-		if (intersection.size() > 0)
-		{
-			++m_num_objs;
-			m_percent_ngr += (intersection.size()/ngr_size);
-
-			double percent_obj = (intersection.size()/double(agent_voxels.size()));
-			auto obj = m_agents.at(m_agent_map[m_object_states.at(i).id()])->GetObject();
-			m_percent_objs += percent_obj;
-
-			std::vector<double> priority_props = {percent_obj, obj->Height(), obj->desc.mass, obj->desc.mu};
-			m_obj_priority_data.push_back(std::move(priority_props));
-		}
-	}
-}
 
 void MAMONode::resetAgents()
 {

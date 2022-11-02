@@ -76,13 +76,13 @@ int main(int argc, char** argv)
 	// read from NONE file
 	std::string filename(__FILE__), results(__FILE__);
 	auto found = filename.find_last_of("/\\");
-	filename = filename.substr(0, found + 1) + "../dat/FIRST.txt";
+	filename = filename.substr(0, found + 1) + "../dat/PRIORITY.txt";
 	results = results.substr(0, found + 1) + "../dat/RESULTS.csv";
 
-// int runs;
-// ph.getParam("robot/runs", runs);
-// for (int i = 0; i < runs; ++i)
-// {
+int runs;
+ph.getParam("robot/runs", runs);
+for (int i = 0; i < runs; ++i)
+{
 	std::ifstream NONE;
 	NONE.open(filename);
 
@@ -119,11 +119,11 @@ int main(int argc, char** argv)
 			bool replay;
 			ph.getParam("robot/replay", replay);
 
-			int runs;
-			ph.getParam("robot/runs", runs);
-			ROS_WARN("Run planner %d times on: %s", runs, planfile.c_str());
-for (int i = 0; i < runs; ++i)
-{
+// 			int runs;
+// 			ph.getParam("robot/runs", runs);
+// 			ROS_WARN("Run planner %d times on: %s", runs, planfile.c_str());
+// for (int i = 0; i < runs; ++i)
+// {
 			Planner p;
 			bool ycb;
 			ph.getParam("objects/ycb", ycb);
@@ -150,7 +150,7 @@ for (int i = 0; i < runs; ++i)
 			else {
 				p.RunSolution();
 			}
-}
+// }
 		}
 	}
 	else
@@ -160,7 +160,7 @@ for (int i = 0; i < runs; ++i)
 	}
 
 	NONE.close();
-// }
+}
 
 	return 0;
 }

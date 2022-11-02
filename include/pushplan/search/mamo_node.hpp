@@ -43,7 +43,8 @@ public:
 		bool *close,
 		double *mapf_time,
 		double *push_planner_time);
-	unsigned int ComputeMAMOPriority();
+	unsigned int ComputeMAMOPriorityOrig();
+	void ComputePriorityFactors();
 	void SaveNode(unsigned int my_id,	unsigned int parent_id);
 
 	size_t GetObjectsHash() const;
@@ -111,7 +112,6 @@ private:
 		const std::shared_ptr<Agent>& agent,
 		const size_t& pidx);
 	// void identifyRelevantMovables();
-	void computePriorityFactors();
 
 	void resetAgents();
 };
