@@ -1114,6 +1114,84 @@ bool Robot::PlanRetrieval(const std::vector<Object*>& movable_obstacles, bool fi
 	return true;
 }
 
+bool Robot::PlanToHomeState(const std::vector<Object*>& movable_obstacles, smpl::RobotState* start_state)
+{
+	bool have_obs = !movable_obstacles.empty();
+	InitArmPlanner(false);
+
+	moveit_msgs::MotionPlanRequest req;
+	moveit_msgs::MotionPlanResponse res;
+
+	m_ph.param("allowed_planning_time", req.allowed_planning_time, 10.0);
+	req.max_acceleration_scaling_factor = 1.0;
+	req.max_velocity_scaling_factor = 1.0;
+	req.num_planning_attempts = 1;
+
+	// set start state for retract plan to latest push end state
+	moveit_msgs::RobotState orig_start = m_start_state;
+	if (start_state != nullptr)
+	{
+		m_start_state.joint_state.position.erase(
+			m_start_state.joint_state.position.begin() + 1,
+			m_start_state.joint_state.position.begin() + 1 + start_state->size());
+		m_start_state.joint_state.position.insert(
+			m_start_state.joint_state.position.begin() + 1,
+			start_state->begin(), start_state->end());
+	}
+	req.start_state = m_start_state;
+
+	// set goal state for retract plan to home state
+	smpl::RobotState home;
+	home.insert(home.begin(),
+		orig_start.joint_state.position.begin() + 1, orig_start.joint_state.position.end());
+	createJointSpaceGoal(home, req);
+	bool goal_collides = !m_cc_i->isStateValid(home);
+	if (goal_collides) {
+		req.planner_id = "arastar.manip_cbs.joint_distance";
+	}
+	else {
+		req.planner_id = "mhastar.manip_cbs.bfs.joint_distance";
+	}
+
+	// completely unnecessary variable
+	moveit_msgs::PlanningScene planning_scene;
+	planning_scene.robot_state = m_start_state;
+	// SMPL_INFO("Planning to home state with attached body.");
+	if (!m_planner->init_planner(planning_scene, req, res))
+	{
+		// ROS_ERROR("Failed to init planner!");
+		m_start_state = orig_start;
+		return false;
+	}
+
+	if (have_obs) {
+		// add to immovable collision checker
+		ProcessObstacles(movable_obstacles);
+	}
+
+	std::vector<std::vector<double> > dummy;
+	if (!m_planner->solve_with_constraints(req, res, m_movable_moveit_objs, dummy))
+	{
+		// ROS_ERROR("Failed to plan to home state with attached body.");
+		m_start_state = orig_start;
+
+		if (have_obs) {
+			// remove from immovable collision checker
+			ProcessObstacles(movable_obstacles, true);
+		}
+		return false;
+	}
+	// SMPL_INFO("Robot found extraction plan! # wps = %d", res.trajectory.joint_trajectory.points.size());
+	if (have_obs) {
+		// remove from immovable collision checker
+		ProcessObstacles(movable_obstacles, true);
+	}
+	m_start_state = orig_start;
+	m_traj = res.trajectory.joint_trajectory;
+
+	return true;
+}
+
 bool Robot::SatisfyPath(HighLevelNode* ct_node, Trajectory** sol_path, int& expands, int& min_f)
 {
 	expands = 0;

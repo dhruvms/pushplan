@@ -61,18 +61,18 @@ bool MAMOSearch::Solve()
 		}
 
 		auto next = m_OPEN.top();
+		auto next_node = m_hashtable.GetState(next->state_id);
 		SMPL_WARN("Select %d, priority = %.2e", next->state_id, next->priority);
-		if (done(next))
+		if (done(next) || next_node->percent_ngr() == 0)
 		{
-			SMPL_INFO("Final plan found!");
+			SMPL_INFO("Final plan found OR NGR cleared!");
 
-			auto node = m_hashtable.GetState(next->state_id);
 			double t2 = GetTime();
-			node->RunMAPF();
+			next_node->RunMAPF();
 			m_stats["mapf_time"] += GetTime() - t2;
-			node->SaveNode(next->state_id, next->bp == nullptr ? 0 : next->bp->state_id);
+			next_node->SaveNode(next->state_id, next->bp == nullptr ? 0 : next->bp->state_id);
 
-			m_solved_node = node;
+			m_solved_node = next_node;
 			m_solved_search = next;
 			m_solved = true;
 			extractRearrangements();
@@ -247,7 +247,17 @@ bool MAMOSearch::done(MAMOSearchState *state)
 void MAMOSearch::extractRearrangements()
 {
 	m_rearrangements.clear();
-	m_rearrangements.push_back(std::move(m_exec_traj));
+	if (!m_exec_traj.points.empty()) {
+		m_rearrangements.push_back(std::move(m_exec_traj));
+	}
+	else
+	{
+		m_rearrangements.push_back(m_planner->GetFirstTraj());
+
+		auto start_state = m_solved_node->GetCurrentStartState();
+		m_planner->PlanToHomeState(m_solved_node->kobject_states(), start_state, m_exec_traj);
+		m_rearrangements.push_back(std::move(m_exec_traj));
+	}
 	ROS_WARN("Solution path state ids (from goal to start):");
 	for (MAMOSearchState *state = m_solved_search; state; state = state->bp)
 	{
@@ -417,7 +427,6 @@ double MAMOSearch::computeMAMOPriority(MAMOSearchState *state)
 	auto node = m_hashtable.GetState(state->state_id);
 	const auto odata = node->obj_priority_data();
 
-	ROS_WARN("exp dist at 0 = %f", boost::math::pdf(D_num_objs, 0));
 	if (node->percent_ngr() == 0) {
 		state->priority = std::numeric_limits<double>::max();
 	}

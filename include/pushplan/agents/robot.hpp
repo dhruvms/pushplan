@@ -69,6 +69,7 @@ public:
 	bool RandomiseStart();
 	bool PlanApproachOnly(const std::vector<Object*>& movable_obstacles);
 	bool PlanRetrieval(const std::vector<Object*>& movable_obstacles, bool finalise=false, smpl::RobotState* start_state=nullptr);
+	bool PlanToHomeState(const std::vector<Object*>& movable_obstacles, smpl::RobotState* start_state=nullptr);
 	void UpdateNGR(bool vis=false);
 	bool SatisfyPath(HighLevelNode* ct_node, Trajectory** sol_path, int& expands, int& min_f);
 

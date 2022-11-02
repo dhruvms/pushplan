@@ -44,6 +44,10 @@ public:
 		const std::vector<ObjectState>& objects,
 		std::vector<double>* start_state,
 		trajectory_msgs::JointTrajectory& solution);
+	bool PlanToHomeState(
+		const std::vector<ObjectState>& objects,
+		std::vector<double>* start_state,
+		trajectory_msgs::JointTrajectory& solution);
 	void AddGloballyInvalidPush(
 		const std::pair<Coord, Coord>& bad_start_goal);
 	void AddLocallyInvalidPush(
@@ -71,6 +75,7 @@ public:
 	const int& GetSceneID() const;
 	const int& GetOoIID() const;
 	const std::set<Coord, coord_compare>& GetNGR() const;
+	const trajectory_msgs::JointTrajectory& GetFirstTraj() const;
 	const bool& GetFirstTrajSuccess() const;
 
 	// For KPIECE/RRT

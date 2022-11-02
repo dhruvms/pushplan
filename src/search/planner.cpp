@@ -256,6 +256,33 @@ bool Planner::FinalisePlan(
 	return true;
 }
 
+bool Planner::PlanToHomeState(
+	const std::vector<ObjectState>& objects,
+	std::vector<double>* start_state,
+	trajectory_msgs::JointTrajectory& solution)
+{
+	m_timer = GetTime();
+
+	std::vector<Object*> movable_obstacles;
+	for (const auto& pose: objects)
+	{
+		m_agents.at(m_agent_map[pose.id()])->SetObjectPose(pose.cont_pose());
+		movable_obstacles.push_back(m_agents.at(m_agent_map[pose.id()])->GetObject());
+	}
+
+	m_robot->ProcessObstacles({ m_ooi->GetObject() }, true);
+	if (!m_robot->PlanToHomeState(movable_obstacles, start_state))
+	{
+		m_stats["robot_planner_time"] += GetTime() - m_timer;
+		return false;
+	}
+	m_robot->ProcessObstacles({ m_ooi->GetObject() });
+	solution = m_robot->GetLastPlanProfiled();
+
+	m_stats["robot_planner_time"] += GetTime() - m_timer;
+	return true;
+}
+
 void Planner::AddGloballyInvalidPush(
 	const std::pair<Coord, Coord>& bad_start_goal)
 {
@@ -1098,6 +1125,11 @@ const int& Planner::GetOoIID() const
 const std::set<Coord, coord_compare>& Planner::GetNGR() const
 {
 	return m_ngr;
+}
+
+const trajectory_msgs::JointTrajectory& Planner::GetFirstTraj() const
+{
+	return m_exec;
 }
 
 const bool& Planner::GetFirstTrajSuccess() const
