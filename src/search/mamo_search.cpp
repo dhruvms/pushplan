@@ -61,18 +61,18 @@ bool MAMOSearch::Solve()
 		}
 
 		auto next = m_OPEN.top();
-		auto next_node = m_hashtable.GetState(next->state_id);
 		SMPL_WARN("Select %d, priority = %.2e", next->state_id, next->priority);
-		if (done(next) || next_node->percent_ngr() == 0)
+		if (done(next))
 		{
 			SMPL_INFO("Final plan found OR NGR cleared!");
 
+			auto node = m_hashtable.GetState(next->state_id);
 			double t2 = GetTime();
-			next_node->RunMAPF();
+			node->RunMAPF();
 			m_stats["mapf_time"] += GetTime() - t2;
-			next_node->SaveNode(next->state_id, next->bp == nullptr ? 0 : next->bp->state_id);
+			node->SaveNode(next->state_id, next->bp == nullptr ? 0 : next->bp->state_id);
 
-			m_solved_node = next_node;
+			m_solved_node = node;
 			m_solved_search = next;
 			m_solved = true;
 			extractRearrangements();
@@ -98,7 +98,7 @@ void MAMOSearch::SaveStats()
 {
 	std::string filename(__FILE__);
 	auto found = filename.find_last_of("/\\");
-	filename = filename.substr(0, found + 1) + "../../dat/PRIORITY.csv";
+	filename = filename.substr(0, found + 1) + "../../dat/MAMO.csv";
 
 	bool exists = FileExists(filename);
 	std::ofstream STATS;
@@ -247,24 +247,17 @@ bool MAMOSearch::done(MAMOSearchState *state)
 void MAMOSearch::extractRearrangements()
 {
 	m_rearrangements.clear();
-	if (!m_exec_traj.points.empty()) {
-		m_rearrangements.push_back(std::move(m_exec_traj));
+	m_rearrangements.push_back(std::move(m_exec_traj));
+	if (m_exec_traj.points.empty()) {
+		SMPL_ERROR("Found MAMO solution without retrieval traj?");
 	}
-	else
-	{
-		m_rearrangements.push_back(m_planner->GetFirstTraj());
-
-		auto start_state = m_solved_node->GetCurrentStartState();
-		m_planner->PlanToHomeState(m_solved_node->kobject_states(), start_state, m_exec_traj);
-		m_rearrangements.push_back(std::move(m_exec_traj));
-	}
-	ROS_WARN("Solution path state ids (from goal to start):");
+	SMPL_WARN("Solution path state ids (from goal to start):");
 	for (MAMOSearchState *state = m_solved_search; state; state = state->bp)
 	{
 		auto node = m_hashtable.GetState(state->state_id);
 		if (node->has_traj())
 		{
-			ROS_WARN("\t%d", state->state_id);
+			SMPL_WARN("\t%d", state->state_id);
 			m_rearrangements.push_back(node->krobot_traj());
 		}
 	}
