@@ -985,6 +985,7 @@ void Robot::getTrajSpheres(
 	m_sim->GetShelfParams(ox, oy, oz, sx, sy, sz);
 
 	spheres.clear();
+	setGripper(true);
 	for (const auto &wp: traj.points)
 	{
 		auto markers = m_cc_i->getCollisionModelVisualization(wp.positions);
@@ -1015,6 +1016,7 @@ void Robot::getTrajSpheres(
 					std::ceil(mr * 100.0) / 100.0 });
 		}
 	}
+	setGripper(false);
 }
 
 void Robot::voxeliseTrajectory()
