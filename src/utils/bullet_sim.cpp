@@ -1108,8 +1108,11 @@ std::string BulletSim::getPartialFilename(int id)
 	else if (id < 300000) {
 		level = "10";
 	}
-	else {
+	else if (id < 400000) {
 		level = "15";
+	}
+	else {
+		level = "nb";
 	}
 	filename += level + "/plan_";
 

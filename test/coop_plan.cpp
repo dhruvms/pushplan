@@ -76,7 +76,7 @@ int main(int argc, char** argv)
 	// read from NONE file
 	std::string filename(__FILE__), results(__FILE__);
 	auto found = filename.find_last_of("/\\");
-	filename = filename.substr(0, found + 1) + "../dat/PRIORITY.txt";
+	filename = filename.substr(0, found + 1) + "../dat/FIRST.txt";
 	results = results.substr(0, found + 1) + "../dat/RESULTS.csv";
 
 int runs;
@@ -107,8 +107,11 @@ for (int i = 0; i < runs; ++i)
 			else if (scene_id < 300000) {
 				level = "10";
 			}
-			else {
+			else if (scene_id < 400000) {
 				level = "15";
+			}
+			else {
+				level = "nb";
 			}
 
 			std::string planfile(__FILE__);
