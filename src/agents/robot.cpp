@@ -349,6 +349,34 @@ bool Robot::ProcessObstacles(const std::vector<Object*>& obstacles,
 	return true;
 }
 
+void Robot::ProcessFCLObstacles(std::vector<Object> *obstacles, bool remove)
+{
+	for (auto &o : *obstacles)
+	{
+		if (remove) {
+			m_cc_i->RemoveFCLMovableObstacle(o.GetFCLObject());
+		}
+		else {
+			m_cc_i->AddFCLMovableObstacle(o.GetFCLObject());
+		}
+	}
+	m_cc_i->SetupFCL();
+}
+
+void Robot::ProcessFCLObstacles(const std::vector<Object*> &obstacles, bool remove)
+{
+	for (const auto &o : obstacles)
+	{
+		if (remove) {
+			m_cc_i->RemoveFCLMovableObstacle(o->GetFCLObject());
+		}
+		else {
+			m_cc_i->AddFCLMovableObstacle(o->GetFCLObject());
+		}
+	}
+	m_cc_i->SetupFCL();
+}
+
 bool Robot::SteerAction(
 	const smpl::RobotState& to, int steps,
 	const smpl::RobotState& from, const comms::ObjectsPoses& start_objs,
@@ -914,9 +942,13 @@ bool Robot::planRetract(
 		return false;
 	}
 
-	if (have_obs && finalise) {
+	if (have_obs && finalise)
+	{
 		// add to immovable collision checker
 		ProcessObstacles(movable_obstacles);
+		ProcessFCLObstacles(movable_obstacles);
+		m_cc_i->SetFCLObjectOOI(m_ooi.GetFCLObject());
+		// req.allowed_planning_time = 5.0;
 	}
 
 	if (!m_planner->solve_with_constraints(req, res, m_movable_moveit_objs, retract_cvecs))
@@ -928,6 +960,7 @@ bool Robot::planRetract(
 		if (have_obs && finalise) {
 			// remove from immovable collision checker
 			ProcessObstacles(movable_obstacles, true);
+			ProcessFCLObstacles(movable_obstacles, true);
 		}
 		return false;
 	}
@@ -935,6 +968,7 @@ bool Robot::planRetract(
 	if (have_obs && finalise) {
 		// remove from immovable collision checker
 		ProcessObstacles(movable_obstacles, true);
+		ProcessFCLObstacles(movable_obstacles, true);
 	}
 
 	detachObject();
@@ -3552,6 +3586,7 @@ void Robot::createVirtualTable()
 	virtual_table.CreateSMPLCollisionObject();
 	virtual_table.GenerateCollisionModels();
 	ProcessObstacles({ &virtual_table });
+	ProcessFCLObstacles({ &virtual_table });
 }
 
 int Robot::getPushIdx(double push_frac)
