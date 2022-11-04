@@ -328,7 +328,7 @@ void MAMOSearch::createSuccs(
 				for (auto it = debug_pushes->begin() + i; it != debug_pushes->end(); ++it) {
 					parent_node->AddDebugPush(*it);
 				}
-				parent_search_state->priority = parent_search_state->priority * (boost::math::pdf(D_noops, succ_noops) / boost::math::pdf(D_noops, parent_search_state->noops));
+				// parent_search_state->priority = parent_search_state->priority * (boost::math::pdf(D_noops, succ_noops) / boost::math::pdf(D_noops, parent_search_state->noops));
 				parent_search_state->noops = succ_noops;
 				m_OPEN.update(parent_search_state->m_OPEN_h);
 				SMPL_WARN("Update duplicate %d, priority = %.2e", old_id, parent_search_state->priority);
@@ -427,8 +427,9 @@ double MAMOSearch::computeMAMOPriority(MAMOSearchState *state)
 	{
 		state->priority = solvable_prior *
 							boost::math::pdf(D_percent_ngr, node->percent_ngr()) *
-							boost::math::pdf(D_num_objs, odata.size()) *
-							boost::math::pdf(D_noops, state->noops);
+							boost::math::pdf(D_num_objs, odata.size());
+							//  *
+							// boost::math::pdf(D_noops, state->noops);
 		for (size_t i = 0; i < odata.size(); ++i) {
 			state->priority *= boost::math::pdf(D_odata, odata[i][0] * odata[i][2] * odata[i][3]);
 		}
