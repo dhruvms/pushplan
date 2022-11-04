@@ -985,7 +985,7 @@ void Robot::getTrajSpheres(
 	m_sim->GetShelfParams(ox, oy, oz, sx, sy, sz);
 
 	spheres.clear();
-	setGripper(true);
+	// setGripper(true);
 	for (const auto &wp: traj.points)
 	{
 		auto markers = m_cc_i->getCollisionModelVisualization(wp.positions);
@@ -1016,7 +1016,7 @@ void Robot::getTrajSpheres(
 					std::ceil(mr * 100.0) / 100.0 });
 		}
 	}
-	setGripper(false);
+	// setGripper(false);
 }
 
 void Robot::voxeliseTrajectory()
@@ -1952,24 +1952,27 @@ bool Robot::PlanPush(
 		++m_stats["push_actions_found"];
 		debug_push = std::make_tuple(debug_push_start, debug_push_end, push_failure);
 
+		// append waypoint to retract to push start pose
+		push_action.points.push_back(push_action.points.at(0));
+		push_action.points.back().time_from_start = push_action.points.at(push_action.points.size() - 2).time_from_start + ros::Duration(1.0);
+
 		// append push_action to push_traj
 		auto t_prev = push_traj.points.back().time_from_start;
-		for (auto it = push_action.points.begin(); it != push_action.points.end(); ++it)
+		for (auto it = push_action.points.begin() + 1; it != push_action.points.end(); ++it)
 		{
 			auto tdiff = it->time_from_start - t_prev;
-			if ((it != push_action.points.end() - 1) && tdiff.toSec() < 0.3) {
+			// last two points in push_action must be appended to push_traj
+			// they are the final state in the push action and the retraction
+			// to the first state
+			if ((it < push_action.points.end() - 2) && tdiff.toSec() < 0.3) {
 				continue;
 			}
 			push_traj.points.push_back(*it);
 			t_prev = it->time_from_start;
 		}
 
-		// append waypoint to retract to push start pose
-		push_action.points.push_back(push_action.points.at(push_action.points.size()/2));
-		push_action.points.back().time_from_start = push_action.points.at(push_action.points.size() - 2).time_from_start + ros::Duration(0.5);
-		push_traj.points.push_back(push_action.points.back());
-
 		profileTrajectoryMoveIt(push_traj);
+		// store the profiled push_action
 		push_action.points.clear();
 		push_action.points.insert(push_action.points.begin(), push_traj.points.begin() + push_traj_approach_size, push_traj.points.end());
 
