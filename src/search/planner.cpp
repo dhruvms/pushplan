@@ -419,11 +419,11 @@ std::uint32_t Planner::RunSolution()
 
 std::uint32_t Planner::RunSim(bool save)
 {
-	// m_timer = GetTime();
-	// if (!runSim()) {
-	// 	SMPL_ERROR("Simulation failed!");
-	// }
-	// m_stats["sim_time"] += GetTime() - m_timer;
+	m_timer = GetTime();
+	if (!runSim()) {
+		SMPL_ERROR("Simulation failed!");
+	}
+	m_stats["sim_time"] += GetTime() - m_timer;
 
 	if (save) {
 		writeState("SOLUTION");
