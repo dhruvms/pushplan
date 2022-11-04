@@ -27,19 +27,17 @@ struct MAMOSearchState
 		// return true if p goes before q
 		bool operator()(const MAMOSearchState *p, const MAMOSearchState *q) const
 		{
-			// if (p->actions == q->actions)
-			// {
-			// 	if (p->noops == q->noops)
-			// 	{
-			// 		if (p->priority == q->priority)
-			// 		{
-			// 			return rand() % 2;
-			// 		}
-			// 		return p->priority > q->priority;
-			// 	}
-			// 	return p->noops < q->noops;
-			// }
-			// return p->actions < q->actions;
+			if (p->priority == q->priority)
+			{
+				if (p->actions == q->actions)
+				{
+					if (p->noops == q->noops) {
+						return rand() % 2;
+					}
+					return p->noops < q->noops;
+				}
+				return p->actions < q->actions;
+			}
 			return p->priority < q->priority;
 		}
 	};
