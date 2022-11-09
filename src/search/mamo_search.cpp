@@ -106,12 +106,12 @@ void MAMOSearch::SaveStats()
 	if (!exists)
 	{
 		STATS << "UID,"
-				<< "Solved?,SolveTime,MAPFTime,PushPlannerTime,"
+				<< "Solved?,NumTrajs,SolveTime,MAPFTime,PushPlannerTime,"
 				<< "Expansions,OnlyDuplicate,NoDuplicate,NoSuccs\n";
 	}
 
 	STATS << m_planner->GetSceneID() << ','
-			<< (int)m_solved << ','
+			<< (int)m_solved << ',' << (int)m_rearrangements.size() << ','
 			<< m_stats["total_time"] << ',' << m_stats["mapf_time"] << ',' << m_stats["push_planner_time"] << ','
 			<< m_stats["expansions"] << ',' << m_stats["only_duplicate"] << ',' << m_stats["no_duplicate"] << ','
 			<< m_stats["no_succs"] << '\n';
