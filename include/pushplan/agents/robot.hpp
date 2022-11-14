@@ -101,7 +101,7 @@ public:
 		comms::ObjectsPoses& result,
 		int& push_failure,
 		std::tuple<State, State, int>& debug_push,
-		bool input=false);
+		double &sim_time, bool input=false);
 	void IdentifyReachableMovables(
 		const std::vector<std::shared_ptr<Agent> >& agents,
 		std::vector<int>& reachable_ids);

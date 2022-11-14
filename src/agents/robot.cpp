@@ -1741,8 +1741,10 @@ bool Robot::PlanPush(
 	comms::ObjectsPoses& result,
 	int& push_failure,
 	std::tuple<State, State, int>& debug_push,
-	bool input)
+	double &sim_time, bool input)
 {
+	sim_time = 0.0;
+
 	// required info about object being pushed
 	int aidx = getPushIdx(push_frac);
 	const Trajectory* obj_traj = object->SolveTraj();
@@ -2000,6 +2002,7 @@ bool Robot::PlanPush(
 		m_sim->SimPushes(m_push_actions, object->GetID(), push[3], push[4], curr_scene, pidx, successes, result, relevant_ids);
 	}
 	m_stats["push_sim_time"] += GetTime() - start_time;
+	sim_time += GetTime() - start_time;
 
 	push_failure = pidx != -1 ? -1 : 0;
 	debug_push = std::make_tuple(debug_push_start, debug_push_end, push_failure);

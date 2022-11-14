@@ -41,8 +41,7 @@ public:
 		std::vector<trajectory_msgs::JointTrajectory> *succ_trajs,
 		std::vector<std::tuple<State, State, int> > *debug_pushes,
 		bool *close,
-		double *mapf_time,
-		double *push_planner_time);
+		double *mapf_time, double *get_succs_time, double *sim_time);
 	unsigned int ComputeMAMOPriorityOrig();
 	void ComputePriorityFactors();
 	void SaveNode(unsigned int my_id,	unsigned int parent_id);

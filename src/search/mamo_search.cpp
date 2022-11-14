@@ -20,6 +20,7 @@ bool MAMOSearch::CreateRoot()
 	m_stats["no_duplicate"] = 0.0;
 	m_stats["mapf_time"] = 0.0;
 	m_stats["push_planner_time"] = 0.0;
+	m_stats["sim_time"] = 0.0;
 	m_stats["total_time"] = 0.0;
 
 	createDists();
@@ -106,13 +107,13 @@ void MAMOSearch::SaveStats()
 	if (!exists)
 	{
 		STATS << "UID,"
-				<< "Solved?,NumTrajs,SolveTime,MAPFTime,PushPlannerTime,"
+				<< "Solved?,NumTrajs,SolveTime,MAPFTime,PushPlannerTime,SimTime"
 				<< "Expansions,OnlyDuplicate,NoDuplicate,NoSuccs\n";
 	}
 
 	STATS << m_planner->GetSceneID() << ','
 			<< (int)m_solved << ',' << (int)m_rearrangements.size() << ','
-			<< m_stats["total_time"] << ',' << m_stats["mapf_time"] << ',' << m_stats["push_planner_time"] << ','
+			<< m_stats["total_time"] << ',' << m_stats["mapf_time"] << ',' << m_stats["push_planner_time"] << ',' << m_stats["sim_time"] << ','
 			<< m_stats["expansions"] << ',' << m_stats["only_duplicate"] << ',' << m_stats["no_duplicate"] << ','
 			<< m_stats["no_succs"] << '\n';
 	STATS.close();
@@ -188,9 +189,10 @@ bool MAMOSearch::expand(MAMOSearchState *state)
 	std::vector<trajectory_msgs::JointTrajectory> succ_trajs;
 	std::vector<std::tuple<State, State, int> > debug_pushes;
 	bool close;
-	double mapf_time = 0.0, push_planner_time = 0.0;
-	node->GetSuccs(&succ_object_centric_actions, &succ_objects, &succ_trajs, &debug_pushes, &close, &mapf_time, &push_planner_time);
-	m_stats["push_planner_time"] += push_planner_time;
+	double mapf_time = 0.0, get_succs_time = 0.0, sim_time = 0.0;
+	node->GetSuccs(&succ_object_centric_actions, &succ_objects, &succ_trajs, &debug_pushes, &close, &mapf_time, &get_succs_time, &sim_time);
+	m_stats["push_planner_time"] += get_succs_time - sim_time;
+	m_stats["sim_time"] += sim_time;
 	m_stats["mapf_time"] += mapf_time;
 
 	assert(succ_object_centric_actions.size() == succ_objects.size());

@@ -94,8 +94,7 @@ void MAMONode::GetSuccs(
 	std::vector<trajectory_msgs::JointTrajectory> *succ_trajs,
 	std::vector<std::tuple<State, State, int> > *debug_pushes,
 	bool *close,
-	double *mapf_time,
-	double *push_planner_time)
+	double *mapf_time, double *get_succs_time, double *sim_time)
 {
 	*close = false;
 	*mapf_time = GetTime();
@@ -110,7 +109,7 @@ void MAMONode::GetSuccs(
 
 	bool duplicate_successor = false;
 	std::vector<std::tuple<State, State, int> > invalid_push_samples;
-	*push_planner_time = GetTime();
+	*get_succs_time = GetTime();
 	for (size_t i = 0; i < m_mapf_solution.size(); ++i)
 	{
 		const auto& moved = m_mapf_solution.at(i);
@@ -164,7 +163,8 @@ void MAMONode::GetSuccs(
 			comms::ObjectsPoses result;
 			int push_failure;
 			std::tuple<State, State, int> debug_push;
-			if (m_robot->PlanPush(this->GetCurrentStartState(), m_agents.at(m_agent_map[moved.first]).get(), push, movable_obstacles, m_all_objects, 1.0, result, push_failure, debug_push))
+			double sim_time_push = 0.0;
+			if (m_robot->PlanPush(this->GetCurrentStartState(), m_agents.at(m_agent_map[moved.first]).get(), push, movable_obstacles, m_all_objects, 1.0, result, push_failure, debug_push, sim_time_push))
 			{
 				// valid push found!
 				succ_object_centric_actions->emplace_back(moved.first, 0); // TODO: currently only one aidx
@@ -203,6 +203,7 @@ void MAMONode::GetSuccs(
 					break;
 				}
 			}
+			*sim_time += sim_time_push;
 		}
 
 		if (samples == SAMPLES) // this was a new push I was considering
@@ -235,7 +236,7 @@ void MAMONode::GetSuccs(
 					invalid_push_samples.begin(), invalid_push_samples.end());
 		m_new_constraints = true;
 	}
-	*push_planner_time = GetTime() - *push_planner_time;
+	*get_succs_time = GetTime() - *get_succs_time;
 }
 
 unsigned int MAMONode::ComputeMAMOPriorityOrig()
