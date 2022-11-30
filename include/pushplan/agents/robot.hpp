@@ -54,6 +54,7 @@ public:
 
 	bool Setup();
 	void SetMovables(const std::vector<std::shared_ptr<Agent> >& agents);
+	void AddMovablesToCC();
 	bool SetScene(const comms::ObjectsPoses& objects);
 	bool ProcessObstacles(const std::vector<Object>& obstacles, bool remove=false, bool movable=false);
 	bool ProcessObstacles(const std::vector<Object*>& obstacles, bool remove=false, bool movable=false);
@@ -75,7 +76,6 @@ public:
 	void UpdateNGR(bool vis=false);
 	bool SatisfyPath(HighLevelNode* ct_node, Trajectory** sol_path, int& expands, int& min_f);
 
-	void ProfileTraj(Trajectory& traj);
 	bool ComputeGrasps(
 		const std::vector<double>& pregrasp_goal);
 	void ConvertTraj(
@@ -112,6 +112,9 @@ public:
 		profileTrajectoryMoveIt(m_traj);
 		return m_traj;
 	};
+	void ProfileTraj(trajectory_msgs::JointTrajectory& traj) {
+		profileTrajectoryMoveIt(traj);
+	}
 	const trajectory_msgs::JointTrajectory& GetLastPlan() {
 		return m_traj;
 	};

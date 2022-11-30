@@ -259,6 +259,15 @@ void Robot::SetMovables(const std::vector<std::shared_ptr<Agent> >& agents)
 	}
 }
 
+void Robot::AddMovablesToCC()
+{
+	std::vector<Object*> movable_obstacles;
+	for (const auto& a: m_movables) {
+		movable_obstacles.push_back(a->GetObject());
+	}
+	ProcessObstacles(movable_obstacles, false, true);
+}
+
 bool Robot::SetScene(const comms::ObjectsPoses& objects)
 {
 	for (const auto &object : objects.poses)
@@ -430,12 +439,8 @@ bool Robot::SteerAction(
 			return false;
 		}
 
-		if (collides_mov_idx < 0 && collides_immov_idx >= 0) {
-			// we know that its valid up to waypoint collides_immov_idx - 1
-			break;
-		}
-		else if (collides_mov_idx >= 0 && collides_immov_idx >= 0) {
-			// we know that it must be simulated up to waypoint collides_immov_idx - 1
+		if (collides_immov_idx >= 0) {
+			// we know that it may be valid up to waypoint collides_immov_idx - 1
 			break;
 		}
 	}
@@ -490,6 +495,7 @@ bool Robot::SteerAction(
 		// set final waypoint
 		interp.interpolate(action_size - 1, action_end, planning_variables);
 
+		profileTrajectoryMoveIt(steer_action);
 		int dummy, success;
 		std::vector<int> dummy_v;
 		// simulate for result
@@ -547,8 +553,8 @@ bool Robot::ComputeGraspTraj(const smpl::RobotState& state, trajectory_msgs::Joi
 	Eigen::Affine3d ee_pose = m_rm->computeFK(postgrasp_state);
 	double yaw, pitch, roll;
 	smpl::angles::get_euler_zyx(ee_pose.rotation(), yaw, pitch, roll);
-	ee_pose.translation().x() -= 0.2 * std::cos(yaw);
-	ee_pose.translation().y() -= 0.2 * std::sin(yaw);
+	ee_pose.translation().x() -= 0.3 * std::cos(yaw);
+	ee_pose.translation().y() -= 0.3 * std::sin(yaw);
 	if (!getStateNearPose(ee_pose, postgrasp_state, retreat_state, 1))
 	{
 		ProcessObstacles({ m_ooi });
@@ -575,6 +581,7 @@ bool Robot::ComputeGraspTraj(const smpl::RobotState& state, trajectory_msgs::Joi
 	p.positions = retreat_state;
 	p.time_from_start = ros::Duration(retreat_time) + grasp_traj.points.back().time_from_start;
 	grasp_traj.points.push_back(p);
+	profileTrajectoryMoveIt(grasp_traj);
 
 	ProcessObstacles({ m_ooi });
 	return true;
@@ -665,18 +672,6 @@ void Robot::ConvertTraj(
 		}
 	}
 	traj_out.header.stamp = ros::Time::now();
-}
-
-void Robot::ProfileTraj(Trajectory& traj)
-{
-	double prev_time = 0.0, wp_time = 0.0;
-	for (size_t i = 1; i < traj.size(); ++i)
-	{
-		wp_time += profileAction(traj.at(i-1).state, traj.at(i).state);
-		traj.at(i-1).state.push_back(prev_time);
-		prev_time = wp_time;
-	}
-	traj.back().state.push_back(prev_time);
 }
 
 bool Robot::detachObject()

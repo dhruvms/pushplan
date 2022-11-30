@@ -2,6 +2,7 @@
 #include <pushplan/search/planner.hpp>
 #include <pushplan/utils/helpers.hpp>
 #include <pushplan/utils/constants.hpp>
+#include <pushplan/utils/discretisation.hpp>
 
 #include <string>
 #include <fstream>
@@ -18,9 +19,49 @@
 
 using namespace clutter;
 
-int main(int argc, char* argv[])
+void readDiscretisationParams(const ros::NodeHandle& ph, WorldResolutionParams& disc_params)
 {
+	std::string disc_string;
+	if (!ph.getParam("objects/discretisation", disc_string)) {
+		throw std::runtime_error("Parameter 'objects/discretisation' not found in planning params");
+	}
 
+	auto disc = ParseMapFromString<double>(disc_string);
+	SetWorldResolutionParams(
+		disc["x"], disc["y"], disc["theta"],
+		disc["ox"], disc["oy"], disc_params);
+	DiscretisationManager::Initialize(disc_params);
+}
+
+void setupGlobals(const ros::NodeHandle& ph)
+{
+	ph.getParam("/fridge", FRIDGE);
+	ph.getParam("mapf/planning_time", MAPF_PLANNING_TIME);
+	ph.getParam("mapf/res", RES);
+	ph.getParam("mapf/goal_thresh", GOAL_THRESH);
+	ph.getParam("mapf/whca/window", WINDOW);
+	ph.getParam("mapf/whca/grid", GRID);
+	ph.getParam("robot/semi_minor", SEMI_MINOR);
+	ph.getParam("robot/speed", R_SPEED);
+	ph.getParam("goal/save", SAVE);
+	ph.getParam("goal/cc_2d", CC_2D);
+	ph.getParam("goal/cc_3d", CC_3D);
+	ph.getParam("occupancy_grid/res", DF_RES);
+	ph.getParam("robot/pushing/samples", SAMPLES);
+
+	int llhc, hlhc, cp, algo;
+	ph.getParam("mapf/cbs/llhc", llhc);
+	ph.getParam("mapf/cbs/hlhc", hlhc);
+	ph.getParam("mapf/cbs/cp", cp);
+	ph.getParam("mapf/cbs/algo", algo);
+	LLHC = static_cast<LowLevelConflictHeuristic>(llhc);
+	HLHC = static_cast<HighLevelConflictHeuristic>(hlhc);
+	CP = static_cast<ConflictPrioritisation>(cp);
+	ALGO = static_cast<MAPFAlgo>(algo);
+}
+
+int main(int argc, char** argv)
+{
 	std::srand(std::time(0));
 
 	ros::init(argc, argv, "whca");
@@ -32,6 +73,11 @@ int main(int argc, char* argv[])
 
 	// Let publishers set up
 	ros::Duration(1.0).sleep();
+
+	// setup globals
+	WorldResolutionParams disc_params;
+	setupGlobals(ph);
+	readDiscretisationParams(ph, disc_params);
 
 	// read from NONE file
 	std::string filename(__FILE__);
@@ -72,13 +118,13 @@ int main(int argc, char* argv[])
 			planfile += level + "/plan_" + line + "_SCENE.txt";
 			ROS_WARN("Run planner on: %s", planfile.c_str());
 
-			Planner p;
+			Planner pushplan;
 			bool ycb;
 			ph.getParam("objects/ycb", ycb);
 			if (ycb) {
 				scene_id = -1;
 			}
-			if (!p.Init(planfile, scene_id, ycb)) {
+			if (!pushplan.Init(planfile, scene_id, ycb)) {
 				continue;
 			}
 			ROS_INFO("Planner and simulator init-ed!");
@@ -89,7 +135,7 @@ int main(int argc, char* argv[])
 
 			ROS_INFO("Initialize the planner");
 
-			auto* state_space = new PushplanStateSpace(&p);
+			auto* state_space = new PushplanStateSpace(&pushplan);
 			ompl::base::StateSpacePtr ss_ptr(state_space);
 			ompl::geometric::SimpleSetup ss(ss_ptr);
 
@@ -99,16 +145,16 @@ int main(int argc, char* argv[])
 				ROS_ERROR("call StateSpace StateValidityChecker");
 				smpl::RobotState values;
 				state_space->copyToReals(values, state);
-				return p.StateValidityChecker(values);
+				return pushplan.StateValidityChecker(values);
 			});
 
 			std::shared_ptr<PushplanMotionValidator> motion_validator = std::make_shared<PushplanMotionValidator>(ss.getSpaceInformation());
-			motion_validator->SetRobot(p.GetRobot());
+			motion_validator->SetRobot(pushplan.GetRobot());
 			ss.getSpaceInformation()->setMotionValidator(motion_validator);
 
 			// Set up a projection evaluator to provide forward kinematics...
 			auto* fk_projection = new ProjectionEvaluatorFK(state_space);
-			fk_projection->model = p.GetRobot()->RobotModel();
+			fk_projection->model = pushplan.GetRobot()->RobotModel();
 			// state_space->registerProjection(
 			// 		"fk", ompl::base::ProjectionEvaluatorPtr(fk_projection));
 
@@ -148,9 +194,10 @@ int main(int argc, char* argv[])
 			ROS_INFO("Setup the query");
 
 			smpl::RobotState start_state;
-			p.GetStartState(start_state);
+			pushplan.GetStartState(start_state);
 
-			comms::ObjectsPoses start_objects = p.GetStartObjects();
+			pushplan.GetRobot()->AddMovablesToCC();
+			comms::ObjectsPoses start_objects = pushplan.GetStartObjects();
 
 			state_space->SetStartObjects(start_objects);
 
@@ -164,11 +211,11 @@ int main(int argc, char* argv[])
 			}
 
 			auto* goal_condition = new PushplanPoseGoal(
-					ss.getSpaceInformation(), p.GoalPose());
+					ss.getSpaceInformation(), pushplan.GoalPose());
 			goal_condition->SetTolerances(
 					Eigen::Vector3d(0.015, 0.015, 0.015),
 					Eigen::Vector3d(0.05, 0.05, 0.05));
-			goal_condition->SetRobot(p.GetRobot());
+			goal_condition->SetRobot(pushplan.GetRobot());
 			ss.setGoal(ompl::base::GoalPtr(goal_condition));
 
 			// plan
@@ -193,13 +240,13 @@ int main(int argc, char* argv[])
 
 			if (plan_success)
 			{
-				std::cout << "Original solution length = " << ss.getSolutionPath().getStateCount() << "\n";
+				// std::cout << "Original solution length = " << ss.getSolutionPath().getStateCount() << "\n";
 
-				ompl::geometric::PathSimplifier shortcut(ss.getSpaceInformation());
-				shortcut.reduceVertices(ss.getSolutionPath());
+				// ompl::geometric::PathSimplifier shortcut(ss.getSpaceInformation());
+				// shortcut.reduceVertices(ss.getSolutionPath());
 
-				std::cout << "Solution length after reduceVertices = " << ss.getSolutionPath().getStateCount() << "\n";
-				ROS_INFO("Animate path");
+				// std::cout << "Solution length after reduceVertices = " << ss.getSolutionPath().getStateCount() << "\n";
+				// ROS_INFO("Animate path");
 
 				trajectory_msgs::JointTrajectory traj;
 				traj.points.clear();
@@ -260,7 +307,7 @@ int main(int argc, char* argv[])
 				trajectory_msgs::JointTrajectory grasp_traj;
 				auto pregrasp_state = ss.getSolutionPath().getState(ss.getSolutionPath().getStateCount() - 1)->as<PushplanStateSpace::StateType>()->joint_state();
 
-				if (!p.GetRobot()->ComputeGraspTraj(pregrasp_state, grasp_traj)) {
+				if (!pushplan.GetRobot()->ComputeGraspTraj(pregrasp_state, grasp_traj)) {
 					ROS_ERROR("Grasp trajectory computation for solution path failed?");
 				}
 
@@ -270,9 +317,10 @@ int main(int argc, char* argv[])
 					traj.points.push_back(*itr);
 				}
 
-				traj.joint_names = p.GetRobot()->GetPlanningJoints();
+				traj.joint_names = pushplan.GetRobot()->GetPlanningJoints();
+				pushplan.GetRobot()->ProfileTraj(traj);
 				start_time = GetTime();
-				exec_success = p.ExecTraj(traj, grasp_at);
+				exec_success = pushplan.ExecTraj(traj, grasp_at);
 				exec_time = GetTime() - start_time;
 			}
 
