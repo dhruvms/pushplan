@@ -22,6 +22,8 @@
 #include <moveit_msgs/Constraints.h>
 #include <ros/ros.h>
 #include <boost/optional.hpp>
+#include <moveit/robot_model_loader/robot_model_loader.h>
+#include <moveit/trajectory_processing/iterative_time_parameterization.h>
 
 #include <string>
 #include <memory>
@@ -247,6 +249,8 @@ private:
 	std::shared_ptr<smpl::DistanceMapInterface> m_df_i, m_df_m, m_df_ngr;
 	std::shared_ptr<smpl::OccupancyGrid> m_grid_i, m_grid_m, m_grid_ngr;
 	std::unique_ptr<smpl::collision::CollisionSpace> m_cc_i, m_cc_m;
+	double m_ngr_res;
+	Eigen::Vector3d m_ngr_origin, m_ngr_gmin, m_ngr_gmax;
 
 	PlannerConfig m_planning_config;
 	smpl::PlanningParams m_planning_params;
@@ -290,12 +294,12 @@ private:
 		const smpl::RobotState& goal_config,
 		trajectory_msgs::JointTrajectory& solve_traj,
 		double t=0.1);
-	bool computePushAction(
+	int computePushAction(
 		const double time_start,
 		const smpl::RobotState& jnt_positions,
 		const smpl::RobotState& jnt_velocities,
 		const Eigen::Affine3d& end_pose,
-		trajectory_msgs::JointTrajectory& action, int& failure);
+		trajectory_msgs::JointTrajectory& action);
 
 	bool reinitStartState();
 
@@ -378,6 +382,9 @@ private:
 		const std::vector<Object*>& movable_obstacles,
 		bool finalise=false);
 
+	void getTrajSpheres(
+		const trajectory_msgs::JointTrajectory& traj,
+		std::set<std::vector<double> >& spheres);
 	void voxeliseTrajectory();
 	void voxeliseTrajectory(const trajectory_msgs::JointTrajectory& traj);
 
@@ -389,6 +396,13 @@ private:
 		std::set<int> move_ids={},
 		std::set<int> avoid_ids={},
 		smpl::RobotState end_config={});
+	void createVirtualTable();
+
+	// for moveit profiling
+	moveit::core::RobotModelPtr m_moveit_robot_model;
+	moveit::core::RobotStatePtr m_moveit_robot_state;
+	robot_trajectory::RobotTrajectoryPtr m_moveit_trajectory_ptr;
+	void profileTrajectoryMoveIt(trajectory_msgs::JointTrajectory& traj);
 };
 
 } // namespace clutter

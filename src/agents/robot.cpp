@@ -191,7 +191,15 @@ bool Robot::Setup()
 	m_pushes_per_object = -1;
 	m_ph.getParam("robot/grasping/tries", m_grasp_tries);
 	m_ph.getParam("robot/grasping/lift", m_grasp_lift);
+
+	m_ph.getParam("robot/pushing/plan_time", m_plan_push_time);
+	m_ph.param<double>("robot/pushing/control/Kp", m_Kp, 1.0);
+	m_ph.param<double>("robot/pushing/control/Ki", m_Ki, 1.0);
+	m_ph.param<double>("robot/pushing/control/Kd", m_Kd, 1.0);
+	m_ph.param<double>("robot/pushing/control/dt", m_dt, 0.01);
+	m_ph.param<int>("robot/pushing/control/iters", m_invvel_iters, 1000);
 	m_vis_pub = m_nh.advertise<visualization_msgs::Marker>( "/visualization_marker", 10);
+	createVirtualTable();
 
 	return true;
 }
@@ -970,79 +978,98 @@ bool Robot::planRetract(
 	return true;
 }
 
-void Robot::voxeliseTrajectory(const trajectory_msgs::JointTrajectory& traj)
+void Robot::getTrajSpheres(
+	const trajectory_msgs::JointTrajectory& traj,
+	std::set<std::vector<double> >& spheres)
 {
-	m_traj = traj;
-	voxeliseTrajectory();
+	double ox, oy, oz, sx, sy, sz;
+	m_sim->GetShelfParams(ox, oy, oz, sx, sy, sz);
+
+	spheres.clear();
+	// setGripper(true);
+	for (const auto &wp: traj.points)
+	{
+		auto markers = m_cc_i->getCollisionModelVisualization(wp.positions);
+		for (auto& marker : markers)
+		{
+			double mx = marker.pose.position[0];
+			double my = marker.pose.position[1];
+			double mz = marker.pose.position[2];
+			double mr = boost::get<smpl::visual::Ellipse>(marker.shape).axis_x - RES;
+			if (mx < ox && (mx + mr + 0.05 < ox)) {
+				continue;
+			}
+			if (my < oy && (my + mr + 0.05 < oy)) {
+				continue;
+			}
+			if (mz < oz && (mz + mr + 0.05 < oz)) {
+				continue;
+			}
+			if (mz > oz + sz && (mz - mr - 0.05 > oz + sz)) {
+				continue;
+			}
+
+			spheres.emplace(
+				std::initializer_list<double>{
+					std::ceil(mx * 100.0) / 100.0,
+					std::ceil(my * 100.0) / 100.0,
+					std::ceil(mz * 100.0) / 100.0,
+					std::ceil(mr * 100.0) / 100.0 });
+		}
+	}
+	// setGripper(false);
 }
 
 void Robot::voxeliseTrajectory()
 {
 	m_traj_voxels.clear();
-	// double start_time = GetTime();
+	std::set<std::vector<double> > spheres;
+	double start_time = GetTime();
+	getTrajSpheres(m_traj, spheres);
 
 	int sphere_count = 0;
-	for (const auto& wp: m_traj.points)
+	for (const auto &s : spheres)
 	{
-		auto markers = m_cc_i->getCollisionModelVisualization(wp.positions);
-		for (auto& marker : markers)
-		{
-			std::unique_ptr<smpl::collision::CollisionShape> shape;
-			shape = smpl::make_unique<smpl::collision::SphereShape>(boost::get<smpl::visual::Ellipse>(marker.shape).axis_x - RES);
+		std::unique_ptr<smpl::collision::CollisionShape> shape;
+		shape = smpl::make_unique<smpl::collision::SphereShape>(s[3]);
 
-			std::vector<smpl::collision::CollisionShape*> shapes;
-			shapes.push_back(shape.get());
+		std::vector<smpl::collision::CollisionShape*> shapes;
+		shapes.push_back(shape.get());
 
-			geometry_msgs::Pose pose;
-			pose.position.x = marker.pose.position[0];
-			pose.position.y = marker.pose.position[1];
-			pose.position.z = marker.pose.position[2];
-			geometry_msgs::Quaternion orientation;
-			tf::quaternionEigenToMsg(marker.pose.orientation, orientation);
-			pose.orientation = orientation;
+		smpl::collision::AlignedVector<Eigen::Affine3d> shape_poses;
+		Eigen::Affine3d transform(Eigen::Translation3d(s[0], s[1], s[2]));
+		shape_poses.push_back(transform);
 
-			smpl::collision::AlignedVector<Eigen::Affine3d> shape_poses;
-			Eigen::Affine3d transform;
-			tf::poseMsgToEigen(pose, transform);
-			shape_poses.push_back(transform);
+		// create the collision object
+		smpl::collision::CollisionObject co;
+		co.id = std::to_string(sphere_count++);
+		co.shapes = std::move(shapes);
+		co.shape_poses = std::move(shape_poses);
 
-			// create the collision object
-			smpl::collision::CollisionObject co;
-			co.id = std::to_string(sphere_count++);
-			co.shapes = std::move(shapes);
-			co.shape_poses = std::move(shape_poses);
-
-			const double res = m_grid_ngr->resolution();
-			const Eigen::Vector3d origin(
-					m_grid_ngr->originX(), m_grid_ngr->originY(), m_grid_ngr->originZ());
-
-			const Eigen::Vector3d gmin(
-					m_grid_ngr->originX(), m_grid_ngr->originY(), m_grid_ngr->originZ());
-
-			const Eigen::Vector3d gmax(
-					m_grid_ngr->originX() + m_grid_ngr->sizeX(),
-					m_grid_ngr->originY() + m_grid_ngr->sizeY(),
-					m_grid_ngr->originZ() + m_grid_ngr->sizeZ());
-
-			if (!smpl::collision::VoxelizeObject(co, res, origin, gmin, gmax, m_traj_voxels)) {
-				continue;
-			}
+		if (!smpl::collision::VoxelizeObject(co, m_ngr_res, m_ngr_origin, m_ngr_gmin, m_ngr_gmax, m_traj_voxels)) {
+			continue;
 		}
 	}
 
-	// ROS_INFO("Robot trajectory voxelisation took %f seconds", GetTime() - start_time);
+	ROS_INFO("Robot trajectory voxelisation took %f seconds", GetTime() - start_time);
 
 	// TODO: make this faster by looping over cells in a sphere octant
 	// and computing the rest via symmetry
 
 	// int sphere_count = 0;
-	// for (const auto& wp: m_traj.points)
+	// for (const auto &wp: m_traj.points)
 	// {
 	// 	auto markers = m_cc_i->getCollisionModelVisualization(wp.positions);
 	// 	for (auto& marker : markers)
 	// 	{
 	// 	}
 	// }
+}
+
+void Robot::voxeliseTrajectory(const trajectory_msgs::JointTrajectory& traj)
+{
+	m_traj = traj;
+	voxeliseTrajectory();
 }
 
 void Robot::UpdateNGR(bool vis)
@@ -1485,13 +1512,14 @@ bool Robot::planToConfig(
 	return true;
 }
 
-bool Robot::computePushAction(
+int Robot::computePushAction(
 	const double time_start,
 	const smpl::RobotState& jnt_positions,
 	const smpl::RobotState& jnt_velocities,
 	const Eigen::Affine3d& end_pose,
-	trajectory_msgs::JointTrajectory& action, int& failure)
+	trajectory_msgs::JointTrajectory& action)
 {
+	int failure = 0;
 	// Constants
 	double xy_thresh = 0.01;
 
@@ -1503,7 +1531,7 @@ bool Robot::computePushAction(
 	Eigen::Affine3d xo_ = end_pose;
 
 	bool push_end = false;
-	for(int iter = 0; iter < m_invvel_iters; iter++)
+	for (int iter = 0; iter < m_invvel_iters; iter++)
 	{
 
 		// Get difference between current EE pose and desired EE pose
@@ -1549,8 +1577,10 @@ bool Robot::computePushAction(
 		if (!m_rm->computeInverseVelocity(q_, x_dot, q_dot))
 		{
 			// SMPL_INFO("Failed to compute inverse velocity");
-			failure = 1;
-			return false;
+			failure = 4;
+			// return false;
+			action.points.pop_back();
+			break;
 		}
 
 		// Add waypoint to action
@@ -1593,11 +1623,12 @@ bool Robot::computePushAction(
 			}
 			SV_SHOW_INFO_NAMED("push_action", ma);
 
-			return true;
+			return failure;
 		}
 
 		// Move arm joints
-		for(size_t i = 0; i < q_.size(); ++i) {
+		for (size_t i = 0; i < q_.size(); ++i)
+		{
 			// q_[i] += (q_dot[i] * m_dt);
 			double limit = m_rm->velLimit(i);
 			q_[i] += std::min(std::max(-limit, q_dot[i]), limit) * m_dt;
@@ -1614,19 +1645,45 @@ bool Robot::computePushAction(
 
 		// TODO: check velocity limit
 		// Check joint limits
-		if (!m_rm->checkJointLimits(q_)) {
-			failure = 2;
-			return false;
+		if (!m_rm->checkJointLimits(q_))
+		{
+			failure = 4;
+			// return false;
+			action.points.pop_back();
+			break;
 		}
-		if (!m_cc_i->isStateValid(q_)) {
-			failure = 3;
-			return false;
+		if (!m_cc_i->isStateValid(q_))
+		{
+			failure = 5;
+			// return false;
+			action.points.pop_back();
+			break;
 		}
 	}
 
-	// SMPL_INFO("Failed to reach end pose");
-	failure = 1;
-	return false;
+	if (failure == 0)
+	{
+		SMPL_WARN("Push action failed to reach end pose.");
+		failure = 3;
+	}
+	return failure;
+}
+
+void Robot::profileTrajectoryMoveIt(trajectory_msgs::JointTrajectory& traj)
+{
+	robot_model_loader::RobotModelLoader robot_model_loader("/robot_description");
+	m_moveit_robot_model = robot_model_loader.getModel();
+	m_moveit_robot_state.reset(new moveit::core::RobotState(m_moveit_robot_model));
+	m_moveit_trajectory_ptr.reset(new robot_trajectory::RobotTrajectory(m_moveit_robot_model, "right_arm"));
+
+	// Moveit Profiling
+	m_moveit_trajectory_ptr->setRobotTrajectoryMsg(*m_moveit_robot_state, traj);
+
+	trajectory_processing::IterativeParabolicTimeParameterization iptp;
+	bool success = iptp.computeTimeStamps(*m_moveit_trajectory_ptr, 0.05, 1.0);
+	moveit_msgs::RobotTrajectory trajectory_msg;
+	m_moveit_trajectory_ptr->getRobotTrajectoryMsg(trajectory_msg);
+	traj = trajectory_msg.joint_trajectory;
 }
 
 bool Robot::PlanPush(
@@ -1637,164 +1694,144 @@ bool Robot::PlanPush(
 	comms::ObjectsPoses& result,
 	bool input)
 {
-	m_trajs_vec.clear();
-	m_actions_vec.clear();
-
 	// required info about object being pushed
 	const Trajectory* obj_traj = object->SolveTraj();
 	std::vector<Object*> pushed_obj = { object->GetObject() };
-
-	// remove objects from movable collision checker if they exist
-	ProcessObstacles(pushed_obj, true, true);
-	ProcessObstacles(other_movables, true, true);
-
-	if (m_pushes_per_object == -1)
+	Eigen::Affine3d push_start_pose, push_end_pose;
+	moveit_msgs::RobotState push_start_state = m_start_state;
+	if (start_state.size() == m_rm->jointVariableCount())
 	{
-		m_ph.getParam("robot/pushing/num", m_pushes_per_object);
-		m_ph.getParam("robot/pushing/plan_time", m_plan_push_time);
+		push_start_state.joint_state.position.erase(
+			push_start_state.joint_state.position.begin() + 1,
+			push_start_state.joint_state.position.begin() + 1 + start_state.size());
+		push_start_state.joint_state.position.insert(
+			push_start_state.joint_state.position.begin() + 1,
+			start_state.begin(), start_state.end());
+	}
+	bool push_found = false;
 
-		m_ph.param<double>("robot/pushing/control/Kp", m_Kp, 1.0);
-		m_ph.param<double>("robot/pushing/control/Ki", m_Ki, 1.0);
-		m_ph.param<double>("robot/pushing/control/Kd", m_Kd, 1.0);
-		m_ph.param<double>("robot/pushing/control/dt", m_dt, 0.01);
-		m_ph.param<int>("robot/pushing/control/iters", m_invvel_iters, 1000);
+	double start_time = GetTime();
+	++m_stats["plan_push_calls"];
+
+	m_trajs_vec.clear();
+	m_actions_vec.clear();
+
+	// add all movable objects as obstacles into immovable collision checker
+	// they should be at their latest positions
+	ProcessObstacles(pushed_obj);
+	ProcessObstacles(other_movables);
+
+	// get push start pose
+	bool failure = false;
+	getPushStartPose(push, push_start_pose, false);
+	if (m_grid_i->getDistanceFromPoint(
+		push_start_pose.translation().x(),
+		push_start_pose.translation().y(),
+		push_start_pose.translation().z()) <= m_grid_i->resolution())
+	{
+		failure = true;
 	}
 
-	int i = 0;
-	double start_time = GetTime();
-	bool added = false;
-	while((i < m_pushes_per_object) && (GetTime() - start_time < m_plan_push_time))
+	// plan path to push start pose with all other objects as obstacles
+	trajectory_msgs::JointTrajectory push_traj;
+	if (!failure && !planToPoseGoal(push_start_state, push_start_pose, push_traj)) {
+		failure = true;
+	}
+
+	ProcessObstacles(pushed_obj, true);
+	ProcessObstacles(other_movables, true);
+	if (failure) {
+		return false;
+	}
+	++m_stats["push_samples_found"];
+	profileTrajectoryMoveIt(push_traj);
+
+	// push action parameters
+	size_t push_traj_approach_size = push_traj.points.size();
+	push_end_pose = m_rm->computeFK(push_traj.points.back().positions);
+
+	std::vector<double> pstart = { push_end_pose.translation().x(), push_end_pose.translation().y() }, pend = { push[3], push[4] };
+	double push_dist = EuclideanDist(pstart, pend);
+	double push_at_angle = std::atan2(
+			push[4] - push_end_pose.translation().y(),
+			push[3] - push_end_pose.translation().x());
+
+	// compute push action end pose
+	push_end_pose.translation().x() += std::cos(push_at_angle) * push_dist + (m_distG(m_rng));
+	push_end_pose.translation().y() += std::sin(push_at_angle) * push_dist + (m_distG(m_rng));
+	// SV_SHOW_INFO_NAMED("push_end_pose", smpl::visual::MakePoseMarkers(
+	// 	push_end_pose, m_grid_i->getReferenceFrame(), "push_end_pose"));
+
+	// get push action trajectory via inverse velocity
+	trajectory_msgs::JointTrajectory push_action;
+	smpl::RobotState joint_vel(m_rm->jointVariableCount(), 0.0);
+	int push_failure = computePushAction(
+						push_traj.points.back().time_from_start.toSec(),
+						push_traj.points.back().positions,
+						joint_vel,
+						push_end_pose,
+						push_action);
+
+	if (push_action.points.empty()) {
+		return false;
+	}
+
+	// compute obtainable push action end pose
+	push_end_pose = m_rm->computeFK(push_action.points.back().positions);
+	// collision check push action against pushed object
+	// ensure that it collides
 	{
-		++m_stats["plan_push_calls"];
-
-		// add all movable objects as obstacles into immovable collision checker
-		// they should be at their latest positions
-		if (!added)
+		bool collides = false;
+		ProcessObstacles(pushed_obj);
+		for (size_t wp = 1; wp < push_action.points.size(); ++wp)
 		{
-			ProcessObstacles(pushed_obj, false, false);
-			ProcessObstacles(other_movables, false, false);
-			added = true;
-		}
-
-		// get push start pose
-		Eigen::Affine3d push_start_pose, push_end_pose;
-		getPushStartPose(push, push_start_pose, false);
-		if (m_grid_i->getDistanceFromPoint(
-			push_start_pose.translation().x(),
-			push_start_pose.translation().y(),
-			push_start_pose.translation().z()) <= m_grid_i->resolution())
-		{
-			continue;
-		}
-
-		// plan path to push start pose with all other objects as obstacles
-		trajectory_msgs::JointTrajectory push_traj;
-		moveit_msgs::RobotState push_start_state = m_start_state;
-		if (start_state.size() == m_rm->jointVariableCount())
-		{
-			push_start_state.joint_state.position.erase(
-				push_start_state.joint_state.position.begin() + 1,
-				push_start_state.joint_state.position.begin() + 1 + start_state.size());
-			push_start_state.joint_state.position.insert(
-				push_start_state.joint_state.position.begin() + 1,
-				start_state.begin(), start_state.end());
-		}
-		if (!planToPoseGoal(push_start_state, push_start_pose, push_traj)) {
-			continue;
-		}
-		++m_stats["push_samples_found"];
-
-		if (added)
-		{
-			// remove all movable objects from immovable collision space
-			ProcessObstacles(pushed_obj, true, false);
-			ProcessObstacles(other_movables, true, false);
-			added = false;
-		}
-
-		// push action parameters
-		push_end_pose = m_rm->computeFK(push_traj.points.back().positions);
-
-		std::vector<double> pstart = { push_end_pose.translation().x(), push_end_pose.translation().y() }, pend = { push[3], push[4] };
-		double push_dist = EuclideanDist(pstart, pend);
-		double push_at_angle = std::atan2(
-				push[4] - push_end_pose.translation().y(),
-				push[3] - push_end_pose.translation().x());
-
-		// compute push action end pose
-		// double push_frac = m_distD(m_rng) * 0.5 + 0.5;
-		push_end_pose.translation().x() += std::cos(push_at_angle) * push_dist + (m_distG(m_rng) * 0.025); // * push_frac;
-		push_end_pose.translation().y() += std::sin(push_at_angle) * push_dist + (m_distG(m_rng) * 0.025); // * push_frac;
-		// SV_SHOW_INFO_NAMED("push_end_pose", smpl::visual::MakePoseMarkers(
-		// 	push_end_pose, m_grid_i->getReferenceFrame(), "push_end_pose"));
-
-		// get push action trajectory via inverse velocity
-		trajectory_msgs::JointTrajectory push_action;
-		smpl::RobotState joint_vel(m_rm->jointVariableCount(), 0.0);
-		int failure = 0;
-		if (computePushAction(
-				push_traj.points.back().time_from_start.toSec(),
-				push_traj.points.back().positions,
-				joint_vel,
-				push_end_pose,
-				push_action, failure))
-		{
-			// collision check push action against pushed object
-			// ensure that it collides
-			bool collides = false;
-			ProcessObstacles(pushed_obj, false, false);
-			for (size_t wp = 1; wp < push_action.points.size(); ++wp)
+			if (!m_cc_i->isStateValid(push_action.points[wp].positions))
 			{
-				auto& prev_istate = push_action.points[wp - 1].positions;
-				auto& curr_istate = push_action.points[wp].positions;
-				if (!m_cc_i->isStateToStateValid(prev_istate, curr_istate))
-				{
-					collides = true;
-					break;
-				}
+				collides = true;
+				break;
 			}
-			if (!collides)
-			{
-				ProcessObstacles(pushed_obj, true, false);
+		}
+
+		ProcessObstacles(pushed_obj, true);
+		if (!collides) {
+			return false;
+		}
+
+		push_found = true;
+		++m_stats["push_actions_found"];
+
+		// append waypoint to retract to push start pose
+		push_action.points.push_back(push_action.points.at(0));
+		push_action.points.back().time_from_start = push_action.points.at(push_action.points.size() - 2).time_from_start + ros::Duration(1.0);
+
+		// append push_action to push_traj
+		auto t_prev = push_traj.points.back().time_from_start;
+		for (auto it = push_action.points.begin() + 1; it != push_action.points.end(); ++it)
+		{
+			auto tdiff = it->time_from_start - t_prev;
+			// last two points in push_action must be appended to push_traj
+			// they are the final state in the push action and the retraction
+			// to the first state
+			if ((it < push_action.points.end() - 2) && tdiff.toSec() < 0.3) {
 				continue;
 			}
-			ProcessObstacles(pushed_obj, true, false);
-
-			++m_stats["push_actions_found"];
-
-			// append waypoints to retract to push start pose
-			auto push_action_copy = push_action;
-			auto t_reverse = push_action_copy.points.rbegin()->time_from_start;
-			for (auto itr = push_action_copy.points.rbegin() + 1; itr != push_action_copy.points.rend(); ++itr)
-			{
-				itr->time_from_start = t_reverse + ros::Duration(0.01);
-				push_action.points.push_back(*itr);
-				t_reverse = itr->time_from_start;
-			}
-
-			m_planner->ProfilePath(m_rm.get(), push_traj);
-			for (auto itr = push_action.points.begin() + 1; itr != push_action.points.end(); ++itr) {
-				push_traj.points.push_back(*itr);
-			}
-
-			m_actions_vec.push_back(std::move(push_action));
-			m_trajs_vec.push_back(std::move(push_traj));
-			++i;
+			push_traj.points.push_back(*it);
+			t_prev = it->time_from_start;
 		}
-	}
+		profileTrajectoryMoveIt(push_traj);
 
-	if (added)
-	{
-		// remove all movable objects from immovable collision space
-		ProcessObstacles(pushed_obj, true, false);
-		ProcessObstacles(other_movables, true, false);
-		added = false;
+		// store the profiled push_action
+		push_action.points.clear();
+		push_action.points.insert(push_action.points.begin(), push_traj.points.begin() + push_traj_approach_size, push_traj.points.end());
+
+		m_actions_vec.push_back(std::move(push_action));
+		m_trajs_vec.push_back(std::move(push_traj));
 	}
 
 	// reset robot model back to chain tip link
 	UpdateKDLRobot(0);
 
-	if (i == 0) {
+	if (!push_found) {
 		return false;
 	}
 	m_stats["push_plan_time"] += GetTime() - start_time;
@@ -2364,6 +2401,18 @@ void Robot::initOccupancyGrids()
 
 	m_grid_ngr = std::make_unique<smpl::OccupancyGrid>(m_df_ngr, ref_counted);
 	m_grid_ngr->setReferenceFrame(m_planning_frame);
+
+	m_ngr_res = m_grid_ngr->resolution();
+	m_ngr_origin = Eigen::Vector3d(
+			m_grid_ngr->originX(), m_grid_ngr->originY(), m_grid_ngr->originZ());
+
+	m_ngr_gmin = Eigen::Vector3d(
+			m_grid_ngr->originX(), m_grid_ngr->originY(), m_grid_ngr->originZ());
+
+	m_ngr_gmax = Eigen::Vector3d(
+			m_grid_ngr->originX() + m_grid_ngr->sizeX(),
+			m_grid_ngr->originY() + m_grid_ngr->sizeY(),
+			m_grid_ngr->originZ() + m_grid_ngr->sizeZ());
 }
 
 bool Robot::initCollisionChecker()
@@ -3337,22 +3386,15 @@ void Robot::RunPushIKStudy(int N)
 						// get push action trajectory via inverse velocity
 						trajectory_msgs::JointTrajectory push_action;
 						smpl::RobotState joint_vel(m_rm->jointVariableCount(), 0.0);
-						int failure = 0;
-						if (computePushAction(
-								path.points.back().time_from_start.toSec(),
-								path.points.back().positions,
-								joint_vel,
-								goal,
-								push_action, failure))
-						{
-							DATA << x0 << ',' << y0 << ',' << yaw0 << ','
-								<< x1 << ',' << y1 << ',' << 4 << '\n';
-						}
-						else
-						{
-							DATA << x0 << ',' << y0 << ',' << yaw0 << ','
-								<< x1 << ',' << y1 << ',' << failure << '\n';
-						}
+						int failure = computePushAction(
+										path.points.back().time_from_start.toSec(),
+										path.points.back().positions,
+										joint_vel,
+										goal,
+										push_action);
+						if (failure > 0) { failure -= 2; };
+						DATA << x0 << ',' << y0 << ',' << yaw0 << ','
+							<< x1 << ',' << y1 << ',' << failure << '\n';
 					}
 					else
 					{
@@ -3457,8 +3499,10 @@ std::vector<trajectory_msgs::JointTrajectory> Robot::dogarReconfigure(
 	// lines 4-6
 	Agent* agent = nullptr;
 	comms::ObjectPose push_result_pose;
+	SMPL_INFO("Rearrange object %d", oid);
 	if (oid == m_ooi.desc.id)
 	{
+		SMPL_INFO("Object %d is OoI, plan retrieval!", oid);
 		// plan approach
 		double timer = GetTime();
 		if (!PlanRetrieval({})) {
@@ -3473,6 +3517,7 @@ std::vector<trajectory_msgs::JointTrajectory> Robot::dogarReconfigure(
 
 	else
 	{
+		SMPL_INFO("Plan push for object %d!", oid);
 		double ox, oy, oz, sx, sy, sz;
 		m_sim->GetShelfParams(ox, oy, oz, sx, sy, sz);
 
@@ -3502,15 +3547,16 @@ std::vector<trajectory_msgs::JointTrajectory> Robot::dogarReconfigure(
 
 		bool push_success = false;
 		double timer = GetTime();
-		while (!push_success && (GetTime() - timer < 12.0))
+		// int push_tries = 0;
+		while (!push_success && (GetTime() - m_timer < m_time_limit)) // && push_tries < 5)
 		{
 			// select push goal location
 			// if we need to move this object, it must be inside NGR
 			// pick an outside cell at random
 			int gx, gy, gz;
-			double wx, wy, wz, push_frac = m_distD(m_rng);
+			double wx, wy, wz;
 			bool push_goal_found = false;
-			while (!push_goal_found && (GetTime() - timer < 12.0))
+			while (!push_goal_found && (GetTime() - m_timer < m_time_limit))
 			{
 				wx = (m_distD(m_rng) * (sx - 2*RES)) + (ox + RES);
 				wy = (m_distD(m_rng) * (sy - 2*RES)) + (oy + RES);
@@ -3521,7 +3567,7 @@ std::vector<trajectory_msgs::JointTrajectory> Robot::dogarReconfigure(
 				}
 			}
 
-			if (GetTime() - timer > 12.0) {
+			if (GetTime() - m_timer > m_time_limit) {
 				break;
 			}
 
@@ -3539,17 +3585,15 @@ std::vector<trajectory_msgs::JointTrajectory> Robot::dogarReconfigure(
 				push[0] += aabb_dir[0] * t;
 				push[1] += aabb_dir[1] * t;
 			}
-			else
-			{
-				push[0] += std::cos(push_dir + M_PI) * 0.1;
-				push[1] += std::sin(push_dir + M_PI) * 0.1;
+			else {
+				continue;
 			}
 
 			// update push goal based on sampled fraction
 			std::vector<double> pstart = { push[0], push[1] }, pend = { push[3], push[4] };
 			double push_dist = EuclideanDist(pstart, pend);
-			push[3] = push[0] + std::cos(push_dir) * push_dist * push_frac;
-			push[4] = push[1] + std::sin(push_dir) * push_dist * push_frac;
+			push[3] = push[0] + std::cos(push_dir) * push_dist;
+			push[4] = push[1] + std::sin(push_dir) * push_dist;
 
 			m_df_ngr->worldToGrid(push[3], push[4], wz, gx, gy, gz);
 			if (!m_df_ngr->isCellValid(gx, gy, gz)) {
@@ -3561,6 +3605,8 @@ std::vector<trajectory_msgs::JointTrajectory> Robot::dogarReconfigure(
 			std::vector<Object*> dummy_v;
 			comms::ObjectsPoses result, dummy_op;
 			double dummy_d;
+			// ++push_tries;
+			SMPL_INFO("Push start/goal found! Plan and sim trajectory!");
 			if (PlanPush(dummy_s, agent, push, irrelevant, dummy_v, dummy_op, result, dummy_d))
 			{
 				LatticeState push_result_state;
@@ -3574,8 +3620,10 @@ std::vector<trajectory_msgs::JointTrajectory> Robot::dogarReconfigure(
 					}
 				}
 
+				SMPL_INFO("Push succeeded in sim!");
 				if (agent->OutsideNGR(push_result_state))
 				{
+					SMPL_INFO("Push moved object out of NGR!");
 					push_success = true;
 					++m_stats["dogar_pushes"];
 				}
@@ -3583,7 +3631,7 @@ std::vector<trajectory_msgs::JointTrajectory> Robot::dogarReconfigure(
 		}
 		m_stats["dogar_push_plan_time"] += GetTime() - timer;
 
-		if (!push_success)
+		if (GetTime() - m_timer > m_time_limit)
 		{
 			// deal with push planner failure
 			return {};
@@ -3599,6 +3647,7 @@ std::vector<trajectory_msgs::JointTrajectory> Robot::dogarReconfigure(
 	if (!end_config.empty() && agent != nullptr &&
 			push_result_pose.id == oid && !push_result_pose.xyz.empty() && !push_result_pose.rpy.empty())
 	{
+		SMPL_INFO("Plan goto path to start state of next trajectory in sequence.");
 		LatticeState init_state = agent->InitState();
 		std::vector<double> xyz_init, rpy_init;
 		xyz_init = { init_state.state[0], init_state.state[1], init_state.state[2] };
@@ -3616,6 +3665,7 @@ std::vector<trajectory_msgs::JointTrajectory> Robot::dogarReconfigure(
 			m_stats["dogar_goto_plan_time"] += GetTime() - timer;
 			return {};
 		}
+		SMPL_INFO("tau2 goto plan found!");
 		m_stats["dogar_goto_plan_time"] += GetTime() - timer;
 		tau2_found = true;
 		ProcessObstacles({ agent->GetObject() }, true);
@@ -3627,6 +3677,7 @@ std::vector<trajectory_msgs::JointTrajectory> Robot::dogarReconfigure(
 	// voxelise robot arm along trajectory
 	double timer = GetTime();
 
+	SMPL_INFO("Voxelise taus!");
 	voxeliseTrajectory(tau1);
 	m_traj.joint_names.clear();
 	m_traj.points.clear();
@@ -3642,6 +3693,7 @@ std::vector<trajectory_msgs::JointTrajectory> Robot::dogarReconfigure(
 		m_traj_voxels.clear();
 	}
 
+	SMPL_INFO("Voxelise objects that moved!");
 	// voxelise all objects that moved as well
 	if (agent != nullptr)
 	{
@@ -3680,14 +3732,18 @@ std::vector<trajectory_msgs::JointTrajectory> Robot::dogarReconfigure(
 	for (auto& voxel_list : swept_vol) {
 		m_grid_ngr->addPointsToField(voxel_list);
 	}
+	// SV_SHOW_INFO(m_grid_ngr->getOccupiedVoxelsVisualization());
 
+	SMPL_INFO("Find objects that must now be moved as well!");
 	std::set<int> move_next = move_ids;
 	for (auto& a: m_agents)
 	{
 		int aid = a->GetID();
 		if (aid != oid)
 		{
-			if (!a->OutsideNGR(a->InitState())) {
+			if (!a->OutsideNGR(a->InitState()))
+			{
+				SMPL_INFO("Object %d needs to be moved", aid);
 				move_next.insert(aid);
 			}
 		}
@@ -3696,6 +3752,7 @@ std::vector<trajectory_msgs::JointTrajectory> Robot::dogarReconfigure(
 	// lines 13-14
 	if (move_next.empty())
 	{
+		SMPL_INFO("No objects remain to be moved, concat and return taus!");
 		plan.push_back(tau1);
 		if (tau2_found) {
 			plan.push_back(tau2);
@@ -3717,6 +3774,7 @@ std::vector<trajectory_msgs::JointTrajectory> Robot::dogarReconfigure(
 		for (const auto& i: move_next)
 		{
 			// line 18
+			SMPL_INFO("Try rearranging object %d", i);
 			std::set<int> also_move = move_next;
 			also_move.erase(i);
 			plan = dogarReconfigure(i, ngr_next, also_move, avoid_next, tau1.points.at(0).positions);
@@ -3737,6 +3795,20 @@ std::vector<trajectory_msgs::JointTrajectory> Robot::dogarReconfigure(
 	}
 
 	return {};
+}
+
+void Robot::createVirtualTable()
+{
+	auto obs = m_cc->GetObstacles();
+	Object virtual_table = obs->front();
+	virtual_table.desc.o_x -= virtual_table.desc.x_size + 0.12;
+	virtual_table.desc.x_size = 0.1;
+	virtual_table.desc.id = 999;
+
+	virtual_table.CreateCollisionObjects();
+	virtual_table.CreateSMPLCollisionObject();
+	virtual_table.GenerateCollisionModels();
+	ProcessObstacles({ &virtual_table });
 }
 
 } // namespace clutter
