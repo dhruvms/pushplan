@@ -50,7 +50,7 @@ robot:
   speed: 0.1
   interpolate: false
   shortcut: true
-  runs: 3
+  runs: 1
   study: 1
   yoshikawa_tries: 10
   push_ik_yaws: 50
@@ -95,4 +95,4 @@ sampling:
     mode: 1
     I: 1000
     J: 100
-  ompl_planner: 1 # 0: RRT, 1: KPIECE
+  ompl_planner: 0 # 0: RRT, 1: KPIECE
