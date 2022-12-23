@@ -401,6 +401,12 @@ bool Robot::SteerAction(
 	smpl::RobotState& action_end, comms::ObjectsPoses& end_objs,
 	std::uint32_t& result)
 {
+	// auto markers = m_cc_i->getCollisionRobotVisualization(from);
+	// for (auto& m : markers.markers) {
+	// 	m.ns = "rrt_from_state";
+	// }
+	// SV_SHOW_INFO(markers);
+
 	result = 0x00000000; // error in action computation
 
 	const double res = DEG5 / 5; // 1 degree
@@ -472,11 +478,14 @@ bool Robot::SteerAction(
 		// there was no need to simulate
 		// if result is 5: full action, 6: partial action
 
-		// auto markers = m_cc_i->getCollisionRobotVisualization(action_end);
+		// markers = m_cc_i->getCollisionRobotVisualization(action_end);
 		// for (auto& m : markers.markers) {
 		// 	m.ns = "rrt_state";
 		// }
 		// SV_SHOW_INFO(markers);
+		// ROS_WARN("Action SHOULD NOT collide with movable objects!");
+		// SV_SHOW_INFO(m_cc_m->getCollisionWorldVisualization());
+		// SV_SHOW_INFO(m_cc_i->getCollisionWorldVisualization());
 
 		return true;
 	}
@@ -496,14 +505,27 @@ bool Robot::SteerAction(
 			// get intermediate waypoint
 			interp.interpolate(i, action_pt.positions, planning_variables);
 			// get time to intermediate waypoint
-			auto prev_state = steer_action.points.at(i - 1).positions;
+			auto prev_state = steer_action.points.back().positions;
 			double duration = profileAction(prev_state, action_pt.positions);
-			action_pt.time_from_start = steer_action.points.at(i - 1).time_from_start + ros::Duration(duration);
+
+			if ((i < action_size - 1) && duration < 0.3) {
+				continue;
+			}
 			// add intermediate waypoint
+			action_pt.time_from_start = steer_action.points.back().time_from_start + ros::Duration(duration);
 			steer_action.points.push_back(action_pt);
 		}
 		// set final waypoint
 		interp.interpolate(action_size - 1, action_end, planning_variables);
+
+		// markers = m_cc_i->getCollisionRobotVisualization(action_end);
+		// for (auto& m : markers.markers) {
+		// 	m.ns = "rrt_state";
+		// }
+		// SV_SHOW_INFO(markers);
+		// ROS_WARN("Action SHOULD collide with movable objects!");
+		// SV_SHOW_INFO(m_cc_m->getCollisionWorldVisualization());
+		// SV_SHOW_INFO(m_cc_i->getCollisionWorldVisualization());
 
 		profileTrajectoryMoveIt(steer_action);
 		int dummy, success;
@@ -1397,9 +1419,9 @@ bool Robot::ComputeGrasps(
 	ee_pose.translation().x() = pregrasp_goal[0];
 	ee_pose.translation().y() = pregrasp_goal[1];
 
-	// vis_name = "pregrasp_pose";
-	// SV_SHOW_INFO_NAMED(vis_name, smpl::visual::MakePoseMarkers(
-	// 	ee_pose, m_grid_i->getReferenceFrame(), vis_name));
+	vis_name = "pregrasp_pose";
+	SV_SHOW_INFO_NAMED(vis_name, smpl::visual::MakePoseMarkers(
+		ee_pose, m_grid_i->getReferenceFrame(), vis_name));
 
 	if (getStateNearPose(ee_pose, m_grasp_state, m_pregrasp_state, 1))
 	{
