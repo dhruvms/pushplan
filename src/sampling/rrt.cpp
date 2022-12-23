@@ -259,7 +259,7 @@ bool RRT::steer(
 	comms::ObjectsPoses& qnew_objs,
 	std::uint32_t& result)
 {
-	if (!m_robot->SetScene(xnear->objects()))
+	if (!m_robot->SetScene(xnear->objects(), xnear->robot_state()))
 	{
 		result = 0x0002711;
 		return false;
@@ -273,7 +273,7 @@ bool RRT::steer(
 
 bool RRT::checkGoalNode(Node* node)
 {
-	if (!m_robot->SetScene(node->objects())) {
+	if (!m_robot->SetScene(node->objects(), node->robot_state())) {
 		return false;
 	}
 

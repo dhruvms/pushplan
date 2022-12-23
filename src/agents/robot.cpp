@@ -268,7 +268,8 @@ void Robot::AddMovablesToCC()
 	ProcessObstacles(movable_obstacles, false, true);
 }
 
-bool Robot::SetScene(const comms::ObjectsPoses& objects)
+bool Robot::SetScene(
+	const comms::ObjectsPoses& objects, const smpl::RobotState& state, bool vis)
 {
 	for (const auto &object : objects.poses)
 	{
@@ -296,9 +297,17 @@ bool Robot::SetScene(const comms::ObjectsPoses& objects)
 		}
 	}
 
-	// if (!objects.poses.empty()) {
-	// 	SV_SHOW_INFO(m_cc_m->getCollisionWorldVisualization());
-	// }
+	if (vis)
+	{
+		auto markers = m_cc_i->getCollisionRobotVisualization(state);
+		for (auto& m : markers.markers) {
+			m.ns = "rrt_goal_state";
+		}
+		SV_SHOW_INFO(markers);
+		ROS_WARN("Visualization of goal state achieved by OMPL!");
+		SV_SHOW_INFO(m_cc_m->getCollisionWorldVisualization());
+		SV_SHOW_INFO(m_cc_i->getCollisionWorldVisualization());
+	}
 	return true;
 }
 

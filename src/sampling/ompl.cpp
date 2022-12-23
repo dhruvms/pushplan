@@ -489,7 +489,9 @@ void PushplanMotionValidator::defaultSettings()
 bool PushplanMotionValidator::checkMotion(const ob::State *s1, const ob::State *s2,
 													std::pair<ob::State *, double> &lastValid) const
 {
-	if (!m_robot->SetScene(s1->as<PushplanStateSpace::StateType>()->objects()))
+	if (!m_robot->SetScene(
+					s1->as<PushplanStateSpace::StateType>()->objects(),
+					s1->as<PushplanStateSpace::StateType>()->joint_state()))
 	{
 		m_state_space->copyState(lastValid.first, s1);
 		lastValid.second = 0.0;
@@ -606,7 +608,10 @@ bool PushplanPoseGoal::isSatisfied(const ob::State *st) const
 
 	if (near.first && near.second)
 	{
-		if (!m_robot->SetScene(st->as<PushplanStateSpace::StateType>()->objects())) {
+		if (!m_robot->SetScene(
+						st->as<PushplanStateSpace::StateType>()->objects(),
+						st->as<PushplanStateSpace::StateType>()->joint_state(),
+						true)) {
 			return false;
 		}
 
@@ -629,7 +634,10 @@ bool PushplanPoseGoal::isSatisfied(const ob::State *st, double *distance) const
 
 	if (near.first && near.second)
 	{
-		if (!m_robot->SetScene(st->as<PushplanStateSpace::StateType>()->objects())) {
+		if (!m_robot->SetScene(
+						st->as<PushplanStateSpace::StateType>()->objects(),
+						st->as<PushplanStateSpace::StateType>()->joint_state(),
+						true)) {
 			return false;
 		}
 

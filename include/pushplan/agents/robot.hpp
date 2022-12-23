@@ -55,7 +55,7 @@ public:
 	bool Setup();
 	void SetMovables(const std::vector<std::shared_ptr<Agent> >& agents);
 	void AddMovablesToCC();
-	bool SetScene(const comms::ObjectsPoses& objects);
+	bool SetScene(const comms::ObjectsPoses& objects, const smpl::RobotState& state, bool vis=false);
 	bool ProcessObstacles(const std::vector<Object>& obstacles, bool remove=false, bool movable=false);
 	bool ProcessObstacles(const std::vector<Object*>& obstacles, bool remove=false, bool movable=false);
 	void ProcessFCLObstacles(std::vector<Object> *obstacles, bool remove=false);
