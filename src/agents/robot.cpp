@@ -484,6 +484,7 @@ bool Robot::SteerAction(
 	{
 		// simulate whole or partial action
 		trajectory_msgs::JointTrajectory steer_action;
+		steer_action.joint_names = m_rm->getPlanningJoints();
 		trajectory_msgs::JointTrajectoryPoint action_pt;
 		// starting waypoint
 		action_pt.positions = from;
