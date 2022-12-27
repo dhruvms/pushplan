@@ -399,7 +399,7 @@ bool Robot::SteerAction(
 	const smpl::RobotState& to, int steps,
 	const smpl::RobotState& from, const comms::ObjectsPoses& start_objs,
 	smpl::RobotState& action_end, comms::ObjectsPoses& end_objs,
-	std::uint32_t& result)
+	double& frac, std::uint32_t& result, int planner)
 {
 	// auto markers = m_cc_i->getCollisionRobotVisualization(from);
 	// for (auto& m : markers.markers) {
@@ -419,38 +419,49 @@ bool Robot::SteerAction(
 			planning_variables,
 			res,
 			interp);
+	if (planner == 0 && interp.waypointCount() > steps) // RRT
+	{
+		frac = 0.0;
+		return false;
+	}
 
 	smpl::RobotState interm;
-	int collides_immov_idx = -1, collides_mov_idx = -1;
+	bool mov_collision = false;
+	int collides_immov_idx = -1;
 	std::size_t max_idx = interp.waypointCount() > steps ? steps : interp.waypointCount();
 	for (std::size_t i = 0; i < max_idx; i++)
 	{
 		interp.interpolate(i, interm, planning_variables);
-		if (!m_rm->checkJointLimits(interm)) {
+		if (!m_rm->checkJointLimits(interm))
+		{
+			frac = 0.0;
 			return false;
 		}
 
-		bool mov_collision = false, immov_collision = false;
-
 		// check if interpolated waypoint collides with movable obstacles
-		if (collides_mov_idx < 0)
-		{
+		if (!mov_collision) {
 			mov_collision = !m_cc_m->isStateValid(interm);
-			if (mov_collision) {
-				collides_mov_idx = (int)i;
-			}
 		}
 		// check if interpolated waypoint collides with immovable obstacles
 		if (collides_immov_idx < 0)
 		{
-			immov_collision = !m_cc_i->isStateValid(interm);
-			if (immov_collision) {
+			if (!m_cc_i->isStateValid(interm))
+			{
 				collides_immov_idx = (int)i;
+				if (planner == 0) // RRT
+				{
+					// we cannot reach the 'to' state since there are immovable
+					// obstacles in the way; so `steer' fails for RRT
+					frac = 0.0;
+					return false;
+				}
 			}
 		}
 
-		if (mov_collision && immov_collision) {
+		if (mov_collision && collides_immov_idx >= 0)
+		{
 			SMPL_DEBUG("Action must be in collision with robot body!");
+			frac = 0.0;
 			return false;
 		}
 
@@ -463,18 +474,21 @@ bool Robot::SteerAction(
 	if (collides_immov_idx == 0)
 	{
 		// SMPL_ERROR("Start state of SteerAction collides with immovable obstacles!!");
+		frac = 0.0;
 		return false;
 	}
 	result |= collides_immov_idx < 0 ? 0x00000001 : 0x00000002; // we have an action to validate, full or partial
 
 	std::size_t action_size = collides_immov_idx < 0 ? max_idx : collides_immov_idx;
-	if (collides_mov_idx < 0)
+	frac = action_size/(double)interp.waypointCount();
+	if (!mov_collision)
 	{
 		// no collision with movable objects along action, no need to simulate
 		// whole or partial action is valid
 		interp.interpolate(action_size - 1, action_end, planning_variables);
 		end_objs = start_objs;
 		result |= 0x00000004;
+		SMPL_DEBUG("[SteerAction] Planner: %d, Result: %d (no collision with movables)", planner, result);
 		// there was no need to simulate
 		// if result is 5: full action, 6: partial action
 
@@ -534,7 +548,9 @@ bool Robot::SteerAction(
 		bool sim_result = m_sim->SimPushes(	{ steer_action }, -1, -1.0, -1.0,
 										start_objs,
 										dummy, success, end_objs, dummy_v);
+		frac = sim_result ? frac : 0.0;
 		result |= sim_result ? 0x00000008 : 0x00000063;
+		SMPL_DEBUG("[SteerAction] Planner: %d, Result: %d (action simmed)", planner, result);
 		// simulated an action
 		// success if result is < 100, failure otherwise
 		// full action if result = 9, partial if result = 10

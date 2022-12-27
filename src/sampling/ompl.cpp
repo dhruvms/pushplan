@@ -486,6 +486,7 @@ void PushplanMotionValidator::defaultSettings()
 		throw ompl::Exception("No state space for motion validator");
 }
 
+// KPIECE calls this
 bool PushplanMotionValidator::checkMotion(const ob::State *s1, const ob::State *s2,
 													std::pair<ob::State *, double> &lastValid) const
 {
@@ -501,28 +502,28 @@ bool PushplanMotionValidator::checkMotion(const ob::State *s1, const ob::State *
 
 	smpl::RobotState qnew;
 	comms::ObjectsPoses qnew_objs;
+	double frac = 0.0;
 	std::uint32_t result;
 
 	double start_time = GetTime();
 	bool steer_result = m_robot->SteerAction(
 			s2->as<PushplanStateSpace::StateType>()->joint_state(), std::numeric_limits<int>::max(),
 			s1->as<PushplanStateSpace::StateType>()->joint_state(), s1->as<PushplanStateSpace::StateType>()->objects(),
-			qnew, qnew_objs, result);
+			qnew, qnew_objs, frac, result, m_planner);
 	double sim_time = GetTime() - start_time;
 
+	lastValid.second = frac;
 	if (steer_result)
 	{
 		lastValid.first->as<PushplanStateSpace::StateType>()->setJointState(qnew);
 		lastValid.first->as<PushplanStateSpace::StateType>()->copyObjectState(s1->as<PushplanStateSpace::StateType>()->objects());
 		lastValid.first->as<PushplanStateSpace::StateType>()->setObjectState(qnew_objs);
-		lastValid.second = 1.0;
 
 		valid_++;
 	}
 	else
 	{
 		m_state_space->copyState(lastValid.first, s1);
-		lastValid.second = 0.0;
 		invalid_++;
 	}
 
@@ -535,19 +536,12 @@ bool PushplanMotionValidator::checkMotion(const ob::State *s1, const ob::State *
 	return steer_result;
 }
 
+// RRT calls this
 bool PushplanMotionValidator::checkMotion(const ob::State *s1, const ob::State *s2) const
 {
 	std::pair<ob::State *, double> lastValid;
 	lastValid.first = m_state_space->allocState();
-	bool steer_result = this->checkMotion(s1, s2, lastValid);
-	if (steer_result) {
-		valid_++;
-	}
-	else {
-		invalid_++;
-	}
-
-	return steer_result;
+	return this->checkMotion(s1, s2, lastValid);
 }
 
 static
@@ -614,6 +608,7 @@ bool PushplanPoseGoal::isSatisfied(const ob::State *st) const
 						true)) {
 			return false;
 		}
+		// return near.first && near.second;
 
 		return m_robot->CheckGraspTraj(
 			st->as<PushplanStateSpace::StateType>()->joint_state(),
@@ -640,6 +635,7 @@ bool PushplanPoseGoal::isSatisfied(const ob::State *st, double *distance) const
 						true)) {
 			return false;
 		}
+		// return near.first && near.second;
 
 		return m_robot->CheckGraspTraj(
 			st->as<PushplanStateSpace::StateType>()->joint_state(),

@@ -265,10 +265,11 @@ bool RRT::steer(
 		return false;
 	}
 
+	double frac;
 	return m_robot->SteerAction(
 			qrand, m_steps,
 			xnear->robot_state(), xnear->objects(),
-			qnew, qnew_objs, result);
+			qnew, qnew_objs, frac, result);
 }
 
 bool RRT::checkGoalNode(Node* node)

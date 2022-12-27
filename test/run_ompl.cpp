@@ -185,6 +185,8 @@ int main(int argc, char** argv)
 			// // This call will also issue a call to ompl::base::SpaceInformation::setup() if needed.
 			// // This must be called before solving.
 			// planner->setup();
+			state_space->SetPlannerType(ompl_planner);
+			motion_validator->SetPlannerType(ompl_planner);
 			ss.setPlanner(planner);
 
 			//////////////
@@ -255,19 +257,18 @@ int main(int argc, char** argv)
 
 				smpl::RobotState s;
 				s.clear();
-
 				auto* curr_state = ss.getSolutionPath().getState(0);
-				auto* prev_state = ss.getSolutionPath().getState(0);
 				state_space->copyToReals(s, curr_state);
 				wp.positions = s;
 				wp.time_from_start = ros::Duration(0.0);
 
 				traj.points.push_back(wp);
+				auto prev_state = traj.points.back();
 
 				for (size_t pidx = 1; pidx < ss.getSolutionPath().getStateCount(); ++pidx)
 				{
 					curr_state = ss.getSolutionPath().getState(pidx);
-					prev_state = ss.getSolutionPath().getState(pidx-1);
+					prev_state = traj.points.back();
 
 					s.clear();
 					state_space->copyToReals(s, curr_state);
@@ -278,7 +279,7 @@ int main(int argc, char** argv)
 					double max_speed_factor = 0.1;
 					double max_time = 0.0;
 					for (size_t jidx = 0; jidx < state_space->RMJointVariableCount(); ++jidx) {
-						auto from_pos = prev_state->as<PushplanStateSpace::StateType>()->getJoint(jidx);
+						auto from_pos = prev_state.positions[jidx];
 						auto to_pos = curr_state->as<PushplanStateSpace::StateType>()->getJoint(jidx);
 						auto vel = state_space->RMVelLimit(jidx) * max_speed_factor;
 						if (vel <= 0.0) {
@@ -293,15 +294,16 @@ int main(int argc, char** argv)
 
 						max_time = std::max(max_time, t);
 					}
-					// if (max_time <= 0.01) {
-					// 	continue;
-					// }
 
-					wp.time_from_start = traj.points.back().time_from_start + ros::Duration(max_time);
+					if ((pidx < ss.getSolutionPath().getStateCount() - 1) && max_time < 0.3) {
+						continue;
+					}
 
+					wp.time_from_start = prev_state.time_from_start + ros::Duration(max_time);
 					traj.points.push_back(wp);
 				}
 
+				// int grasp_at = -1;
 				int grasp_at = traj.points.size() + 1;
 
 				trajectory_msgs::JointTrajectory grasp_traj;
@@ -320,6 +322,7 @@ int main(int argc, char** argv)
 				traj.joint_names = pushplan.GetRobot()->GetPlanningJoints();
 				pushplan.GetRobot()->ProfileTraj(traj);
 				start_time = GetTime();
+				ROS_ERROR("Planning succeeded! Executing!!!");
 				exec_success = pushplan.ExecTraj(traj, grasp_at);
 				exec_time = GetTime() - start_time;
 			}

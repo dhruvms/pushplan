@@ -65,7 +65,7 @@ public:
 		const smpl::RobotState& to, int steps,
 		const smpl::RobotState& from, const comms::ObjectsPoses& start_objs,
 		smpl::RobotState& action_end, comms::ObjectsPoses& end_objs,
-		std::uint32_t& result);
+		double &frac, std::uint32_t& result, int planner=0);
 	void GetRandomState(smpl::RobotState& s);
 
 	bool Init();

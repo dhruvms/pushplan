@@ -124,6 +124,8 @@ public:
 	void AddSimTime(double val) { m_sim_time += val; };
 	void IncrementSims() { m_num_sims++; };
 
+	void SetPlannerType(int p) { m_planner = p; };
+
 protected:
 
 private:
@@ -144,7 +146,7 @@ private:
 	comms::ObjectsPoses m_start_objects;
 	smpl::RobotState m_last_ik;
 	double m_sim_time = 0.0;
-	int m_num_sims = 0.0;
+	int m_num_sims = 0.0, m_planner;
 
 	void addSubspace(const ob::StateSpacePtr &component, double weight);
 	void addSubspaceToJointMap(const ob::StateSpacePtr &subspace, int joint);
@@ -171,10 +173,12 @@ public:
 	void SetRobot(const std::shared_ptr<Robot>& robot) {
 		m_robot = robot;
 	};
+	void SetPlannerType(int p) { m_planner = p; };
 
 private:
 	PushplanStateSpace *m_state_space;
 	std::shared_ptr<Robot> m_robot;
+	int m_planner;
 
 	void defaultSettings();
 };
