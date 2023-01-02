@@ -1049,7 +1049,7 @@ void Planner::RunStudy(int study)
 	}
 	else if (study == 1)
 	{
-		m_ph.getParam("robot/push_ik_yaws", N);
+		m_ph.getParam("robot/push_ik_ends", N);
 		m_robot->RunPushIKStudy(N);
 	}
 }
