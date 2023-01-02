@@ -1678,7 +1678,7 @@ int Robot::computePushAction(
 			}
 			SV_SHOW_INFO_NAMED("push_action", ma);
 
-			return failure;
+			return failure; // failure = 0 here
 		}
 
 		// Move arm joints
@@ -1702,14 +1702,14 @@ int Robot::computePushAction(
 		// Check joint limits
 		if (!m_rm->checkJointLimits(q_))
 		{
-			failure = 4;
+			failure = 3;
 			// return false;
 			action.points.pop_back();
 			break;
 		}
 		if (!m_cc_i->isStateValid(q_))
 		{
-			failure = 5;
+			failure = 2;
 			// return false;
 			action.points.pop_back();
 			break;
@@ -1719,7 +1719,7 @@ int Robot::computePushAction(
 	if (failure == 0)
 	{
 		SMPL_WARN("Push action failed to reach end pose.");
-		failure = 3;
+		failure = 1;
 	}
 	return failure;
 }
@@ -1836,7 +1836,7 @@ bool Robot::PlanPush(
 		bool success = true;
 		if (!m_cc_i->isStateValid(push_start_joints))
 		{
-			push_failure = 1;
+			push_failure = 2;
 			debug_push = std::make_tuple(debug_push_start, debug_push_end, push_failure);
 
 			success = false;
@@ -1845,7 +1845,7 @@ bool Robot::PlanPush(
 		trajectory_msgs::JointTrajectory push_traj;
 		if (success && !planToPoseGoal(push_start_state, push_start_pose, push_traj))
 		{
-			push_failure = 2;
+			push_failure = 1;
 			debug_push = std::make_tuple(debug_push_start, debug_push_end, push_failure);
 
 			success = false;
@@ -1866,7 +1866,7 @@ bool Robot::PlanPush(
 			}
 
 			result = new_scene;
-			push_failure = -1;
+			push_failure = 0;
 			debug_push = std::make_tuple(debug_push_start, debug_push_end, push_failure);
 			m_traj = push_traj;
 			++m_stats["push_db_successes"];
@@ -1896,7 +1896,7 @@ bool Robot::PlanPush(
 		push_start_pose.translation().y(),
 		push_start_pose.translation().z()) <= m_grid_i->resolution())
 	{
-		push_failure = 1;
+		push_failure = 6;
 		debug_push_end = { -99.0, -99.0 };
 		debug_push = std::make_tuple(debug_push_start, debug_push_end, push_failure);
 
@@ -1907,7 +1907,7 @@ bool Robot::PlanPush(
 	trajectory_msgs::JointTrajectory push_traj;
 	if (!failure && !planToPoseGoal(push_start_state, push_start_pose, push_traj))
 	{
-		push_failure = 2;
+		push_failure = 5;
 		debug_push_end = { -99.0, -99.0 };
 		debug_push = std::make_tuple(debug_push_start, debug_push_end, push_failure);
 
@@ -1962,7 +1962,7 @@ bool Robot::PlanPush(
 						push_end_pose,
 						push_action);
 
-	if (push_action.points.empty())
+	if (push_failure > 0 || push_action.points.empty())
 	{
 		debug_push = std::make_tuple(debug_push_start, debug_push_end, push_failure);
 		return false;
@@ -1988,7 +1988,7 @@ bool Robot::PlanPush(
 		ProcessObstacles(pushed_obj, true);
 		if (!collides)
 		{
-			push_failure = 6;
+			push_failure = -1;
 			debug_push = std::make_tuple(debug_push_start, debug_push_end, push_failure);
 			return false;
 		}
@@ -2030,6 +2030,7 @@ bool Robot::PlanPush(
 
 	if (!push_found)
 	{
+		// we should never enter this if
 		m_stats["push_plan_time"] += GetTime() - start_time;
 		return false;
 	}
@@ -2047,7 +2048,7 @@ bool Robot::PlanPush(
 	m_stats["push_sim_time"] += GetTime() - start_time;
 	sim_time += GetTime() - start_time;
 
-	push_failure = pidx != -1 ? -1 : 0;
+	push_failure = pidx == -1 ? -2 : 0;
 	debug_push = std::make_tuple(debug_push_start, debug_push_end, push_failure);
 	if (pidx == -1)	{
 		return false;
