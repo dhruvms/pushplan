@@ -52,7 +52,7 @@ robot:
   shortcut: true
   runs: 1
   study: 1
-  yoshikawa_tries: 10
+  yoshikawa_tries: 20
   push_ik_ends: 20
   replay: false
 
