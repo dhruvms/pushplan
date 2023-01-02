@@ -3443,125 +3443,82 @@ void Robot::RunManipulabilityStudy(int N)
 
 void Robot::RunPushIKStudy(int N)
 {
-	m_ph.param<double>("robot/pushing/control/Kp", m_Kp, 1.0);
-	m_ph.param<double>("robot/pushing/control/Ki", m_Ki, 1.0);
-	m_ph.param<double>("robot/pushing/control/Kd", m_Kd, 1.0);
-	m_ph.param<double>("robot/pushing/control/dt", m_dt, 0.01);
-	m_ph.param<int>("robot/pushing/control/iters", m_invvel_iters, 1000);
-
 	double ox, oy, oz, sx, sy, sz;
 	m_sim->GetShelfParams(ox, oy, oz, sx, sy, sz);
 
 	moveit_msgs::RobotState start = m_start_state;
-	smpl::RobotState start_state, end_state;
-	Eigen::Affine3d goal;
+	Eigen::Affine3d push_start_pose, push_end_pose;
 	trajectory_msgs::JointTrajectory path;
 	Eigen::MatrixXd J, Jprod;
 
-	// for (double z = 0.03; z < 0.08; z += 0.02)
-	for (double z = 0.03; z < 0.04; z += 0.02)
+	std::string filename(__FILE__);
+	auto found = filename.find_last_of("/\\");
+	filename = filename.substr(0, found + 1) + "../../dat/PUSHES_IK_3cm.csv";
+
+	bool exists = FileExists(filename);
+	std::ofstream DATA;
+	DATA.open(filename, std::ofstream::out | std::ofstream::app);
+	if (!exists)
 	{
-		std::string filename(__FILE__);
-		auto found = filename.find_last_of("/\\");
-		filename = filename.substr(0, found + 1) + "../../dat/PUSHES_IK_";
-		filename += std::to_string(int(z * 100)) + "cm.csv";
+		DATA << "x0,y0,yaw0,x1,y1,result\n";
+	}
 
-		bool exists = FileExists(filename);
-		std::ofstream DATA;
-		DATA.open(filename, std::ofstream::out | std::ofstream::app);
-		if (!exists)
+	for (double x0 = ox - 0.05; x0 <= ox + sx; x0 += RES)
+	{
+		for (double y0 = oy - 0.05; y0 <= oy + sy; y0 += RES)
 		{
-			DATA << "x0,y0,yaw0,x1,y1,result\n";
-		}
+			// 1. random ee yaw at push start pose
+			double yaw0 = m_distD(m_rng) * M_PI * 2;
+			yaw0 = smpl::angles::normalize_angle(yaw0);
 
-		for (double x0 = ox; x0 <= ox + sx - 0.02; x0 += 0.05)
-		{
-			for (double y0 = oy + 0.02; y0 <= oy + sy; y0 += 0.05)
+			// 2. push start pose
+			push_start_pose = Eigen::Translation3d(x0, y0, m_table_z + 0.03) *
+				Eigen::AngleAxisd(yaw0, Eigen::Vector3d::UnitZ()) *
+				Eigen::AngleAxisd(M_PI/6.0, Eigen::Vector3d::UnitY()) *
+				Eigen::AngleAxisd(0.0, Eigen::Vector3d::UnitX());
+			SV_SHOW_INFO_NAMED("push_start_pose", smpl::visual::MakePoseMarkers(
+				push_start_pose, m_grid_i->getReferenceFrame(), "push_start_pose"));
+
+			// 3. verify push start pose
+			if ((m_grid_i->getDistanceFromPoint(x0, y0, m_table_z + 0.03) <= m_grid_i->resolution())
+					|| (!planToPoseGoal(start, push_start_pose, path)))
 			{
-				for (int t = 0; t < N; ++t)
-				{
-					// 1. random start state
-					while (true)
-					{
-						GetRandomState(start_state);
-						if (!m_rm->checkJointLimits(start_state)) {
-							continue;
-						}
+				DATA << x0 << ',' << y0 << ',' << yaw0 << ','
+						<< -1 << ',' << -1 << ',' << 5 << '\n';
+				continue;
+			}
+			// 4. generate N random push end pose samples to try
+			for (int t = 0; t < N; ++t)
+			{
+				// 5. sample push end pose (x, y) coordinates
+				double x1, y1, dist;
+				x1 = ox + 0.01 + (m_distD(m_rng) * (sx - 0.02));
+				y1 = oy + 0.01 + (m_distD(m_rng) * (sy - 0.02));
+				dist = std::sqrt(std::pow(x0 - x1, 2) + std::pow(y0 - y1, 2));
 
-						auto ee_pose = m_rm->computeFK(start_state);
-						double eex = ee_pose.translation().x();
-						double eey = ee_pose.translation().y();
-						double eez = ee_pose.translation().z();
-						if (eex <= ox - 0.05 || eex >= ox + sx + 0.05
-							|| eey <= oy - 0.05 || eey >= oy + sy + 0.05
-							|| eez <= oz - 0.05 || eez >= oz + sz + 0.05) {
-							continue;
-						}
+				// 6. set push end pose
+				push_end_pose = m_rm->computeFK(path.points.back().positions);
+				push_end_pose.translation().x() = x1;
+				push_end_pose.translation().y() = y1;
+				SV_SHOW_INFO_NAMED("push_end_pose", smpl::visual::MakePoseMarkers(
+					push_end_pose, m_grid_i->getReferenceFrame(), "push_end_pose"));
 
-						if (!m_cc_i->isStateValid(start_state)) {
-							continue;
-						}
-
-						break;
-					}
-					start.joint_state.position.erase(
-						start.joint_state.position.begin() + 1,
-						start.joint_state.position.begin() + 1 + start_state.size());
-					start.joint_state.position.insert(
-						start.joint_state.position.begin() + 1,
-						start_state.begin(), start_state.end());
-
-					// 2. random ee yaw at push start pose
-					double yaw0 = m_distD(m_rng) * M_PI * 2;
-					yaw0 = smpl::angles::normalize_angle(yaw0);
-
-					// 3. random push start pose
-					goal = Eigen::Translation3d(x0, y0, z + oz) *
-						Eigen::AngleAxisd(yaw0, Eigen::Vector3d::UnitZ()) *
-						Eigen::AngleAxisd(M_PI/6.0, Eigen::Vector3d::UnitY()) *
-						Eigen::AngleAxisd(0.0, Eigen::Vector3d::UnitX());
-
-					// 4. find path to push start
-					if (planToPoseGoal(start, goal, path, 0.2))
-					{
-						// 5. compute push end pose (x, y) coordinates
-						double x1, y1, dist;
-						do
-						{
-							x1 = ox + 0.01 + (m_distD(m_rng) * (sx - 0.02));
-							y1 = oy + 0.01 + (m_distD(m_rng) * (sy - 0.02));
-							dist = std::sqrt(std::pow(x0 - x1, 2) + std::pow(y0 - y1, 2));
-						} while (dist >= sy/2.0);
-
-						// set push end pose
-						goal = m_rm->computeFK(path.points.back().positions);
-						goal.translation().x() = x1;
-						goal.translation().y() = y1;
-
-						// get push action trajectory via inverse velocity
-						trajectory_msgs::JointTrajectory push_action;
-						smpl::RobotState joint_vel(m_rm->jointVariableCount(), 0.0);
-						int failure = computePushAction(
-										path.points.back().time_from_start.toSec(),
-										path.points.back().positions,
-										joint_vel,
-										goal,
-										push_action);
-						if (failure > 0) { failure -= 2; };
-						DATA << x0 << ',' << y0 << ',' << yaw0 << ','
-							<< x1 << ',' << y1 << ',' << failure << '\n';
-					}
-					else
-					{
-						DATA << x0 << ',' << y0 << ',' << yaw0 << ','
-								<< -1 << ',' << -1 << ',' << 4 << '\n';
-					}
-				}
+				// 7. get push action trajectory via inverse velocity
+				trajectory_msgs::JointTrajectory push_action;
+				smpl::RobotState joint_vel(m_rm->jointVariableCount(), 0.0);
+				int failure = computePushAction(
+								path.points.back().time_from_start.toSec(),
+								path.points.back().positions,
+								joint_vel,
+								push_end_pose,
+								push_action);
+				DATA << x0 << ',' << y0 << ',' << yaw0 << ','
+					<< x1 << ',' << y1 << ',' << failure << '\n';
 			}
 		}
-
-		DATA.close();
 	}
+
+	DATA.close();
 }
 
 void Robot::VizPlane(double z)
