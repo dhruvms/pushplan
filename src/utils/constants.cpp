@@ -1,5 +1,7 @@
 #include <pushplan/utils/constants.hpp>
 
+#include <cmath>
+
 bool clutter::FRIDGE;
 
 double clutter::MAPF_PLANNING_TIME;
@@ -72,5 +74,6 @@ const std::map<int, std::string> clutter::EXEC_TRAJ_FAIL = {
 };
 
 double clutter::DEG5 = 0.0872665;
+double clutter::LOG2PI = std::log(2 * M_PI);
 
 int clutter::SAMPLES;

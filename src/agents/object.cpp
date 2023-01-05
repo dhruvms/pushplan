@@ -61,6 +61,45 @@ bool Object::Symmetric() const
 	}
 }
 
+double Object::GaussianCost(double x, double y) const
+{
+	Eigen::Vector2d dev;
+	dev << x - desc.o_x, y - desc.o_y;
+
+	Eigen::Vector2d mahalanobis = dev.transpose() * m_U;
+	mahalanobis = mahalanobis.array().square();
+
+	// assuming Gaussian covariance is always full rank (= 2)
+	double logval = -0.5 * (2 * LOG2PI + m_log_det + mahalanobis.sum());
+	double expval = std::exp(logval);
+	return expval * 1e6;
+}
+
+void Object::SetupGaussianCost()
+{
+	double sx2, sy2, cth, sth, cth2, sth2, cov;
+	sx2 = std::pow(desc.x_size, 2);
+	sy2 = std::pow(desc.y_size, 2);
+	cth = std::cos(desc.o_yaw);
+	sth = std::sin(desc.o_yaw);
+	cth2 = std::pow(cth, 2);
+	sth2 = std::pow(sth, 2);
+	cov = (sx2 - sy2)*cth*sth;
+
+	Eigen::Matrix2d Sigma, D, V, D_pinv_sqrt;
+	Sigma <<	sx2*cth2 + sy2*sth2, cov,
+				cov, sx2*sth2 + sy2*cth2;
+	Sigma /= 1.386;
+	Eigen::EigenSolver<Eigen::Matrix2d> eig_d(Sigma);
+
+	D = eig_d.pseudoEigenvalueMatrix();
+	V = eig_d.pseudoEigenvectors();
+	D_pinv_sqrt = D.inverse().array().sqrt();
+
+	m_U = V * D_pinv_sqrt;
+	m_log_det = D.diagonal().array().log().sum();
+}
+
 bool Object::CreateCollisionObjects()
 {
 	moveit_obj = new moveit_msgs::CollisionObject();

@@ -45,6 +45,9 @@ struct Object
 	int Shape() const;
 	double Height() const;
 	bool Symmetric() const;
+	double GaussianCost(double x, double y) const;
+
+	void SetupGaussianCost();
 	bool CreateCollisionObjects();
 	bool CreateSMPLCollisionObject();
 	bool GenerateCollisionModels();
@@ -74,6 +77,9 @@ struct Object
 
 private:
 	Eigen::Affine3d m_T;
+
+	double m_log_det;
+	Eigen::Matrix2d m_U;
 
 	bool createSpheresModel(
 		const std::vector<shapes::ShapeConstPtr>& shapes,

@@ -587,6 +587,7 @@ void Planner::init_agents(
 			continue;
 		}
 
+		o.SetupGaussianCost();
 		o.CreateCollisionObjects();
 		o.CreateSMPLCollisionObject();
 		o.GenerateCollisionModels();
@@ -697,12 +698,15 @@ void Planner::parse_scene(std::vector<Object>& obstacles)
 					o.CreateSMPLCollisionObject();
 					o.GenerateCollisionModels();
 
-					if (o.desc.movable) {
+					if (o.desc.movable)
+					{
 						std::shared_ptr<Agent> movable(new Agent(o));
 						m_agents.push_back(std::move(movable));
 						m_agent_map[o.desc.id] = m_agents.size() - 1;
 					}
-					else {
+					else
+					{
+						o.SetupGaussianCost();
 						// o.desc.x_size += RES;
 						// o.desc.y_size += RES;
 						obstacles.push_back(o);
