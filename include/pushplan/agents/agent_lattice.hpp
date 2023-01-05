@@ -85,6 +85,9 @@ private:
 	unsigned int cost(
 		const LatticeState* s1,
 		const LatticeState* s2);
+	unsigned int cost_gaussian_penalty(
+		const LatticeState* s1,
+		const LatticeState* s2);
 
 	// PP
 	int generateSuccessorPP(

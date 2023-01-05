@@ -455,6 +455,14 @@ unsigned int AgentLattice::cost(
 	return dist;
 }
 
+unsigned int AgentLattice::cost_gaussian_penalty(
+	const LatticeState* s1,
+	const LatticeState* s2)
+{
+	double obs_cost = m_agent->ObstacleGaussianCost(s2->state[0], s2->state[1]);
+	return cost(s1, s2) + obs_cost;
+}
+
 unsigned int AgentLattice::costPP(
 	const LatticeState* s1,
 	bool s1_outside_ngr,

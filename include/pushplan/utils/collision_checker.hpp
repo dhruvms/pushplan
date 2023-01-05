@@ -87,6 +87,7 @@ public:
 			fcl::CollisionObject* o1,
 			const std::vector<int>& other_ids,
 			const std::vector<LatticeState>& other_poses);
+	double ObstacleGaussianCost(double x, double y) const;
 	double ObstacleDist(fcl::CollisionObject* o);
 	bool RobotObjectCollision(
 		Agent* a1, const LatticeState& a1_state,

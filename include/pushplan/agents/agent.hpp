@@ -101,6 +101,7 @@ public:
 	bool ObjectObjectsCollision(
 			const std::vector<int>& other_ids,
 			const std::vector<LatticeState>& other_poses);
+	double ObstacleGaussianCost(double x, double y) const;
 	bool OutsideNGR(const LatticeState& s);
 	double ObsDist(double x, double y);
 

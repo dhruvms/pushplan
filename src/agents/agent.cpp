@@ -276,6 +276,11 @@ bool Agent::ObjectObjectsCollision(
 	return m_cc->ObjectObjectsCollision(m_obj.GetFCLObject(), other_ids, other_poses);
 }
 
+double Agent::ObstacleGaussianCost(double x, double y) const
+{
+	return m_cc->ObstacleGaussianCost(x, y);
+}
+
 bool Agent::OutsideNGR(const LatticeState& s)
 {
 	return stateOutsideNGR(s);

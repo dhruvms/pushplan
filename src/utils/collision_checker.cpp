@@ -146,6 +146,22 @@ bool CollisionChecker::ObjectObjectsCollision(
 
 }
 
+double CollisionChecker::ObstacleGaussianCost(double x, double y) const
+{
+	double cost = 0.0;
+
+	int tables = FRIDGE ? 5 : 1;
+	for (size_t i = tables; i != m_obstacles.size(); ++i)
+	{
+		if (i == m_base_loc) {
+			continue;
+		}
+		cost += m_obstacles.at(i).GaussianCost(x, y);
+	}
+
+	return cost;
+}
+
 bool CollisionChecker::PPCollisionCheck(
 	Agent* a, const LatticeState& s, fcl::CollisionObject* o, const int& priority, bool goal_check)
 {
