@@ -255,21 +255,37 @@ def DrawScene(filepath, objs, trajs, invalids, ngr, goals, pushes, alpha=1.0):
 	# 		AX.text(GOALS[i, 1], GOALS[i, 2], str(int(oid)), color='violet', zorder=3)
 
 	if (pushes):
-		cmap = cm.get_cmap('Set3')
+		cmap = cm.get_cmap('tab10')
+		push_debug_legend = []
+		failure_modes = {
+			0: 'sim fail',
+			1: 'no push-object collision',
+			2: 'sim success',
+			3: 'ik did not reach end',
+			4: 'ik obstacle collision',
+			5: 'ik joint limits',
+			6: 'ik inv vel fail',
+			7: 'push start unreachable',
+			8: 'push start in object'
+		}
+		for i in failure_modes:
+			push_debug_legend.append(patches.Patch(color=cmap(i), label=failure_modes[i]))
+
 		for p in pushes:
 			f = int(p[4]) + 2
 			if (p[2] == -99 and p[3] == -99):
 				if (f == 8):
-					AX.scatter(p[0], p[1], c=cmap(f), zorder=24, marker='*', alpha=0.8)
+					AX.scatter(p[0], p[1], c=[cmap(f)], zorder=24, marker='*', alpha=1)
 				elif (f == 7):
-					AX.scatter(p[0], p[1], c=cmap(f), zorder=21, marker='p', alpha=0.8)
+					AX.scatter(p[0], p[1], c=[cmap(f)], zorder=21, marker='p', alpha=1)
 				else: # backwards compatibility
-					AX.scatter(p[0], p[1], c=cmap(f), zorder=24, alpha=0.8)
+					AX.scatter(p[0], p[1], c=[cmap(f)], zorder=24, alpha=1)
 			else:
-				AX.plot([p[0], p[2]], [p[1], p[3]], c=cmap(f), ls='-.', zorder=22, alpha=0.8)
-				AX.scatter(p[0], p[1], c=cmap(f), zorder=23, marker='P', alpha=0.8)
-				AX.scatter(p[2], p[3], c=cmap(f), zorder=23, marker='X', alpha=0.8)
+				AX.plot([p[0], p[2]], [p[1], p[3]], c=cmap(f), ls='-.', zorder=22, alpha=1)
+				AX.scatter(p[0], p[1], c=[cmap(f)], zorder=23, marker='P', alpha=1)
+				AX.scatter(p[2], p[3], c=[cmap(f)], zorder=23, marker='X', alpha=1)
 				AX.text(p[2], p[3], str(f - 2), color=cmap(f), zorder=33)
+		AX.legend(handles=push_debug_legend)
 
 	if (invalids):
 		cmap = cm.get_cmap('cool')
