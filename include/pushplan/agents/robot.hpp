@@ -196,7 +196,7 @@ public:
 	void RunManipulabilityStudy(int N=1000);
 	void RunPushIKStudy(int N=25);
 	void VizPlane(double z);
-	bool SavePushData(int scene_id, bool reset=true);
+	bool SavePushDebugData(int scene_id);
 
 	// For KPIECE
 	bool ComputeGraspTraj(const smpl::RobotState& state, trajectory_msgs::JointTrajectory& grasp_traj);
@@ -278,7 +278,7 @@ private:
 	int m_grasp_tries, m_invvel_iters;
 	double m_plan_push_time, m_grasp_lift, m_grasp_z, m_Kp, m_Ki, m_Kd, m_dt;
 
-	std::map<std::string, double> m_stats;
+	std::map<std::string, double> m_stats, m_debug_push_info;
 	double m_planner_time, m_sim_time;
 
 	std::unordered_map<

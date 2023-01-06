@@ -79,7 +79,7 @@ bool Robot::Setup()
 	///////////
 
 	m_stats["plan_push_calls"] = 0;
-	m_stats["push_samples_found"] = 0;
+	m_stats["push_start_poses_found"] = 0;
 	m_stats["push_actions_found"] = 0;
 	m_stats["push_plan_time"] = 0.0;
 	m_stats["push_sim_time"] = 0.0;
@@ -89,6 +89,16 @@ bool Robot::Setup()
 	m_stats["push_found_in_db"] = 0;
 	m_stats["push_db_successes"] = 0;
 	m_stats["push_db_failures"] = 0;
+
+	m_debug_push_info["start_inside_obstacle"] = 0;
+	m_debug_push_info["start_unreachable"] = 0;
+	m_debug_push_info["ik_inv_vel_fail"] = 0;
+	m_debug_push_info["ik_joint_limit"] = 0;
+	m_debug_push_info["obstacle_collision"] = 0;
+	m_debug_push_info["ik_ended_early"] = 0;
+	m_debug_push_info["sim_success"] = 0;
+	m_debug_push_info["no_collision_ooi"] = 0;
+	m_debug_push_info["sim_fail"] = 0;
 
 	/////////////////
 	// Robot Model //
@@ -1319,7 +1329,6 @@ bool Robot::SatisfyPath(HighLevelNode* ct_node, Trajectory** sol_path, int& expa
 	}
 
 	auto planner_stats = m_planner->getPlannerStats();
-	m_stats["approach_plan_time"] = planner_stats["initial solution planning time"];
 	expands = planner_stats["expansions"];
 	min_f = planner_stats["min f val"];
 	m_traj = res_a.trajectory.joint_trajectory;
@@ -1353,7 +1362,6 @@ bool Robot::SatisfyPath(HighLevelNode* ct_node, Trajectory** sol_path, int& expa
 	}
 
 	planner_stats = m_planner->getPlannerStats();
-	m_stats["extract_plan_time"] = planner_stats["initial solution planning time"];
 	expands += planner_stats["expansions"];
 	min_f = std::min(min_f, (int)planner_stats["min f val"]);
 
@@ -1628,11 +1636,11 @@ int Robot::computePushAction(
 
 		// Update previous error term
 		previous = error;
-
 		if (!m_rm->computeInverseVelocity(q_, x_dot, q_dot))
 		{
 			// SMPL_INFO("Failed to compute inverse velocity");
 			failure = 4;
+			++m_debug_push_info["ik_inv_vel_fail"];
 			// return false;
 			action.points.pop_back();
 			break;
@@ -1703,6 +1711,7 @@ int Robot::computePushAction(
 		if (!m_rm->checkJointLimits(q_))
 		{
 			failure = 3;
+			++m_debug_push_info["ik_joint_limit"];
 			// return false;
 			action.points.pop_back();
 			break;
@@ -1710,6 +1719,7 @@ int Robot::computePushAction(
 		if (!m_cc_i->isStateValid(q_))
 		{
 			failure = 2;
+			++m_debug_push_info["obstacle_collision"];
 			// return false;
 			action.points.pop_back();
 			break;
@@ -1720,6 +1730,7 @@ int Robot::computePushAction(
 	{
 		SMPL_WARN("Push action failed to reach end pose.");
 		failure = 1;
+		++m_debug_push_info["ik_ended_early"];
 	}
 	return failure;
 }
@@ -1837,6 +1848,7 @@ bool Robot::PlanPush(
 		if (!m_cc_i->isStateValid(push_start_joints))
 		{
 			push_failure = 2;
+			++m_debug_push_info["obstacle_collision"];
 			debug_push = std::make_tuple(debug_push_start, debug_push_end, push_failure);
 
 			success = false;
@@ -1845,7 +1857,8 @@ bool Robot::PlanPush(
 		trajectory_msgs::JointTrajectory push_traj;
 		if (success && !planToPoseGoal(push_start_state, push_start_pose, push_traj))
 		{
-			push_failure = 1;
+			push_failure = 5;
+			++m_debug_push_info["start_unreachable"];
 			debug_push = std::make_tuple(debug_push_start, debug_push_end, push_failure);
 
 			success = false;
@@ -1867,6 +1880,7 @@ bool Robot::PlanPush(
 
 			result = new_scene;
 			push_failure = 0;
+			++m_debug_push_info["sim_success"];
 			debug_push = std::make_tuple(debug_push_start, debug_push_end, push_failure);
 			m_traj = push_traj;
 			++m_stats["push_db_successes"];
@@ -1897,6 +1911,7 @@ bool Robot::PlanPush(
 		push_start_pose.translation().z()) <= m_grid_i->resolution())
 	{
 		push_failure = 6;
+		++m_debug_push_info["start_inside_obstacle"];
 		debug_push_end = { -99.0, -99.0 };
 		debug_push = std::make_tuple(debug_push_start, debug_push_end, push_failure);
 
@@ -1908,6 +1923,7 @@ bool Robot::PlanPush(
 	if (!failure && !planToPoseGoal(push_start_state, push_start_pose, push_traj))
 	{
 		push_failure = 5;
+		++m_debug_push_info["start_unreachable"];
 		debug_push_end = { -99.0, -99.0 };
 		debug_push = std::make_tuple(debug_push_start, debug_push_end, push_failure);
 
@@ -1921,7 +1937,7 @@ bool Robot::PlanPush(
 		return false;
 	}
 
-	++m_stats["push_samples_found"];
+	++m_stats["push_start_poses_found"];
 	profileTrajectoryMoveIt(push_traj);
 	size_t push_traj_approach_size = push_traj.points.size();
 
@@ -1989,6 +2005,7 @@ bool Robot::PlanPush(
 		if (!collides)
 		{
 			push_failure = -1;
+			++m_debug_push_info["no_collision_ooi"];
 			debug_push = std::make_tuple(debug_push_start, debug_push_end, push_failure);
 			return false;
 		}
@@ -2050,10 +2067,13 @@ bool Robot::PlanPush(
 
 	push_failure = pidx == -1 ? -2 : 0;
 	debug_push = std::make_tuple(debug_push_start, debug_push_end, push_failure);
-	if (pidx == -1)	{
+	if (pidx == -1)
+	{
+		++m_debug_push_info["sim_fail"];
 		return false;
 	}
 
+	++m_debug_push_info["sim_success"];
 	++m_stats["push_sim_successes"];
 	m_traj = m_push_trajs.at(pidx);
 	// SMPL_INFO("Computed and simulated new push in %f seconds!", GetTime() - start_time);
@@ -3518,11 +3538,11 @@ void Robot::VizPlane(double z)
 	m_vis_pub.publish(marker);
 }
 
-bool Robot::SavePushData(int scene_id, bool reset)
+bool Robot::SavePushDebugData(int scene_id)
 {
 	std::string filename(__FILE__);
 	auto found = filename.find_last_of("/\\");
-	filename = filename.substr(0, found + 1) + "../../dat/ROBOT.csv";
+	filename = filename.substr(0, found + 1) + "../../dat/PUSH_DEBUG_DATA.csv";
 
 	bool exists = FileExists(filename);
 	std::ofstream STATS;
@@ -3530,25 +3550,36 @@ bool Robot::SavePushData(int scene_id, bool reset)
 	if (!exists)
 	{
 		STATS << "UID,"
-				<< "PlanPushCalls,PushSamplesFound,PushActionsFound,"
-				<< "PushPlanTime,PushSimTime,PushSimSuccesses\n";
+				<< "PlanPushCalls,PushStartPosesFound,PushActionsFoundToSim,"
+				<< "PushPlanTime,PushSimTime,PushSimSuccesses,"
+				<< "PushDBLookupTime,PushesFoundInDB,PushDBSuccesses,PushDBFails,PushDBTotalTime,"
+				<< "PushSuccessInSim,PushFailInSim,NoCollisionWithObject,"
+				<< "IKDidNotReachEnd,IKObstacleCollision,IKJointLimitViolation,"
+				<< "InverseVelFail,PushStartPoseUnreachable,PushStartPoseInObstacle\n";
 	}
 
 	STATS << scene_id << ','
-			<< m_stats["plan_push_calls"] << ',' << m_stats["push_samples_found"] << ',' << m_stats["push_actions_found"] << ','
-			<< m_stats["push_plan_time"] << ',' << m_stats["push_sim_time"] << ','
-			<< m_stats["push_sim_successes"] << '\n';
+			<< m_stats["plan_push_calls"] << ','
+			<< m_stats["push_start_poses_found"] << ','
+			<< m_stats["push_actions_found"] << ','
+			<< m_stats["push_plan_time"] << ','
+			<< m_stats["push_sim_time"] << ','
+			<< m_stats["push_sim_successes"] << ','
+			<< m_stats["push_db_lookup_time"] << ','
+			<< m_stats["push_found_in_db"] << ','
+			<< m_stats["push_db_successes"] << ','
+			<< m_stats["push_db_failures"] << ','
+			<< m_stats["push_db_total_time"] << ','
+			<< m_debug_push_info["sim_success"] << ','
+			<< m_debug_push_info["sim_fail"] << ','
+			<< m_debug_push_info["no_collision_ooi"] << ','
+			<< m_debug_push_info["ik_ended_early"] << ','
+			<< m_debug_push_info["obstacle_collision"] << ','
+			<< m_debug_push_info["ik_joint_limit"] << ','
+			<< m_debug_push_info["ik_inv_vel_fail"] << ','
+			<< m_debug_push_info["start_unreachable"] << ','
+			<< m_debug_push_info["start_inside_obstacle"] << '\n';
 	STATS.close();
-
-	if (reset)
-	{
-		m_stats["plan_push_calls"] = 0;
-		m_stats["push_samples_found"] = 0;
-		m_stats["push_actions_found"] = 0;
-		m_stats["push_plan_time"] = 0.0;
-		m_stats["push_sim_time"] = 0.0;
-		m_stats["push_sim_successes"] = 0;
-	}
 }
 
 void Robot::createVirtualTable()
