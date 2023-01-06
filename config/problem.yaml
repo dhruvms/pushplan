@@ -19,7 +19,7 @@ goal:
   yaw: 0.0
   plan_budget: 300.0
   sim_budget: 900.0
-  total_budget: 120.0
+  total_budget: 300.0
   save: true
   cc_2d: true
   cc_3d: false

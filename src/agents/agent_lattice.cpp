@@ -56,6 +56,7 @@ int AgentLattice::PushGoal(const Coord& p)
 	Coord pseudogoal = { -99, -99 };
 	goal_id = getOrCreateState(pseudogoal);
 	m_goal_ids.push_back(goal_id);
+
 	return goal_id;
 }
 
@@ -406,6 +407,7 @@ int AgentLattice::generateSuccessor(
 
 	succs->push_back(succ_state_id);
 	costs->push_back(cost(parent, successor));
+	// costs->push_back(cost_gaussian_penalty(parent, successor));
 
 	return succ_state_id;
 }

@@ -53,7 +53,7 @@ public:
 	MAMOSearch(Planner *planner) : m_planner(planner) {};
 
 	bool CreateRoot();
-	bool Solve();
+	bool Solve(double budget=300.0);
 	void GetRearrangements(std::vector<trajectory_msgs::JointTrajectory>& rearrangements, int& grasp_at);
 	void SaveStats();
 	void SaveNBData();

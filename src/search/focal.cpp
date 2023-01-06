@@ -216,12 +216,14 @@ void Focal::expand(LowLevelNode* s)
 
 	std::vector<int> succ_ids;
 	std::vector<unsigned int> costs;
+
 	if (!m_agent->CheckGoalCost(s->state_id, &succ_ids, &costs))
 	{
 		succ_ids.clear();
 		costs.clear();
 		m_agent->GetSuccs(s->state_id, &succ_ids, &costs);
 	}
+
 	// m_agent->GetSuccs(s->state_id, &succ_ids, &costs);
 
 	for (size_t sidx = 0; sidx < succ_ids.size(); ++sidx)

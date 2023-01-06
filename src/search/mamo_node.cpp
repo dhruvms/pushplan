@@ -135,6 +135,7 @@ void MAMONode::GetSuccs(
 		}
 		else {
 			samples = 1; // seen valid push before, lookup from DB
+			// samples = SAMPLES - samples;
 		}
 
 		// get push location

@@ -219,7 +219,7 @@ bool Planner::SetupNGR()
 bool Planner::Plan(bool& done)
 {
 	done = false;
-	bool result = m_mamo_search->Solve();
+	bool result = m_mamo_search->Solve(m_total_budget);
 	m_mamo_search->SaveStats();
 	m_robot->SavePushDebugData(m_scene_id);
 	if (result)

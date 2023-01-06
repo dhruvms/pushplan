@@ -43,7 +43,7 @@ bool MAMOSearch::CreateRoot()
 	return true;
 }
 
-bool MAMOSearch::Solve()
+bool MAMOSearch::Solve(double budget)
 {
 	double t1 = GetTime();
 	m_root_search->actions = 0;
@@ -55,9 +55,9 @@ bool MAMOSearch::Solve()
 
 	while (!m_OPEN.empty())
 	{
-		if (GetTime() - t1 > 300.0)
+		if (GetTime() - t1 > budget)
 		{
-			SMPL_ERROR("MAMO Search took more than 5 minutes!");
+			SMPL_ERROR("MAMO Search took more than %f seconds!", budget);
 			break;
 		}
 
