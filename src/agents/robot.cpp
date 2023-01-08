@@ -212,21 +212,9 @@ bool Robot::Setup()
 	m_coord_deltas = std::move(deltas);
 
 	// setup planar approx
-	m_priority = 0;
 	m_grasp_at = -1;
-	m_b = SEMI_MINOR;
-	m_shoulder = "r_shoulder_pan_link";
-	m_elbow = "r_elbow_flex_link";
-	m_wrist = "r_wrist_roll_link";
-	m_tip = "r_gripper_finger_dummy_planning_link"; // TODO: check
-	m_table_z = m_cc->GetTableHeight();
 	m_distD = std::uniform_real_distribution<double>(0.0, 1.0);
 	m_distG = std::normal_distribution<>(0.0, 0.025);
-
-	m_link_s = smpl::urdf::GetLink(&m_rm->m_robot_model, m_shoulder.c_str());
-	m_link_e = smpl::urdf::GetLink(&m_rm->m_robot_model, m_elbow.c_str());
-	m_link_w = smpl::urdf::GetLink(&m_rm->m_robot_model, m_wrist.c_str());
-	m_link_t = smpl::urdf::GetLink(&m_rm->m_robot_model, m_tip.c_str());
 
 	smpl::RobotState dummy;
 	dummy.insert(dummy.begin(),
@@ -1511,11 +1499,6 @@ bool Robot::UpdateKDLRobot(int mode)
 		ROS_ERROR("Failed to set start state!");
 		return false;
 	}
-
-	m_link_s = smpl::urdf::GetLink(&m_rm->m_robot_model, m_shoulder.c_str());
-	m_link_e = smpl::urdf::GetLink(&m_rm->m_robot_model, m_elbow.c_str());
-	m_link_w = smpl::urdf::GetLink(&m_rm->m_robot_model, m_wrist.c_str());
-	m_link_t = smpl::urdf::GetLink(&m_rm->m_robot_model, m_tip.c_str());
 
 	smpl::RobotState dummy;
 	dummy.insert(dummy.begin(),

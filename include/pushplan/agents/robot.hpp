@@ -236,11 +236,7 @@ private:
 	std::vector<double> m_coord_deltas;
 
 	int m_grasp_at;
-	double m_b, m_table_z;
-	std::string m_shoulder, m_elbow, m_wrist, m_tip;
-	const smpl::urdf::Link* m_link_s = nullptr;
-	const smpl::urdf::Link* m_link_e = nullptr;	const smpl::urdf::Link* m_link_w = nullptr;
-	const smpl::urdf::Link* m_link_t = nullptr;
+	double m_table_z;
 	Eigen::Affine3d m_home_pose, m_pregrasp_pose, m_grasp_pose, m_postgrasp_pose;
 	smpl::RobotState m_home_state, m_pregrasp_state, m_grasp_state, m_postgrasp_state;
 
@@ -265,7 +261,7 @@ private:
 	trajectory_msgs::JointTrajectory m_traj;
 	std::vector<std::vector<Eigen::Vector3d>> m_traj_voxels;
 
-	int m_t, m_priority;
+	int m_t;
 	Trajectory m_solve;
 	Object m_ooi;
 	std::vector<std::shared_ptr<Agent> > m_movables; // pointers to relevant objects
