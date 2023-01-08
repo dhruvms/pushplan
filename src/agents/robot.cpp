@@ -1885,6 +1885,7 @@ bool Robot::PlanPush(
 			m_traj = push_traj;
 			++m_stats["push_db_successes"];
 			m_stats["push_db_total_time"] += GetTime() - start_time;
+			m_stats["push_plan_time"] += GetTime() - start_time;
 			// ROS_INFO("Push evaluation sans simulation using DB took %f seconds", GetTime() - start_time);
 			return true;
 		}
@@ -1933,7 +1934,9 @@ bool Robot::PlanPush(
 	// remove all movable objects from immovable collision space
 	ProcessObstacles(pushed_obj, true);
 	ProcessObstacles(other_movables, true);
-	if (failure) {
+	if (failure)
+	{
+		m_stats["push_plan_time"] += GetTime() - start_time;
 		return false;
 	}
 
@@ -1981,6 +1984,7 @@ bool Robot::PlanPush(
 	if (push_failure > 0 || push_action.points.empty())
 	{
 		debug_push = std::make_tuple(debug_push_start, debug_push_end, push_failure);
+		m_stats["push_plan_time"] += GetTime() - start_time;
 		return false;
 	}
 
@@ -2007,6 +2011,7 @@ bool Robot::PlanPush(
 			push_failure = -1;
 			++m_debug_push_info["no_collision_ooi"];
 			debug_push = std::make_tuple(debug_push_start, debug_push_end, push_failure);
+			m_stats["push_plan_time"] += GetTime() - start_time;
 			return false;
 		}
 
