@@ -32,7 +32,7 @@ BulletSim::BulletSim(
 	int movable_objs) :
 m_num_immov(immovable_objs), m_num_mov(movable_objs),
 m_robot_id(-1), m_tables(-1),
-m_rng(m_dev())
+m_rng(m_dev()), m_ph("~")
 {
 	setupServices();
 
@@ -53,8 +53,13 @@ m_rng(m_dev())
 		if (!setupTables()) {
 			ROS_ERROR("Failed to setup the scene.");
 		}
+
+		m_friction_min = 0.0, m_friction_max = 0.0;
+		m_ph.getParam("objects/friction_min", m_friction_min);
+		m_ph.getParam("objects/friction_max", m_friction_max);
+
 		if(!setupObjects(ycb)) {
-			ROS_ERROR("Failed to load %d objects into the scene.", m_num_immov);
+			ROS_ERROR("Failed to load (%d, %d) (immov, mov) objects into the scene.", m_num_immov, m_num_mov);
 		}
 	}
 	else
@@ -390,7 +395,7 @@ bool BulletSim::setupPrimitiveObjectsFromFile(int replay_id, const std::string& 
 							case 11: srv.request.z_size = std::stod(split); break;
 							case 12: {
 								srv.request.mass = std::stod(split);
-								srv.request.locked = (std::stod(split) == 0);
+								srv.request.locked = (srv.request.mass == 0);
 								break;
 							}
 							case 13: srv.request.mu = std::stod(split); break;
@@ -414,7 +419,8 @@ bool BulletSim::setupPrimitiveObjectsFromFile(int replay_id, const std::string& 
 														srv.request.x_size,
 														srv.request.y_size,
 														srv.request.z_size,
-														(double)srv.request.locked,
+														srv.request.mass,
+														srv.request.mu,
 														(double)srv.request.movable,
 														0.0 // YCB flag for primitive object = false
 													};
@@ -512,6 +518,7 @@ bool BulletSim::setupYCBObjectsFromFile(int replay_id, const std::string& suffix
 														srv.request.o_r,
 														srv.request.o_p,
 														srv.request.o_yaw,
+														srv.request.mu,
 														(double)srv.request.movable,
 														1.0 // YCB flag for YCB object = true
 													};
@@ -621,7 +628,8 @@ void BulletSim::setupTableFromFile(int replay_id, const std::string& suffix)
 														srv.request.x_size,
 														srv.request.y_size,
 														srv.request.z_size,
-														(double)srv.request.locked,
+														srv.request.mass,
+														srv.request.mu,
 														(double)srv.request.movable,
 														0.0 // YCB flag for primitive object = false
 													};
@@ -643,10 +651,10 @@ bool BulletSim::setupPrimitiveObjects()
 {
 	int immov_added = 0, mov_added = 0;
 	double min_size, xlim, ylim, zlim;
-	m_nh.param("objects/min_size", min_size, 0.0);
-	m_nh.param("objects/x_size", xlim, 1.0);
-	m_nh.param("objects/y_size", ylim, 1.0);
-	m_nh.param("objects/z_size", zlim, 1.0);
+	m_ph.param("objects/min_size", min_size, 0.0);
+	m_ph.param("objects/x_size", xlim, 1.0);
+	m_ph.param("objects/y_size", ylim, 1.0);
+	m_ph.param("objects/z_size", zlim, 1.0);
 
 	comms::AddObject srv;
 	while (immov_added < m_num_immov || mov_added < m_num_mov)
@@ -687,7 +695,8 @@ bool BulletSim::setupPrimitiveObjects()
 		else {
 			srv.request.movable = true;
 		}
-		srv.request.mu = -1; // set in simulator
+		srv.request.mass = 0.1 + m_distD(m_rng);
+		srv.request.mu = m_friction_min + (m_distD(m_rng) * (m_friction_max - m_friction_min));
 		srv.request.sim_id = -1; // add to all simulator instances
 
 		if (m_services.at(m_servicemap["add_object"]).call(srv))
@@ -703,7 +712,8 @@ bool BulletSim::setupPrimitiveObjects()
 											srv.request.x_size,
 											srv.request.y_size,
 											srv.request.z_size,
-											(double)srv.request.locked,
+											srv.request.mass,
+											srv.request.mu,
 											(double)srv.request.movable,
 											0.0 // flag for primitive object = false
 										};
@@ -774,7 +784,7 @@ bool BulletSim::setupYCBObjects()
 		else {
 			srv.request.movable = true;
 		}
-		srv.request.mu = -1; // set in simulator
+		srv.request.mu = m_friction_min + (m_distD(m_rng) * (m_friction_max - m_friction_min));
 
 		if (m_services.at(m_servicemap["add_ycb_object"]).call(srv))
 		{
@@ -787,6 +797,7 @@ bool BulletSim::setupYCBObjects()
 											srv.request.o_r,
 											srv.request.o_p,
 											srv.request.o_yaw,
+											srv.request.mu,
 											(double)srv.request.movable,
 											1.0 // YCB flag for YCB object = true
 										};
@@ -882,9 +893,11 @@ bool BulletSim::setupTables()
 		srv.request.y_size = m_immov.at(i)[7];
 		srv.request.z_size = m_immov.at(i)[8];
 
-		srv.request.locked = true; // (bool)m_immov.at(i)[9];
-		srv.request.movable = false; // (bool)m_immov.at(i)[10];
-		srv.request.mu = -1;
+		srv.request.mass = m_immov.at(i)[9];
+		srv.request.mu = m_immov.at(i)[10];
+
+		srv.request.movable = (bool)m_immov.at(i)[11];
+		srv.request.locked = srv.request.mass == 0;
 
 		srv.request.sim_id = -1; // add to all simulator instances
 		// Adding Table
@@ -927,7 +940,7 @@ bool BulletSim::readTables(const std::string& filename)
 	num_obs = atoi(sTemp);
 	m_tables = num_obs;
 
-	// get {shape x y z dimx dimy dimz} for each object. dims are half extents.
+	// get {shape x y z roll pitch yaw dimx dimy dimz mass mu} for each object. dims are half extents.
 	m_immov.resize(num_obs);
 	m_immov_ids.clear();
 	for (int i = 0; i < num_obs; ++i)
@@ -939,7 +952,7 @@ bool BulletSim::readTables(const std::string& filename)
 		}
 		m_immov_ids.push_back(std::make_pair(-1, atoi(sTemp)));
 
-		m_immov[i].resize(12);
+		m_immov[i].resize(13);
 		for (int j = 0; j < 11; ++j)
 		{
 			if (fscanf(fCfg, "%s", sTemp) < 1)
@@ -952,7 +965,12 @@ bool BulletSim::readTables(const std::string& filename)
 				m_immov[i][j] = atof(sTemp);
 			}
 		}
-		m_immov[i][11] = 0.0; // YCB flag for primitive object = false
+		m_immov[i][11] = 0.0; // tables are not movable
+		m_immov[i][12] = 0.0; // YCB flag for primitive object = false
+
+		if (z_offset) {
+			m_immov[i][2] += z_offset_amount;
+		}
 
 		if (fscanf(fCfg, "%s", sTemp)) {
 			ROS_DEBUG("Finished reading object %s", sTemp);
@@ -1138,7 +1156,7 @@ void BulletSim::GetShelfParams(
 	if (m_tables == 1)
 	{
 		double zlim;
-		m_nh.param("objects/z_size", zlim, 1.0);
+		m_ph.param("objects/z_size", zlim, 1.0);
 		sz = oz + (zlim * 2.0);
 	}
 	else

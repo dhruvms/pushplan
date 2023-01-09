@@ -523,6 +523,7 @@ void Planner::init_agents(
 	for (size_t i = 0; i < immov_objs->size(); ++i)
 	{
 		o.desc.id = immov_obj_ids->at(i).first;
+		o.desc.shape = immov_obj_ids->at(i).second;
 		o.desc.type = i < tables ? -1 : 0; // table or immovable
 		o.desc.o_x = immov_objs->at(i).at(0);
 		o.desc.o_y = immov_objs->at(i).at(1);
@@ -530,10 +531,11 @@ void Planner::init_agents(
 		o.desc.o_roll = immov_objs->at(i).at(3);
 		o.desc.o_pitch = immov_objs->at(i).at(4);
 		o.desc.o_yaw = immov_objs->at(i).at(5);
+		o.desc.ycb = (bool)immov_objs->at(i).back();
 
-		if (ycb && i >= tables)
+		if (o.desc.ycb)
 		{
-			auto itr = YCB_OBJECT_DIMS.find(immov_obj_ids->at(i).second);
+			auto itr = YCB_OBJECT_DIMS.find(o.desc.shape);
 			if (itr != YCB_OBJECT_DIMS.end())
 			{
 				o.desc.x_size = itr->second.at(0);
@@ -541,19 +543,19 @@ void Planner::init_agents(
 				o.desc.z_size = itr->second.at(2);
 				o.desc.o_yaw += itr->second.at(3);
 			}
+			o.desc.mass = -1;
+			o.desc.mu = immov_objs->at(i).at(6);
 		}
 		else
 		{
 			o.desc.x_size = immov_objs->at(i).at(6);
 			o.desc.y_size = immov_objs->at(i).at(7);
 			o.desc.z_size = immov_objs->at(i).at(8);
+			o.desc.mass = immov_objs->at(i).at(9);
+			o.desc.mu = immov_objs->at(i).at(10);
 		}
 		o.desc.movable = false;
-		o.desc.shape = immov_obj_ids->at(i).second;
-		o.desc.mass = i == 0 ? 0 : -1;
-		o.desc.locked = i == 0 ? true : false;
-		o.desc.mu = -1;
-		o.desc.ycb = i >= tables ? ycb : false;
+		o.desc.locked = i < tables ? true : false;
 
 		if (!ooi_set && i >= tables)
 		{
@@ -579,6 +581,7 @@ void Planner::init_agents(
 	for (size_t i = 0; i < mov_objs->size(); ++i)
 	{
 		o.desc.id = mov_obj_ids->at(i).first;
+		o.desc.shape = mov_obj_ids->at(i).second;
 		o.desc.type = 1; // movable
 		o.desc.o_x = mov_objs->at(i).at(0);
 		o.desc.o_y = mov_objs->at(i).at(1);
@@ -586,8 +589,9 @@ void Planner::init_agents(
 		o.desc.o_roll = mov_objs->at(i).at(3);
 		o.desc.o_pitch = mov_objs->at(i).at(4);
 		o.desc.o_yaw = mov_objs->at(i).at(5);
+		o.desc.ycb = (bool)mov_objs->at(i).back();
 
-		if (ycb)
+		if (o.desc.ycb)
 		{
 			auto itr = YCB_OBJECT_DIMS.find(mov_obj_ids->at(i).second);
 			if (itr != YCB_OBJECT_DIMS.end())
@@ -597,19 +601,19 @@ void Planner::init_agents(
 				o.desc.z_size = itr->second.at(2);
 				o.desc.o_yaw += itr->second.at(3);
 			}
+			o.desc.mass = -1;
+			o.desc.mu = mov_objs->at(i).at(6);
 		}
 		else
 		{
 			o.desc.x_size = mov_objs->at(i).at(6);
 			o.desc.y_size = mov_objs->at(i).at(7);
 			o.desc.z_size = mov_objs->at(i).at(8);
+			o.desc.mass = mov_objs->at(i).at(9);
+			o.desc.mu = mov_objs->at(i).at(10);
 		}
 		o.desc.movable = true;
-		o.desc.shape = mov_obj_ids->at(i).second;
-		o.desc.mass = i == 0 ? 0 : -1;
 		o.desc.locked = false;
-		o.desc.mu = -1;
-		o.desc.ycb = ycb;
 
 		o.CreateCollisionObjects();
 		o.CreateSMPLCollisionObject();

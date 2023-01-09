@@ -804,8 +804,8 @@ class BulletSim:
 		xyz = [req.o_x, req.o_y, req.o_z]
 		rpy = [req.o_r, req.o_p, req.o_yaw]
 		half_extents = [req.x_size, req.y_size, req.z_size]
-		mass = 0 if req.locked else np.random.rand() * 0.5
-		mass = mass if req.mass <= 0 else req.mass
+		mass = 0 if req.locked else 0.1 + np.random.rand()
+		mass = mass if req.mass <= 0 else 0.1 + req.mass * 2
 
 		if sim_data['num_objs'] < len(sim_data['table_id']):
 			rgba = self.table_rgba

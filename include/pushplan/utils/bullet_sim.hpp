@@ -60,8 +60,9 @@ public:
 		double& sx, double& sy, double& sz);
 private:
 	int m_num_immov, m_num_mov, m_robot_id, m_tables;
+	double m_friction_min, m_friction_max;
 
-	ros::NodeHandle m_nh;
+	ros::NodeHandle m_ph, m_nh;
 	std::vector<ros::ServiceClient> m_services;
 	std::unordered_map<std::string, int> m_servicemap;
 
