@@ -134,6 +134,7 @@ class BulletSim:
 			for oid, overlap in enumerate(overlaps):
 				if not intersects[oid]:
 					continue
+				sim.performCollisionDetection()
 				if sim.getContactPoints(obj_id, overlap[0]):
 					remove = True
 					break
