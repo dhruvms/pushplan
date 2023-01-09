@@ -82,6 +82,9 @@ objects:
     theta    0.0872665
     ox       0.0
     oy       0.0
+  z_offset_scale: 0.1
+  friction_min: 0.001
+  friction_max: 0.5
 
 sampling:
   samples: 25000
