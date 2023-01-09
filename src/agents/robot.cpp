@@ -1565,7 +1565,7 @@ int Robot::computePushAction(
 	const Eigen::Affine3d& end_pose,
 	trajectory_msgs::JointTrajectory& action)
 {
-	int failure = 0;
+	int result = 0;
 	// Constants
 	double xy_thresh = 0.01;
 
@@ -1622,7 +1622,7 @@ int Robot::computePushAction(
 		if (!m_rm->computeInverseVelocity(q_, x_dot, q_dot))
 		{
 			// SMPL_INFO("Failed to compute inverse velocity");
-			failure = 4;
+			result = 4;
 			++m_debug_push_info["ik_inv_vel_fail"];
 			// return false;
 			action.points.pop_back();
@@ -1669,7 +1669,7 @@ int Robot::computePushAction(
 			}
 			SV_SHOW_INFO_NAMED("push_action", ma);
 
-			return failure; // failure = 0 here
+			return result; // result = 0 here
 		}
 
 		// Move arm joints
@@ -1693,7 +1693,7 @@ int Robot::computePushAction(
 		// Check joint limits
 		if (!m_rm->checkJointLimits(q_))
 		{
-			failure = 3;
+			result = 3;
 			++m_debug_push_info["ik_joint_limit"];
 			// return false;
 			action.points.pop_back();
@@ -1701,7 +1701,7 @@ int Robot::computePushAction(
 		}
 		if (!m_cc_i->isStateValid(q_))
 		{
-			failure = 2;
+			result = 2;
 			++m_debug_push_info["obstacle_collision"];
 			// return false;
 			action.points.pop_back();
@@ -1709,13 +1709,13 @@ int Robot::computePushAction(
 		}
 	}
 
-	if (failure == 0)
+	if (result == 0)
 	{
 		SMPL_WARN("Push action failed to reach end pose.");
-		failure = 1;
+		result = 1;
 		++m_debug_push_info["ik_ended_early"];
 	}
-	return failure;
+	return result;
 }
 
 void Robot::profileTrajectoryMoveIt(trajectory_msgs::JointTrajectory& traj)
@@ -1776,7 +1776,7 @@ bool Robot::PlanPush(
 	const std::vector<Object*>& other_movables,	const comms::ObjectsPoses& curr_scene,
 	const double& push_frac,
 	comms::ObjectsPoses& result,
-	int& push_failure,
+	int& push_result,
 	std::tuple<State, State, int>& debug_push,
 	double &sim_time, bool input)
 {
@@ -1830,9 +1830,9 @@ bool Robot::PlanPush(
 		bool success = true;
 		if (!m_cc_i->isStateValid(push_start_joints))
 		{
-			push_failure = 2;
+			push_result = 2;
 			++m_debug_push_info["obstacle_collision"];
-			debug_push = std::make_tuple(debug_push_start, debug_push_end, push_failure);
+			debug_push = std::make_tuple(debug_push_start, debug_push_end, push_result);
 
 			success = false;
 		}
@@ -1840,9 +1840,9 @@ bool Robot::PlanPush(
 		trajectory_msgs::JointTrajectory push_traj;
 		if (success && !planToPoseGoal(push_start_state, push_start_pose, push_traj))
 		{
-			push_failure = 5;
+			push_result = 5;
 			++m_debug_push_info["start_unreachable"];
-			debug_push = std::make_tuple(debug_push_start, debug_push_end, push_failure);
+			debug_push = std::make_tuple(debug_push_start, debug_push_end, push_result);
 
 			success = false;
 		}
@@ -1862,9 +1862,9 @@ bool Robot::PlanPush(
 			}
 
 			result = new_scene;
-			push_failure = 0;
+			push_result = 0;
 			++m_debug_push_info["sim_success"];
-			debug_push = std::make_tuple(debug_push_start, debug_push_end, push_failure);
+			debug_push = std::make_tuple(debug_push_start, debug_push_end, push_result);
 			m_traj = push_traj;
 			++m_stats["push_db_successes"];
 			m_stats["push_db_total_time"] += GetTime() - start_time;
@@ -1894,10 +1894,10 @@ bool Robot::PlanPush(
 		push_start_pose.translation().y(),
 		push_start_pose.translation().z()) <= m_grid_i->resolution())
 	{
-		push_failure = 6;
+		push_result = 6;
 		++m_debug_push_info["start_inside_obstacle"];
 		debug_push_end = { -99.0, -99.0 };
-		debug_push = std::make_tuple(debug_push_start, debug_push_end, push_failure);
+		debug_push = std::make_tuple(debug_push_start, debug_push_end, push_result);
 
 		failure = true;
 	}
@@ -1906,10 +1906,10 @@ bool Robot::PlanPush(
 	trajectory_msgs::JointTrajectory push_traj;
 	if (!failure && !planToPoseGoal(push_start_state, push_start_pose, push_traj))
 	{
-		push_failure = 5;
+		push_result = 5;
 		++m_debug_push_info["start_unreachable"];
 		debug_push_end = { -99.0, -99.0 };
-		debug_push = std::make_tuple(debug_push_start, debug_push_end, push_failure);
+		debug_push = std::make_tuple(debug_push_start, debug_push_end, push_result);
 
 		failure = true;
 	}
@@ -1957,16 +1957,16 @@ bool Robot::PlanPush(
 	// get push action trajectory via inverse velocity
 	trajectory_msgs::JointTrajectory push_action;
 	smpl::RobotState joint_vel(m_rm->jointVariableCount(), 0.0);
-	push_failure = computePushAction(
+	push_result = computePushAction(
 						push_traj.points.back().time_from_start.toSec(),
 						push_traj.points.back().positions,
 						joint_vel,
 						push_end_pose,
 						push_action);
 
-	if (push_failure > 0 || push_action.points.empty())
+	if (push_result > 0 || push_action.points.empty())
 	{
-		debug_push = std::make_tuple(debug_push_start, debug_push_end, push_failure);
+		debug_push = std::make_tuple(debug_push_start, debug_push_end, push_result);
 		m_stats["push_plan_time"] += GetTime() - start_time;
 		return false;
 	}
@@ -1991,16 +1991,16 @@ bool Robot::PlanPush(
 		ProcessObstacles(pushed_obj, true);
 		if (!collides)
 		{
-			push_failure = -1;
+			push_result = -1;
 			++m_debug_push_info["no_collision_ooi"];
-			debug_push = std::make_tuple(debug_push_start, debug_push_end, push_failure);
+			debug_push = std::make_tuple(debug_push_start, debug_push_end, push_result);
 			m_stats["push_plan_time"] += GetTime() - start_time;
 			return false;
 		}
 
 		push_found = true;
 		++m_stats["push_actions_found"];
-		debug_push = std::make_tuple(debug_push_start, debug_push_end, push_failure);
+		debug_push = std::make_tuple(debug_push_start, debug_push_end, push_result);
 
 		// append waypoint to retract to push start pose
 		push_action.points.push_back(push_action.points.at(0));
@@ -2053,8 +2053,8 @@ bool Robot::PlanPush(
 	m_stats["push_sim_time"] += GetTime() - start_time;
 	sim_time += GetTime() - start_time;
 
-	push_failure = pidx == -1 ? -2 : 0;
-	debug_push = std::make_tuple(debug_push_start, debug_push_end, push_failure);
+	push_result = pidx == -1 ? -2 : 0;
+	debug_push = std::make_tuple(debug_push_start, debug_push_end, push_result);
 	if (pidx == -1)
 	{
 		++m_debug_push_info["sim_fail"];
