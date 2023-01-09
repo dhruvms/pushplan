@@ -59,7 +59,7 @@ bool Planner::Init(const std::string& scene_file, int scene_id, bool ycb)
 
 	m_robot = std::make_shared<Robot>();
 	m_robot->SetID(0);
-	m_robot->SetSim(m_sim);
+	m_robot->SetSim(m_sim.get());
 
 	m_stats["robot_planner_time"] = 0.0;
 	m_stats["push_planner_time"] = 0.0;
@@ -102,6 +102,7 @@ bool Planner::Init(const std::string& scene_file, int scene_id, bool ycb)
 		return false;
 	}
 	m_robot->ProcessFCLObstacles(m_cc->GetObstacles());
+	m_robot->CreateVirtualTable();
 	all_obstacles.clear();
 
 	// Ready OOI

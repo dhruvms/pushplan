@@ -99,7 +99,7 @@ public:
 		const comms::ObjectsPoses& curr_scene,
 		const double& push_frac,
 		comms::ObjectsPoses& result,
-		int& push_failure,
+		int& push_result,
 		std::tuple<State, State, int>& debug_push,
 		double &sim_time, bool input=false);
 	void IdentifyReachableMovables(
@@ -119,17 +119,17 @@ public:
 		return m_traj;
 	};
 
-	void SetSim(const std::shared_ptr<BulletSim>& sim) {
+	void SetSim(BulletSim* sim) {
 		m_sim = sim;
 	}
 	void SetOOI(Object* ooi) {
 		m_ooi = *ooi;
 	}
-
-
 	void SetCC(const std::shared_ptr<CollisionChecker>& cc) {
 		m_cc = cc;
 	}
+	void CreateVirtualTable();
+
 	const Trajectory* SolveTraj() const { return &m_solve; };
 
 	State GetEEState(const State& state);
@@ -269,7 +269,7 @@ private:
 	std::vector<moveit_msgs::CollisionObject> m_movable_moveit_objs;
 	std::shared_ptr<CollisionChecker> m_cc;
 
-	std::shared_ptr<BulletSim> m_sim;
+	BulletSim* m_sim = nullptr;
 	std::vector<trajectory_msgs::JointTrajectory> m_push_trajs, m_push_actions;
 	int m_grasp_tries, m_invvel_iters;
 	double m_plan_push_time, m_grasp_lift, m_grasp_z, m_Kp, m_Ki, m_Kd, m_dt;
@@ -384,8 +384,6 @@ private:
 		const trajectory_msgs::JointTrajectory& traj,
 		std::set<std::vector<double> >& spheres);
 	void voxeliseTrajectory();
-
-	void createVirtualTable();
 
 	int getPushIdx(double push_frac);
 	void addPushToDB(
