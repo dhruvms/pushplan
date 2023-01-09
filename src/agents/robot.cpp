@@ -2154,6 +2154,143 @@ bool Robot::PlanPush(
 	return true;
 }
 
+bool Robot::GenMovablePush(
+	Object& movable,
+	std::vector<double>& push, double move_dir, double move_dist,
+	Eigen::Affine3d& push_start_pose,
+	int& push_result)
+{
+	// default values
+	push.clear();
+	push.resize(4, 0.0);
+	push[0] = movable.desc.o_x;
+	push[1] = movable.desc.o_y;
+	push[2] = move_dir;
+
+	std::vector<Object> movable_v = { movable };
+	ProcessObstacles(movable_v);
+
+	LatticeState from;
+	from.state = { 	movable.desc.o_x, movable.desc.o_y, movable.desc.o_z,
+						movable.desc.o_roll, movable.desc.o_pitch, movable.desc.o_yaw };
+	movable.GetSE2Push(push, move_dir, from);
+
+	// get push start pose
+	getPushStartPose(push, push_start_pose, false); // do not add noise to start pose (x, y)
+
+	bool failure = false;
+	if (m_grid_i->getDistanceFromPoint(
+		push_start_pose.translation().x(),
+		push_start_pose.translation().y(),
+		push_start_pose.translation().z()) <= m_grid_i->resolution())
+	{
+		push_result = 6;
+		failure = true;
+	}
+
+	// plan path to push start pose with all other objects as obstacles
+	trajectory_msgs::JointTrajectory push_traj;
+	if (!failure && !planToPoseGoal(m_start_state, push_start_pose, push_traj, 5.0))
+	{
+		push_result = 5;
+		failure = true;
+	}
+
+	// remove all movable objects from immovable collision space
+	ProcessObstacles(movable_v, true);
+	if (failure) {
+		return false;
+	}
+
+	profileTrajectoryMoveIt(push_traj);
+	size_t push_traj_approach_size = push_traj.points.size();
+
+	// compute push action end pose
+	Eigen::Affine3d push_end_pose = m_rm->computeFK(push_traj.points.back().positions);
+	push_end_pose.translation().x() += std::cos(move_dir) * move_dist;
+	push_end_pose.translation().y() += std::sin(move_dir) * move_dist;
+	SV_SHOW_INFO_NAMED("push_end_pose", smpl::visual::MakePoseMarkers(
+		push_end_pose, m_grid_i->getReferenceFrame(), "push_end_pose"));
+
+	// get push action trajectory via inverse velocity
+	std::vector<trajectory_msgs::JointTrajectory> push_action(1);
+	smpl::RobotState joint_vel(m_rm->jointVariableCount(), 0.0);
+	push_result = computePushAction(
+						push_traj.points.back().time_from_start.toSec(),
+						push_traj.points.back().positions,
+						joint_vel,
+						push_end_pose,
+						push_action.front());
+
+	if (push_result > 0 || push_action.front().points.empty())
+	{
+		return false;
+	}
+
+	// compute obtainable push action end pose
+	push_end_pose = m_rm->computeFK(push_action.front().points.back().positions);
+
+	// collision check push action against pushed object
+	// ensure that it collides
+	{
+		bool collides = false;
+		ProcessObstacles(movable_v);
+		for (size_t wp = 1; wp < push_action.front().points.size(); ++wp)
+		{
+			if (!m_cc_i->isStateValid(push_action.front().points[wp].positions))
+			{
+				collides = true;
+				break;
+			}
+		}
+
+		ProcessObstacles(movable_v, true);
+		if (!collides)
+		{
+			push_result = -1;
+			return false;
+		}
+
+		// append waypoint to retract to push start pose
+		push_action.front().points.push_back(push_action.front().points.at(0));
+		push_action.front().points.back().time_from_start = push_action.front().points.at(push_action.front().points.size() - 2).time_from_start + ros::Duration(1.0);
+
+		// append push_action to push_traj
+		auto t_prev = push_traj.points.back().time_from_start;
+		for (auto it = push_action.front().points.begin() + 1; it != push_action.front().points.end(); ++it)
+		{
+			auto tdiff = it->time_from_start - t_prev;
+			// last two points in push_action must be appended to push_traj
+			// they are the final state in the push action and the retraction
+			// to the first state
+			if ((it < push_action.front().points.end() - 2) && tdiff.toSec() < 0.3) {
+				continue;
+			}
+			push_traj.points.push_back(*it);
+			t_prev = it->time_from_start;
+		}
+
+		profileTrajectoryMoveIt(push_traj);
+		// store the profiled push_action
+		push_action.front().points.clear();
+		push_action.front().points.insert(push_action.front().points.begin(), push_traj.points.begin() + push_traj_approach_size, push_traj.points.end());
+	}
+
+	// reset robot model back to chain tip link
+	UpdateKDLRobot(0);
+
+	int pidx, successes;
+	std::vector<int> relevant_ids;
+	comms::ObjectsPoses dummy_o;
+	m_sim->SimPushes(push_action, movable.desc.id, movable.desc.o_x, movable.desc.o_y, dummy_o, pidx, successes, dummy_o, relevant_ids);
+
+	push_result = pidx == -1 ? -2 : 0;
+	if (pidx == -1)	{
+		return false;
+	}
+	return true;
+}
+
 void Robot::AnimateSolution()
 {
 	SV_SHOW_INFO_NAMED("trajectory", makePathVisualization());

@@ -69,6 +69,7 @@ add_library(
 	src/utils/bullet_sim.cpp
 	src/utils/collision_checker.cpp
 	src/utils/constants.cpp
+	src/utils/data_gen.cpp
 	src/utils/discretisation.cpp
 	src/utils/hash_manager.cpp
 	src/utils/geometry.cpp
@@ -83,6 +84,9 @@ target_link_libraries(sampling ${catkin_LIBRARIES} smpl::smpl PUSHPLAN)
 
 add_executable(study test/study.cpp)
 target_link_libraries(study ${catkin_LIBRARIES} smpl::smpl PUSHPLAN)
+
+add_executable(gen_data test/gen_data.cpp)
+target_link_libraries(gen_data ${catkin_LIBRARIES} smpl::smpl PUSHPLAN)
 
 add_executable(run_ompl test/run_ompl.cpp)
 target_include_directories(run_ompl SYSTEM PRIVATE ${OMPL_INCLUDE_DIRS})

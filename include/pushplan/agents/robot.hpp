@@ -103,6 +103,11 @@ public:
 		int& push_result,
 		std::tuple<State, State, int>& debug_push,
 		double &sim_time, bool input=false);
+	bool GenMovablePush(
+		Object& movable,
+		std::vector<double>& push, double move_dir, double move_dist,
+		Eigen::Affine3d& push_start_pose,
+		int& push_result);
 	void IdentifyReachableMovables(
 		const std::vector<std::shared_ptr<Agent> >& agents,
 		std::vector<int>& reachable_ids);
