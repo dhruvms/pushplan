@@ -22,7 +22,7 @@ public:
 	BulletSim(
 		const std::string& tables, bool ycb=false,
 		int replay_id=-1, const std::string& suffix=std::string(),
-		int immovable_objs=5, int movable_objs=5);
+		int immovable_objs=5, int movable_objs=5, bool z_offset=false);
 
 	bool SetRobotState(const sensor_msgs::JointState& msg);
 	bool ResetArm(const int& arm);
@@ -92,7 +92,7 @@ private:
 	void readRobotFromFile(int replay_id, const std::string& suffix);
 
 	bool setupTables();
-	bool readTables(const std::string& filename);
+	bool readTables(const std::string& filename, bool z_offset);
 
 	bool resetSimulation();
 	void setupServices();

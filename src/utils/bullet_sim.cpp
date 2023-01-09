@@ -28,8 +28,8 @@ namespace clutter
 BulletSim::BulletSim(
 	const std::string& tables, bool ycb,
 	int replay_id, const std::string& suffix,
-	int immovable_objs,
-	int movable_objs) :
+	int immovable_objs,	int movable_objs,
+	bool z_offset) :
 m_num_immov(immovable_objs), m_num_mov(movable_objs),
 m_robot_id(-1), m_tables(-1),
 m_rng(m_dev()), m_ph("~")
@@ -47,7 +47,7 @@ m_rng(m_dev()), m_ph("~")
 	if (replay_id < 0)
 	{
 		// load objects from tables file into scene
-		if (!readTables(tables)) {
+		if (!readTables(tables, z_offset)) {
 			ROS_ERROR("Failed to read tables file properly. Exiting.\n");
 		}
 		if (!setupTables()) {
@@ -916,8 +916,15 @@ bool BulletSim::setupTables()
 	return true;
 }
 
-bool BulletSim::readTables(const std::string& filename)
+bool BulletSim::readTables(const std::string& filename, bool z_offset)
 {
+	double z_offset_scale = 0.0, z_offset_amount;
+	if (z_offset)
+	{
+		m_ph.getParam("objects/z_offset_scale", z_offset_scale);
+		z_offset_amount = -z_offset_scale + m_distD(m_rng) * z_offset_scale * 2;
+	}
+
 	char sTemp[1024];
 	int num_obs = 0;
 	m_tables = 0;
