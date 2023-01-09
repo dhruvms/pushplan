@@ -46,7 +46,6 @@ robot:
   grasping:
     tries: 100
     lift: 0.075
-  semi_minor: 0.05
   speed: 0.1
   interpolate: false
   shortcut: true

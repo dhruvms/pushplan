@@ -41,7 +41,6 @@ void setupGlobals(const ros::NodeHandle& ph)
 	ph.getParam("mapf/goal_thresh", GOAL_THRESH);
 	ph.getParam("mapf/whca/window", WINDOW);
 	ph.getParam("mapf/whca/grid", GRID);
-	ph.getParam("robot/semi_minor", SEMI_MINOR);
 	ph.getParam("robot/speed", R_SPEED);
 	ph.getParam("goal/save", SAVE);
 	ph.getParam("goal/cc_2d", CC_2D);

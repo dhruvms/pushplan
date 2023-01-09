@@ -51,7 +51,6 @@ extern double GOAL_THRESH;
 extern int WINDOW;
 extern int GRID;
 
-extern double SEMI_MINOR;
 extern double R_SPEED;
 
 extern bool SAVE;
