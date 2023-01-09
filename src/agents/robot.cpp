@@ -239,9 +239,90 @@ bool Robot::Setup()
 	m_ph.param<int>("robot/pushing/control/iters", m_invvel_iters, 1000);
 
 	m_vis_pub = m_nh.advertise<visualization_msgs::Marker>( "/visualization_marker", 10);
-	createVirtualTable();
 
 	return true;
+}
+
+void Robot::AddObstaclesFromSim()
+{
+	auto immov_objs = m_sim->GetImmovableObjs();
+	auto immov_obj_ids = m_sim->GetImmovableObjIDs();
+	int num_immov = (int)immov_objs->size();
+	int tables = FRIDGE ? 5 : 1;
+
+	std::vector<Object> obstacles;
+	for (int i = 0; i < num_immov; ++i)
+	{
+		Object o;
+		o.desc.id = immov_obj_ids->at(i).first;
+		o.desc.shape = immov_obj_ids->at(i).second;
+		o.desc.type = i < tables ? -1 : 0; // immovable obstacle is either table or not
+		o.desc.o_x = immov_objs->at(i).at(0);
+		o.desc.o_y = immov_objs->at(i).at(1);
+		o.desc.o_z = immov_objs->at(i).at(2);
+		o.desc.o_roll = immov_objs->at(i).at(3);
+		o.desc.o_pitch = immov_objs->at(i).at(4);
+		o.desc.o_yaw = immov_objs->at(i).at(5);
+		o.desc.ycb = (bool)immov_objs->at(i).back();
+		if (o.desc.ycb)
+		{
+			auto itr = YCB_OBJECT_DIMS.find(o.desc.shape);
+			if (itr != YCB_OBJECT_DIMS.end())
+			{
+				o.desc.x_size = itr->second.at(0);
+				o.desc.y_size = itr->second.at(1);
+				o.desc.z_size = itr->second.at(2);
+				o.desc.o_yaw += itr->second.at(3);
+			}
+			o.desc.mass = -1;
+			o.desc.mu = immov_objs->at(i).at(6);
+		}
+		else
+		{
+			o.desc.x_size = immov_objs->at(i).at(6);
+			o.desc.y_size = immov_objs->at(i).at(7);
+			o.desc.z_size = immov_objs->at(i).at(8);
+			o.desc.mass = immov_objs->at(i).at(9);
+			o.desc.mu = immov_objs->at(i).at(10);
+		}
+		o.desc.movable = false;
+		o.desc.locked = i < tables ? true : false;
+
+		o.CreateCollisionObjects();
+		o.CreateSMPLCollisionObject();
+		o.GenerateCollisionModels();
+		obstacles.push_back(std::move(o));
+	}
+
+	auto obs = m_cc->GetObstacles();
+	Object virtual_table = obstacles.front();
+	virtual_table.desc.o_x -= virtual_table.desc.x_size + 0.12;
+	virtual_table.desc.x_size = 0.1;
+	virtual_table.desc.id = 999;
+
+	virtual_table.CreateCollisionObjects();
+	virtual_table.CreateSMPLCollisionObject();
+	virtual_table.GenerateCollisionModels();
+	obstacles.push_back(std::move(virtual_table));
+
+	ProcessObstacles(obstacles);
+	m_table_z = obstacles.front().desc.o_z + obstacles.front().desc.z_size;
+}
+
+void Robot::CreateVirtualTable()
+{
+	m_table_z = m_cc->GetTableHeight();
+	auto obs = m_cc->GetObstacles();
+	Object virtual_table = obs->front();
+	virtual_table.desc.o_x -= virtual_table.desc.x_size + 0.12;
+	virtual_table.desc.x_size = 0.1;
+	virtual_table.desc.id = 999;
+
+	virtual_table.CreateCollisionObjects();
+	virtual_table.CreateSMPLCollisionObject();
+	virtual_table.GenerateCollisionModels();
+	ProcessObstacles({ &virtual_table });
+	ProcessFCLObstacles({ &virtual_table });
 }
 
 void Robot::SetMovables(const std::vector<std::shared_ptr<Agent> >& agents)
@@ -3568,21 +3649,6 @@ bool Robot::SavePushDebugData(int scene_id)
 			<< m_debug_push_info["start_unreachable"] << ','
 			<< m_debug_push_info["start_inside_obstacle"] << '\n';
 	STATS.close();
-}
-
-void Robot::createVirtualTable()
-{
-	auto obs = m_cc->GetObstacles();
-	Object virtual_table = obs->front();
-	virtual_table.desc.o_x -= virtual_table.desc.x_size + 0.12;
-	virtual_table.desc.x_size = 0.1;
-	virtual_table.desc.id = 999;
-
-	virtual_table.CreateCollisionObjects();
-	virtual_table.CreateSMPLCollisionObject();
-	virtual_table.GenerateCollisionModels();
-	ProcessObstacles({ &virtual_table });
-	ProcessFCLObstacles({ &virtual_table });
 }
 
 int Robot::getPushIdx(double push_frac)

@@ -53,6 +53,7 @@ public:
 	int GetID() { return m_id; };
 
 	bool Setup();
+	void AddObstaclesFromSim();
 	void SetMovables(const std::vector<std::shared_ptr<Agent> >& agents);
 	void AddMovablesToCC();
 	bool SetScene(const comms::ObjectsPoses& objects, const smpl::RobotState& state, bool vis=false);
