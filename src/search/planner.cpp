@@ -133,7 +133,7 @@ bool Planner::Init(const std::string& scene_file, int scene_id, bool ycb)
 	}
 	m_robot->VizCC();
 
-	setupSim(m_sim.get(), m_robot->GetStartState()->joint_state, armId(), m_ooi->GetID());
+	setupSim(m_sim.get(), m_robot->GetStartState()->joint_state, m_ooi->GetID());
 	m_violation = 0x00000008;
 	m_distD = std::uniform_real_distribution<double>(0.0, 1.0);
 	m_ph.getParam("robot/pushing/input", m_push_input);
@@ -392,7 +392,7 @@ bool Planner::TryExtract()
 {
 	m_timer = GetTime();
 
-	if (!setupSim(m_sim.get(), m_robot->GetStartState()->joint_state, armId(), m_ooi->GetID()))
+	if (!setupSim(m_sim.get(), m_robot->GetStartState()->joint_state, m_ooi->GetID()))
 	{
 		m_stats["sim_time"] += GetTime() - m_timer;
 		return false;
@@ -447,7 +447,7 @@ void Planner::AnimateSolution()
 
 bool Planner::runSim()
 {
-	setupSim(m_sim.get(), m_robot->GetStartState()->joint_state, armId(), m_ooi->GetID());
+	setupSim(m_sim.get(), m_robot->GetStartState()->joint_state, m_ooi->GetID());
 
 	// if all executions succeeded, m_violation == 0
 	m_violation = 0x00000000;
@@ -490,26 +490,6 @@ bool Planner::animateSolution()
 {
 	m_robot->AnimateSolution();
 	return true;
-}
-
-int Planner::armId()
-{
-	int arm;
-	for (const auto& name : m_robot->GetStartState()->joint_state.name)
-	{
-		if (name.find("r_") == 0)
-		{
-			arm = 1;
-			break;
-		}
-
-		else if (name.find("l_") == 0)
-		{
-			arm = 0;
-			break;
-		}
-	}
-	return arm;
 }
 
 ////////

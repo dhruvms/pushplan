@@ -159,7 +159,6 @@ private:
 
 	bool runSim();
 	bool animateSolution();
-	int armId();
 
 	int cleanupLogs();
 	void init_agents(

@@ -197,7 +197,28 @@ static auto MakeROSShape(const smpl::collision::CollisionShape* shape)
 }
 
 inline
-bool setupSim(BulletSim* sim, const sensor_msgs::JointState& state, const int& arm, const int& ooi_id)
+int armId(const sensor_msgs::JointState& state)
+{
+	int arm;
+	for (const auto& name : state.name)
+	{
+		if (name.find("r_") == 0)
+		{
+			arm = 1;
+			break;
+		}
+
+		else if (name.find("l_") == 0)
+		{
+			arm = 0;
+			break;
+		}
+	}
+	return arm;
+}
+
+inline
+bool setupSim(BulletSim* sim, const sensor_msgs::JointState& state, const int& ooi_id)
 {
 	if (!sim->SetRobotState(state))
 	{
@@ -205,6 +226,7 @@ bool setupSim(BulletSim* sim, const sensor_msgs::JointState& state, const int& a
 		return false;
 	}
 
+	int arm = armId(state);
 	if (!sim->ResetArm(1 - arm))
 	{
 		ROS_ERROR("Failed to reset other arm!");
