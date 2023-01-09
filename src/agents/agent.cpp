@@ -397,76 +397,7 @@ bool Agent::GetSE2Push(std::vector<double>& push, bool input)
 	push[1] = m_obj_desc.o_y;
 	push[2] = move_dir;
 
-	// Ray-AABB intersection code from
-	// https://www.scratchapixel.com/code.php?id=10&origin=/lessons/3d-basic-rendering/ray-tracing-rendering-simple-shapes&src=1
-
-	// AABB bounds
-	m_obj.UpdatePose(m_init);
-	auto aabb = m_obj.ComputeAABBTight();
-	std::vector<fcl::Vec3f> bounds = {aabb.min_, aabb.max_};
-
-	// Push direction and inverse direction
-	Eigen::Vector3f push_dir(
-			std::cos(move_dir + M_PI),
-			std::sin(move_dir + M_PI),
-			0.0);
-	push_dir.normalize();
-	Eigen::Vector3f inv_dir = push_dir.array().inverse();
-
-	// Push direction sign vector
-	Eigen::Vector3i push_sign(
-		inv_dir[0] < 0, inv_dir[1] < 0, inv_dir[2] < 0);
-
-	float tmin, tmax, tymin, tymax, tzmin, tzmax;
-	tmin = (bounds[push_sign[0]][0] - m_obj_desc.o_x) * inv_dir[0];
-	tmax = (bounds[1 - push_sign[0]][0] - m_obj_desc.o_x) * inv_dir[0];
-	tymin = (bounds[push_sign[1]][1] - m_obj_desc.o_y) * inv_dir[1];
-	tymax = (bounds[1 - push_sign[1]][1] - m_obj_desc.o_y) * inv_dir[1];
-
-	if ((tmin > tymax) || (tymin > tmax)) {
-		return false;
-	}
-
-	if (tymin > tmin) {
-		tmin = tymin;
-	}
-	if (tymax < tmax) {
-		tmax = tymax;
-	}
-
-	tzmin = (bounds[push_sign[2]][2] - m_obj_desc.o_z) * inv_dir[2];
-	tzmax = (bounds[1 - push_sign[2]][2] - m_obj_desc.o_z) * inv_dir[2];
-
-	if ((tmin > tzmax) || (tzmin > tmax)) {
-		return false;
-	}
-
-	if (tzmin > tmin) {
-		tmin = tzmin;
-	}
-	if (tzmax < tmax) {
-		tmax = tzmax;
-	}
-
-	float t = tmin;
-
-	if (t < 0)
-	{
-		t = tmax;
-		if (t < 0) {
-			return false;
-		}
-	}
-
-	if (t > 1) {
-		return false;
-	}
-
-	push[0] = m_obj_desc.o_x + push_dir[0] * t;
-	push[1] = m_obj_desc.o_y + push_dir[1] * t;
-	push[3] = t;
-
-	return true;
+	return m_obj.GetSE2Push(push, move_dir, m_init);
 }
 
 void Agent::GetVoxels(const ContPose& pose, std::set<Coord, coord_compare>& voxels)

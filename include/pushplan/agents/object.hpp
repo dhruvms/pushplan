@@ -46,6 +46,7 @@ struct Object
 	double Height() const;
 	bool Symmetric() const;
 	double GaussianCost(double x, double y) const;
+	bool GetSE2Push(std::vector<double>& push, double dir, LatticeState from);
 
 	void SetupGaussianCost();
 	bool CreateCollisionObjects();

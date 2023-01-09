@@ -75,6 +75,82 @@ double Object::GaussianCost(double x, double y) const
 	return expval * 1e6;
 }
 
+bool Object::GetSE2Push(std::vector<double>& push, double dir, LatticeState from)
+{
+	if (!from.state.empty()) {
+		this->UpdatePose(from);
+	}
+
+	// Ray-AABB intersection code from
+	// https://www.scratchapixel.com/code.php?id=10&origin=/lessons/3d-basic-rendering/ray-tracing-rendering-simple-shapes&src=1
+
+	// AABB bounds
+	auto aabb = this->ComputeAABBTight();
+	std::vector<fcl::Vec3f> bounds = {aabb.min_, aabb.max_};
+
+	// Push direction and inverse direction
+	Eigen::Vector3f push_dir(
+			std::cos(dir + M_PI),
+			std::sin(dir + M_PI),
+			0.0);
+	push_dir.normalize();
+	Eigen::Vector3f inv_dir = push_dir.array().inverse();
+
+	// Push direction sign vector
+	Eigen::Vector3i push_sign(
+		inv_dir[0] < 0, inv_dir[1] < 0, inv_dir[2] < 0);
+
+	float tmin, tmax, tymin, tymax, tzmin, tzmax;
+	tmin = (bounds[push_sign[0]][0] - desc.o_x) * inv_dir[0];
+	tmax = (bounds[1 - push_sign[0]][0] - desc.o_x) * inv_dir[0];
+	tymin = (bounds[push_sign[1]][1] - desc.o_y) * inv_dir[1];
+	tymax = (bounds[1 - push_sign[1]][1] - desc.o_y) * inv_dir[1];
+
+	if ((tmin > tymax) || (tymin > tmax)) {
+		return false;
+	}
+
+	if (tymin > tmin) {
+		tmin = tymin;
+	}
+	if (tymax < tmax) {
+		tmax = tymax;
+	}
+
+	tzmin = (bounds[push_sign[2]][2] - desc.o_z) * inv_dir[2];
+	tzmax = (bounds[1 - push_sign[2]][2] - desc.o_z) * inv_dir[2];
+
+	if ((tmin > tzmax) || (tzmin > tmax)) {
+		return false;
+	}
+
+	if (tzmin > tmin) {
+		tmin = tzmin;
+	}
+	if (tzmax < tmax) {
+		tmax = tzmax;
+	}
+
+	float t = tmin;
+
+	if (t < 0)
+	{
+		t = tmax;
+		if (t < 0) {
+			return false;
+		}
+	}
+
+	if (t > 1) {
+		return false;
+	}
+
+	push[0] = desc.o_x + push_dir[0] * t;
+	push[1] = desc.o_y + push_dir[1] * t;
+	push[3] = t;
+	return true;
+}
+
 void Object::SetupGaussianCost()
 {
 	double sx2, sy2, cth, sth, cth2, sth2, cov;
