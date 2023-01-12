@@ -3654,7 +3654,7 @@ void Robot::RunPushIKStudy(int N)
 	DATA.open(filename, std::ofstream::out | std::ofstream::app);
 	if (!exists)
 	{
-		DATA << "x0,y0,yaw0,x1,y1,result\n";
+		DATA << "x0,y0,yaw0,x1,y1,yaw1,result\n";
 	}
 
 	for (double x0 = ox - 0.05; x0 <= ox + sx; x0 += RES)
@@ -3675,12 +3675,17 @@ void Robot::RunPushIKStudy(int N)
 
 			// 3. verify push start pose
 			if ((m_grid_i->getDistanceFromPoint(x0, y0, m_table_z + 0.03) <= m_grid_i->resolution())
-					|| (!planToPoseGoal(start, push_start_pose, path, 0.5)))
+					|| (!planToPoseGoal(start, push_start_pose, path, 2.0)))
 			{
 				DATA << x0 << ',' << y0 << ',' << yaw0 << ','
-						<< -1 << ',' << -1 << ',' << 5 << '\n';
+						<< -1 << ',' << -1 << ',' << -1 << ',' << 5 << '\n';
 				continue;
 			}
+
+			auto found_pose = m_rm->computeFK(path.points.back().positions);
+			double yaw1, pitch, roll;
+			smpl::angles::get_euler_zyx(push_end_pose.rotation(), yaw1, pitch, roll);
+
 			// 4. generate N random push end pose samples to try
 			for (int t = 0; t < N; ++t)
 			{
@@ -3691,7 +3696,7 @@ void Robot::RunPushIKStudy(int N)
 				dist = std::sqrt(std::pow(x0 - x1, 2) + std::pow(y0 - y1, 2));
 
 				// 6. set push end pose
-				push_end_pose = m_rm->computeFK(path.points.back().positions);
+				push_end_pose = found_pose;
 				push_end_pose.translation().x() = x1;
 				push_end_pose.translation().y() = y1;
 				SV_SHOW_INFO_NAMED("push_end_pose", smpl::visual::MakePoseMarkers(
@@ -3707,7 +3712,7 @@ void Robot::RunPushIKStudy(int N)
 								push_end_pose,
 								push_action);
 				DATA << x0 << ',' << y0 << ',' << yaw0 << ','
-					<< x1 << ',' << y1 << ',' << failure << '\n';
+					<< x1 << ',' << y1 << ',' << yaw1 << ',' << failure << '\n';
 			}
 		}
 	}
