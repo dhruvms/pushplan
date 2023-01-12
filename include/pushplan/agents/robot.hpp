@@ -201,7 +201,7 @@ public:
 
 	void RunManipulabilityStudy(int N=1000);
 	void RunPushIKStudy(int N=25);
-	void VizPlane(double z);
+	void VisPlane(double z);
 	bool SavePushDebugData(int scene_id);
 
 	// For KPIECE
@@ -346,7 +346,7 @@ private:
 		-> smpl::collision::CollisionObject*;
 	bool setCollisionRobotState();
 
-	auto makePathVisualization() const
+	auto makePathVisualisation() const
 	-> std::vector<smpl::visual::Marker>;
 
 	bool initPlanner();
@@ -408,6 +408,8 @@ private:
 	moveit::core::RobotStatePtr m_moveit_robot_state;
 	robot_trajectory::RobotTrajectoryPtr m_moveit_trajectory_ptr;
 	void profileTrajectoryMoveIt(trajectory_msgs::JointTrajectory& traj);
+
+	void visMAPFPath(const Trajectory* path);
 };
 
 } // namespace clutter

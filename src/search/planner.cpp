@@ -943,7 +943,7 @@ bool Planner::RunRRT()
 			Eigen::Affine3d pregrasp_pose;
 			m_robot->GetPregraspState(pregrasp_state);
 			m_robot->ComputeFK(pregrasp_state, pregrasp_pose);
-			m_robot->VizPlane(pregrasp_pose.translation().z());
+			m_robot->VisPlane(pregrasp_pose.translation().z());
 			m_sampling_planner->SetConstraintHeight(pregrasp_pose.translation().z());
 			break;
 		}

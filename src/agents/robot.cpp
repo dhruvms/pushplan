@@ -1463,7 +1463,7 @@ bool Robot::SatisfyPath(HighLevelNode* ct_node, Trajectory** sol_path, int& expa
 	*sol_path = &(this->m_solve);
 
 	// SMPL_INFO("Robot has complete plan! m_solve.size() = %d", m_solve.size());
-	// SV_SHOW_INFO_NAMED("trajectory", makePathVisualization());
+	// SV_SHOW_INFO_NAMED("trajectory", makePathVisualisation());
 	return true;
 }
 
@@ -2293,7 +2293,7 @@ bool Robot::GenMovablePush(
 
 void Robot::AnimateSolution()
 {
-	SV_SHOW_INFO_NAMED("trajectory", makePathVisualization());
+	SV_SHOW_INFO_NAMED("trajectory", makePathVisualisation());
 
 	size_t pidx = 0;
 	while (ros::ok())
@@ -3233,7 +3233,7 @@ bool Robot::setCollisionRobotState()
 	return true;
 }
 
-auto Robot::makePathVisualization() const
+auto Robot::makePathVisualisation() const
 	-> std::vector<smpl::visual::Marker>
 {
 	std::vector<smpl::visual::Marker> ma;
@@ -3720,7 +3720,7 @@ void Robot::RunPushIKStudy(int N)
 	DATA.close();
 }
 
-void Robot::VizPlane(double z)
+void Robot::VisPlane(double z)
 {
 	double ox, oy, oz, sx, sy, sz;
 	m_sim->GetShelfParams(ox, oy, oz, sx, sy, sz);
@@ -3901,6 +3901,53 @@ bool Robot::lookupPushInDB(
 		}
 	}
 	return false;
+}
+
+void Robot::visMAPFPath(const Trajectory* path)
+{
+	visualization_msgs::Marker points, line_strip;
+	points.header.frame_id = line_strip.header.frame_id = m_planning_frame;
+	points.header.stamp = line_strip.header.stamp = ros::Time::now();
+	points.ns = line_strip.ns = "mapf_path";
+	points.action = line_strip.action = visualization_msgs::Marker::ADD;
+	points.pose.orientation.w = line_strip.pose.orientation.w = 1.0;
+
+	points.id = 0;
+	line_strip.id = 1;
+
+	points.type = visualization_msgs::Marker::POINTS;
+	line_strip.type = visualization_msgs::Marker::LINE_STRIP;
+
+	// POINTS markers use x and y scale for width/height respectively
+	points.scale.x = 0.01;
+	points.scale.y = 0.01;
+
+	// LINE_STRIP markers use only the x component of scale, for the line width
+	line_strip.scale.x = 0.01;
+
+	// Points are cyan
+	points.color.g = 1.0f;
+	points.color.b = 1.0f;
+	points.color.a = 1.0;
+
+	// Line strip is blue
+	line_strip.color.b = 1.0;
+	line_strip.color.a = 1.0;
+
+	// Create the vertices for the points and lines
+	for (size_t i = 0; i < path->size(); ++i)
+	{
+		geometry_msgs::Point p;
+		p.x = path->at(i).state[0];
+		p.y = path->at(i).state[1];
+		p.z = path->at(i).state[2];
+
+		points.points.push_back(p);
+		line_strip.points.push_back(p);
+	}
+
+	m_vis_pub.publish(points);
+	m_vis_pub.publish(line_strip);
 }
 
 } // namespace clutter
