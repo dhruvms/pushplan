@@ -2261,57 +2261,41 @@ bool Robot::PlanPush(
 
 bool Robot::GenMovablePush(
 	Object& movable,
-	std::vector<double>& push, double move_dir, double move_dist,
+	std::vector<double>& push, double& move_dir, double& move_dist,
 	Eigen::Affine3d& push_start_pose,
 	int& push_result)
 {
-	// default values
-	push.clear();
-	push.resize(4, 0.0);
-	push[0] = movable.desc.o_x;
-	push[1] = movable.desc.o_y;
-	push[2] = move_dir;
-
+	// add object to be pushed to collision space
 	std::vector<Object> movable_v = { movable };
 	ProcessObstacles(movable_v);
 
-	LatticeState from;
-	from.state = { 	movable.desc.o_x, movable.desc.o_y, movable.desc.o_z,
-						movable.desc.o_roll, movable.desc.o_pitch, movable.desc.o_yaw };
-	movable.GetSE2Push(push, move_dir, from);
-
 	// get push start pose
-	getPushStartPose(push, push_start_pose, false); // do not add noise to start pose (x, y)
+	samplePushStartPose(push, movable, push_start_pose);
+	// set/sample push parameters - direction and distance
+	move_dir = push[2];
+	move_dist = 0.1 + m_distD(m_rng) * 0.2;
 
-	bool failure = false;
-	if (m_grid_i->getDistanceFromPoint(
-		push_start_pose.translation().x(),
-		push_start_pose.translation().y(),
-		push_start_pose.translation().z()) <= m_grid_i->resolution())
-	{
-		push_result = 6;
-		failure = true;
-	}
-
-	// plan path to push start pose with all other objects as obstacles
+	// plan path to push start pose
 	trajectory_msgs::JointTrajectory push_traj;
-	if (!failure && !planToPoseGoal(m_start_state, push_start_pose, push_traj, 5.0))
-	{
+	if (!planToPoseGoal(m_start_state, push_start_pose, push_traj, 10.0)) {
 		push_result = 5;
-		failure = true;
 	}
 
-	// remove all movable objects from immovable collision space
+	// remove the object to pushed from collision space
 	ProcessObstacles(movable_v, true);
-	if (failure) {
+	if (push_result == 5) {
 		return false;
 	}
 
 	profileTrajectoryMoveIt(push_traj);
 	size_t push_traj_approach_size = push_traj.points.size();
+	// actual push start pose achieved by the robot
+	push_start_pose = m_rm->computeFK(push_traj.points.back().positions);
 
-	// compute push action end pose
-	Eigen::Affine3d push_end_pose = m_rm->computeFK(push_traj.points.back().positions);
+	// compute push action end pose based on ee pose achieved at the end of the
+	// trajectory to the push start pose
+	// translate pose along move_dir by move_dist
+	Eigen::Affine3d push_end_pose = push_start_pose;
 	push_end_pose.translation().x() += std::cos(move_dir) * move_dist;
 	push_end_pose.translation().y() += std::sin(move_dir) * move_dist;
 	SV_SHOW_INFO_NAMED("push_end_pose", smpl::visual::MakePoseMarkers(
@@ -2327,13 +2311,9 @@ bool Robot::GenMovablePush(
 						push_end_pose,
 						push_action.front());
 
-	if (push_result > 0 || push_action.front().points.empty())
-	{
+	if (push_result > 0 || push_action.front().points.empty()) {
 		return false;
 	}
-
-	// compute obtainable push action end pose
-	push_end_pose = m_rm->computeFK(push_action.front().points.back().positions);
 
 	// collision check push action against pushed object
 	// ensure that it collides
@@ -2378,7 +2358,7 @@ bool Robot::GenMovablePush(
 		profileTrajectoryMoveIt(push_traj);
 		// store the profiled push_action
 		push_action.front().points.clear();
-		push_action.front().points.insert(push_action.front().points.begin(), push_traj.points.begin() + push_traj_approach_size, push_traj.points.end());
+		push_action.front().points.insert(push_action.front().points.begin(), push_traj.points.begin() + push_traj_approach_size - 1, push_traj.points.end());
 	}
 
 	// reset robot model back to chain tip link
@@ -2393,6 +2373,15 @@ bool Robot::GenMovablePush(
 	if (pidx == -1)	{
 		return false;
 	}
+
+	// update move_dir and move_dist based on what actually happened in sim
+	// HER style
+	move_dir = std::atan2(
+				dummy_o.poses[0].xyz[1] - movable.desc.o_y,
+				dummy_o.poses[0].xyz[0] - movable.desc.o_x);
+	std::vector<double> mstart = { movable.desc.o_x, movable.desc.o_y }, mend = { dummy_o.poses[0].xyz[0], dummy_o.poses[0].xyz[1] };
+	move_dist = EuclideanDist(mstart, mend);
+
 	return true;
 }
 
@@ -2450,6 +2439,58 @@ void Robot::getPushStartPose(
 
 	SV_SHOW_INFO_NAMED("sampled_push_pose", smpl::visual::MakePoseMarkers(
 		push_pose, m_grid_i->getReferenceFrame(), "sampled_push_pose"));
+}
+
+void Robot::samplePushStartPose(
+	std::vector<double>& push, Object& movable,
+	Eigen::Affine3d& start_pose)
+{
+	UpdateKDLRobot(1); // set to r_gripper_tool_frame
+
+	// default values
+	push.clear();
+	push.resize(4, 0.0);
+	push[0] = movable.desc.o_x;
+	push[1] = movable.desc.o_y;
+	LatticeState from;
+	from.state = { 	movable.desc.o_x, movable.desc.o_y, movable.desc.o_z,
+						movable.desc.o_roll, movable.desc.o_pitch, movable.desc.o_yaw };
+
+	bool done = false;
+	while (!done)
+	{
+		// sample movement/pushing direction for object
+		double move_dir = m_distD(m_rng) * 2 * M_PI;
+		push[2] = move_dir;
+		// compute ray-AABB point of intersection
+		// push = {x, y, move_dir, t} where
+		// (x, y) is the point on the AABB
+		// t is the distance between the (o_x, o_y) and (x, y)
+		movable.GetSE2Push(push, move_dir, from);
+
+		// push start pose (x, y) is determined by push start location from ray-AABB intersection
+		// add noise to avoid sampling inside the object
+		double x0 = push[0] + std::cos(push[2] + M_PI) * 0.05 + (m_distG(m_rng));
+		double y0 = push[1] + std::sin(push[2] + M_PI) * 0.05 + (m_distG(m_rng));
+
+		// z is 3-10cm above table height
+		double z0 = m_table_z + 0.03 + m_distD(m_rng) * 0.07;
+
+		// check if sampled (x, y, z) is inside collision voxels
+		if (m_grid_i->getDistanceFromPoint(x0, y0, z0) <= m_grid_i->resolution()) {
+			continue;
+		}
+
+		// complete push start pose by sampling rotational dofs
+		start_pose = Eigen::Translation3d(x0, y0, z0) *
+					Eigen::AngleAxisd(-M_PI_2 + m_distD(m_rng) * M_PI, Eigen::Vector3d::UnitZ()) *
+					Eigen::AngleAxisd(m_distD(m_rng) * M_PI/3.0, Eigen::Vector3d::UnitY()) *
+					Eigen::AngleAxisd(m_distD(m_rng) * M_PI/3.0, Eigen::Vector3d::UnitX());
+		done = true;
+	}
+
+	SV_SHOW_INFO_NAMED("sampled_start_pose", smpl::visual::MakePoseMarkers(
+		start_pose, m_grid_i->getReferenceFrame(), "sampled_start_pose"));
 }
 
 void Robot::GetRandomState(smpl::RobotState& s)

@@ -105,7 +105,7 @@ public:
 		double &sim_time, bool input=false);
 	bool GenMovablePush(
 		Object& movable,
-		std::vector<double>& push, double move_dir, double move_dist,
+		std::vector<double>& push, double& move_dir, double& move_dist,
 		Eigen::Affine3d& push_start_pose,
 		int& push_result);
 	void IdentifyReachableMovables(
@@ -293,6 +293,9 @@ private:
 		const std::vector<double>& push,
 		Eigen::Affine3d& push_pose,
 		bool input);
+	void samplePushStartPose(
+		std::vector<double>& push, Object& movable,
+		Eigen::Affine3d& start_pose);
 	bool planToPoseGoal(
 		const moveit_msgs::RobotState& start_state,
 		const Eigen::Affine3d& pose_goal,

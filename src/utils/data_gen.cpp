@@ -83,44 +83,13 @@ void DataGeneration::GetPushData()
 	movable.CreateSMPLCollisionObject();
 	movable.GenerateCollisionModels();
 
-	double move_dir = m_distD(m_rng) * 2 * M_PI;
-	double move_dist = 0.05 + m_distD(m_rng) * 0.2;
-	Eigen::Affine3d start_pose;
-	std::vector<double> push;
-	int result;
-	m_robot->GenMovablePush(movable, push, move_dir, move_dist, start_pose, result);
-	ROS_WARN("Push sample result: %d", result);
-
 	std::string filename(__FILE__);
 	auto found = filename.find_last_of("/\\");
-	switch (result)
-	{
-		case 0:
-		{
-			filename = filename.substr(0, found + 1) + "../../dat/push_data/POS.csv";
-			break;
-		}
-		case -1:
-		case -2:
-		{
-			filename = filename.substr(0, found + 1) + "../../dat/push_data/NEG.csv";
-			break;
-		}
-		case 1:
-		case 2:
-		case 3:
-		case 4:
-		case 5:
-		case 6:
-		{
-			filename = filename.substr(0, found + 1) + "../../dat/push_data/HARD_NEG.csv";
-			break;
-		}
-		default:
-		{
-			SMPL_ERROR("Unknown push result! Nothing to save.");
-		}
-	}
+
+	filename = filename.substr(0, found + 1) + "../../dat/push_data/PUSH_DATA";
+	int modifier;
+	m_ph.getParam("robot/study", modifier);
+	filename += "_" + std::to_string(modifier) + ".csv";
 
 	bool exists = FileExists(filename);
 	std::ofstream DATA;
@@ -134,31 +103,44 @@ void DataGeneration::GetPushData()
 				<< "r\n";
 	}
 
-	DATA 	<< movable.desc.o_x << ','
-			<< movable.desc.o_y << ','
-			<< movable.desc.o_z << ','
-			<< movable.desc.o_yaw << ','
-			<< movable.desc.shape << ','
-			<< movable.desc.x_size << ','
-			<< movable.desc.y_size << ','
-			<< movable.desc.z_size << ','
-			<< movable.desc.mass << ','
-			<< movable.desc.mu << ','
-			<< move_dir << ','
-			<< move_dist << ','
-			<< start_pose.translation().x() << ','
-			<< start_pose.translation().y() << ','
-			<< start_pose.translation().z() << ','
-			<< start_pose.rotation()(0, 0) << ','
-			<< start_pose.rotation()(1, 0) << ','
-			<< start_pose.rotation()(2, 0) << ','
-			<< start_pose.rotation()(0, 1) << ','
-			<< start_pose.rotation()(1, 1) << ','
-			<< start_pose.rotation()(2, 1) << ','
-			<< start_pose.rotation()(0, 2) << ','
-			<< start_pose.rotation()(1, 2) << ','
-			<< start_pose.rotation()(2, 2) << ','
-			<< result << '\n';
+	for (int i = 0; i < 25; ++i)
+	{
+		std::vector<double> push;
+		double move_dir, move_dist;
+		Eigen::Affine3d start_pose;
+		int result;
+		m_robot->GenMovablePush(
+			movable,
+			push, move_dir, move_dist, start_pose,
+			result);
+		ROS_WARN("Push sample result: %d", result);
+
+		DATA 	<< movable.desc.o_x << ','
+				<< movable.desc.o_y << ','
+				<< movable.desc.o_z << ','
+				<< movable.desc.o_yaw << ','
+				<< movable.desc.shape << ','
+				<< movable.desc.x_size << ','
+				<< movable.desc.y_size << ','
+				<< movable.desc.z_size << ','
+				<< movable.desc.mass << ','
+				<< movable.desc.mu << ','
+				<< move_dir << ','
+				<< move_dist << ','
+				<< start_pose.translation().x() << ','
+				<< start_pose.translation().y() << ','
+				<< start_pose.translation().z() << ','
+				<< start_pose.rotation()(0, 0) << ','
+				<< start_pose.rotation()(1, 0) << ','
+				<< start_pose.rotation()(2, 0) << ','
+				<< start_pose.rotation()(0, 1) << ','
+				<< start_pose.rotation()(1, 1) << ','
+				<< start_pose.rotation()(2, 1) << ','
+				<< start_pose.rotation()(0, 2) << ','
+				<< start_pose.rotation()(1, 2) << ','
+				<< start_pose.rotation()(2, 2) << ','
+				<< result << '\n';
+	}
 	DATA.close();
 }
 
