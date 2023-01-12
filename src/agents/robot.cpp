@@ -1707,7 +1707,7 @@ int Robot::computePushAction(
 			++m_debug_push_info["ik_inv_vel_fail"];
 			// return false;
 			action.points.pop_back();
-			break;
+			return result;
 		}
 
 		// Add waypoint to action
@@ -1778,7 +1778,7 @@ int Robot::computePushAction(
 			++m_debug_push_info["ik_joint_limit"];
 			// return false;
 			action.points.pop_back();
-			break;
+			return result;
 		}
 		if (!m_cc_i->isStateValid(q_))
 		{
@@ -1786,7 +1786,7 @@ int Robot::computePushAction(
 			++m_debug_push_info["obstacle_collision"];
 			// return false;
 			action.points.pop_back();
-			break;
+			return result;
 		}
 	}
 
@@ -1796,6 +1796,103 @@ int Robot::computePushAction(
 		result = 1;
 		++m_debug_push_info["ik_ended_early"];
 	}
+	return result;
+}
+
+int Robot::computePushPath(
+	const double time_start,
+	const smpl::RobotState& jnt_positions,
+	const smpl::RobotState& jnt_velocities,
+	const Trajectory* path,
+	trajectory_msgs::JointTrajectory& action)
+{
+	// visMAPFPath(path);
+	int result = 0;
+
+	// Variables
+	auto q_ = jnt_positions;
+	Eigen::Affine3d xo_ = m_rm->computeFK(q_);
+
+	// Add waypoint to action
+	trajectory_msgs::JointTrajectoryPoint action_pt;
+	action_pt.positions = q_;
+	action_pt.time_from_start = ros::Duration(time_start + m_dt);
+	action.points.push_back(action_pt);
+
+	for (size_t i = 1; i < path->size(); ++i)
+	{
+		// move waypoint
+		xo_.translation().x() += path->at(i).state[0] - path->at(i-1).state[0];
+		xo_.translation().y() += path->at(i).state[1] - path->at(i-1).state[1];
+		xo_.translation().z() += path->at(i).state[2] - path->at(i-1).state[2];
+
+		// run ik for new state
+		if (m_rm->computeIKSearch(xo_, action_pt.positions, q_))
+		{
+			auto markers = m_cc_i->getCollisionRobotVisualization(q_);
+			for (auto& m : markers.markers) {
+				m.ns = "push_action_state";
+			}
+			SV_SHOW_INFO(markers);
+
+			if (!m_rm->checkJointLimits(q_))
+			{
+				result = 3;
+				++m_debug_push_info["ik_joint_limit"];
+				// return false;
+				action.points.pop_back();
+				return result;
+			}
+			if (!m_cc_i->isStateValid(q_))
+			{
+				result = 2;
+				++m_debug_push_info["obstacle_collision"];
+				// return false;
+				action.points.pop_back();
+				return result;
+			}
+
+			action_pt.positions = q_;
+			action_pt.time_from_start += ros::Duration(m_dt);
+			action.points.push_back(action_pt);
+		}
+		else
+		{
+			// SMPL_INFO("Failed to compute inverse velocity");
+			result = 4;
+			++m_debug_push_info["ik_inv_vel_fail"];
+			// return false;
+			action.points.pop_back();
+			return result;
+		}
+	}
+
+	// we are done
+	// SMPL_INFO("SUCCESS - reached end point");
+	std::vector<smpl::visual::Marker> ma;
+
+	auto cinc = 1.0f / float(action.points.size());
+	for (size_t i = 0; i < action.points.size(); ++i) {
+		auto markers = m_cc_i->getCollisionModelVisualization(action.points[i].positions);
+
+		for (auto& marker : markers) {
+			auto r = 0.1f;
+			auto g = cinc * (float)(action.points.size() - (i + 1));
+			auto b = cinc * (float)i;
+			marker.color = smpl::visual::Color{ r, g, b, 1.0f };
+		}
+
+		for (auto& m : markers) {
+			ma.push_back(std::move(m));
+		}
+	}
+
+	for (size_t i = 0; i < ma.size(); ++i) {
+		auto& marker = ma[i];
+		marker.ns = "push_action";
+		marker.id = i;
+	}
+	SV_SHOW_INFO_NAMED("push_action", ma);
 	return result;
 }
 
@@ -2044,6 +2141,14 @@ bool Robot::PlanPush(
 						joint_vel,
 						push_end_pose,
 						push_action);
+	// debug_push_end = { obj_traj->back().state.at(0) + std::cos(push[2] + M_PI) * push[3],
+	// 			obj_traj->back().state.at(1) + std::sin(push[2] + M_PI) * push[3] };
+	// push_result = computePushPath(
+	// 					push_traj.points.back().time_from_start.toSec(),
+	// 					push_traj.points.back().positions,
+	// 					joint_vel,
+	// 					obj_traj,
+	// 					push_action);
 
 	if (push_result > 0 || push_action.points.empty())
 	{
@@ -2105,7 +2210,7 @@ bool Robot::PlanPush(
 		profileTrajectoryMoveIt(push_traj);
 		// store the profiled push_action
 		push_action.points.clear();
-		push_action.points.insert(push_action.points.begin(), push_traj.points.begin() + push_traj_approach_size, push_traj.points.end());
+		push_action.points.insert(push_action.points.begin(), push_traj.points.begin() + push_traj_approach_size - 1, push_traj.points.end());
 
 		m_push_actions.push_back(std::move(push_action));
 		m_push_trajs.push_back(std::move(push_traj));

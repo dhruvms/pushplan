@@ -304,6 +304,12 @@ private:
 		const smpl::RobotState& jnt_velocities,
 		const Eigen::Affine3d& end_pose,
 		trajectory_msgs::JointTrajectory& action);
+	int computePushPath(
+		const double time_start,
+		const smpl::RobotState& jnt_positions,
+		const smpl::RobotState& jnt_velocities,
+		const Trajectory* path,
+		trajectory_msgs::JointTrajectory& action);
 
 	bool reinitStartState();
 
