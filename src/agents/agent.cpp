@@ -487,7 +487,7 @@ bool Agent::createLatticeAndSearch()
 		m_search->reset();
 	}
 	else {
-		m_search = std::make_unique<Focal>(m_lattice.get(), 2.0);
+		m_search = std::make_unique<Focal>(m_lattice.get(), 1.0);
 	}
 	m_search->push_start(m_lattice->PushStart(m_init));
 	m_search->push_goal(m_lattice->PushGoal(m_goal));
