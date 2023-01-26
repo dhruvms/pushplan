@@ -301,6 +301,11 @@ private:
 		const Eigen::Affine3d& pose_goal,
 		trajectory_msgs::JointTrajectory& push_traj,
 		double t=0.1);
+
+	int computePushStateIK(
+		const Eigen::Affine3d &ee_pose,
+		const smpl::RobotState &seed,
+		smpl::RobotState &solution);
 	int computePushPoint(
 		const double time_start,
 		const smpl::RobotState& jnt_positions,
@@ -309,6 +314,7 @@ private:
 	int computePushPath(
 		const double time_start,
 		const smpl::RobotState& jnt_positions,
+		const std::vector<double>& push,
 		const Trajectory* path,
 		trajectory_msgs::JointTrajectory& action);
 

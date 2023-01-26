@@ -92,7 +92,7 @@ bool Robot::Setup()
 
 	m_debug_push_info["start_inside_obstacle"] = 0;
 	m_debug_push_info["start_unreachable"] = 0;
-	m_debug_push_info["ik_inv_vel_fail"] = 0;
+	m_debug_push_info["ik_fail"] = 0;
 	m_debug_push_info["ik_joint_limit"] = 0;
 	m_debug_push_info["obstacle_collision"] = 0;
 	m_debug_push_info["ik_ended_early"] = 0;
@@ -1636,6 +1636,48 @@ bool Robot::planToPoseGoal(
 	return true;
 }
 
+int Robot::computePushStateIK(
+	const Eigen::Affine3d &ee_pose,
+	const smpl::RobotState &seed,
+	smpl::RobotState &solution)
+{
+	int result = 0;
+	// run ik for new state
+	if (m_rm->computeIKPos(ee_pose, seed, solution))
+	{
+		auto markers = m_cc_i->getCollisionRobotVisualization(solution);
+		for (auto& m : markers.markers) {
+			m.ns = "push_action_state";
+		}
+		SV_SHOW_INFO(markers);
+
+		if (!m_rm->checkJointLimits(solution))
+		{
+			result = 3;
+			++m_debug_push_info["ik_joint_limit"];
+			// return false;
+			return result;
+		}
+		if (!m_cc_i->isStateValid(solution))
+		{
+			result = 2;
+			++m_debug_push_info["obstacle_collision"];
+			// return false;
+			return result;
+		}
+	}
+	else
+	{
+		// SMPL_INFO("IK call failed!");
+		result = 4;
+		++m_debug_push_info["ik_fail"];
+		// return false;
+		return result;
+	}
+
+	return result;
+}
+
 int Robot::computePushPoint(
 	const double time_start,
 	const smpl::RobotState& jnt_positions,
@@ -1663,42 +1705,15 @@ int Robot::computePushPoint(
 		xo_.translation().y() = (1.0 - t) * x_.translation().y() + t * end_pose.translation().y();
 		xo_.translation().z() = (1.0 - t) * x_.translation().z() + t * end_pose.translation().z();
 
-		// run ik for new state
-		if (m_rm->computeIKPos(xo_, action_pt.positions, q_))
+		result = computePushStateIK(xo_, action_pt.positions, q_);
+		if (result == 0)
 		{
-			auto markers = m_cc_i->getCollisionRobotVisualization(q_);
-			for (auto& m : markers.markers) {
-				m.ns = "push_action_state";
-			}
-			SV_SHOW_INFO(markers);
-
-			if (!m_rm->checkJointLimits(q_))
-			{
-				result = 3;
-				++m_debug_push_info["ik_joint_limit"];
-				// return false;
-				action.points.pop_back();
-				return result;
-			}
-			if (!m_cc_i->isStateValid(q_))
-			{
-				result = 2;
-				++m_debug_push_info["obstacle_collision"];
-				// return false;
-				action.points.pop_back();
-				return result;
-			}
-
 			action_pt.positions = q_;
 			action_pt.time_from_start += ros::Duration(m_dt);
 			action.points.push_back(action_pt);
 		}
 		else
 		{
-			// SMPL_INFO("IK call failed!");
-			result = 4;
-			++m_debug_push_info["ik_inv_vel_fail"];
-			// return false;
 			action.points.pop_back();
 			return result;
 		}
@@ -1712,6 +1727,7 @@ int Robot::computePushPoint(
 int Robot::computePushPath(
 	const double time_start,
 	const smpl::RobotState& jnt_positions,
+	const std::vector<double>& push,
 	const Trajectory* path,
 	trajectory_msgs::JointTrajectory& action)
 {
@@ -1722,11 +1738,28 @@ int Robot::computePushPath(
 	auto q_ = jnt_positions;
 	Eigen::Affine3d xo_ = m_rm->computeFK(q_);
 
-	// Add waypoint to action
+	// Add first waypoint to action
 	trajectory_msgs::JointTrajectoryPoint action_pt;
 	action_pt.positions = q_;
 	action_pt.time_from_start = ros::Duration(time_start + m_dt);
 	action.points.push_back(action_pt);
+
+	// Compute second waypoint = ray-AABB intersection
+	xo_.translation().x() = push[0];
+	xo_.translation().y() = push[1];
+	// Add second waypoint to action
+	result = computePushStateIK(xo_, action_pt.positions, q_);
+	if (result == 0)
+	{
+		action_pt.positions = q_;
+		action_pt.time_from_start += ros::Duration(m_dt);
+		action.points.push_back(action_pt);
+	}
+	else
+	{
+		action.points.pop_back();
+		return result;
+	}
 
 	for (size_t i = 1; i < path->size(); ++i)
 	{
@@ -1735,42 +1768,15 @@ int Robot::computePushPath(
 		xo_.translation().y() += path->at(i).state[1] - path->at(i-1).state[1];
 		xo_.translation().z() += path->at(i).state[2] - path->at(i-1).state[2];
 
-		// run ik for new state
-		if (m_rm->computeIKPos(xo_, action_pt.positions, q_))
+		result = computePushStateIK(xo_, action_pt.positions, q_);
+		if (result == 0)
 		{
-			auto markers = m_cc_i->getCollisionRobotVisualization(q_);
-			for (auto& m : markers.markers) {
-				m.ns = "push_action_state";
-			}
-			SV_SHOW_INFO(markers);
-
-			if (!m_rm->checkJointLimits(q_))
-			{
-				result = 3;
-				++m_debug_push_info["ik_joint_limit"];
-				// return false;
-				action.points.pop_back();
-				return result;
-			}
-			if (!m_cc_i->isStateValid(q_))
-			{
-				result = 2;
-				++m_debug_push_info["obstacle_collision"];
-				// return false;
-				action.points.pop_back();
-				return result;
-			}
-
 			action_pt.positions = q_;
 			action_pt.time_from_start += ros::Duration(m_dt);
 			action.points.push_back(action_pt);
 		}
 		else
 		{
-			// SMPL_INFO("IK call failed!");
-			result = 4;
-			++m_debug_push_info["ik_inv_vel_fail"];
-			// return false;
 			action.points.pop_back();
 			return result;
 		}
@@ -2029,6 +2035,7 @@ bool Robot::PlanPush(
 	// push_result = computePushPath(
 	// 					push_traj.points.back().time_from_start.toSec(),
 	// 					push_traj.points.back().positions,
+	// 					push,
 	// 					obj_traj,
 	// 					push_action);
 
@@ -3756,7 +3763,7 @@ bool Robot::SavePushDebugData(int scene_id)
 				<< "PushDBLookupTime,PushesFoundInDB,PushDBSuccesses,PushDBFails,PushDBTotalTime,"
 				<< "PushSuccessInSim,PushFailInSim,NoCollisionWithObject,"
 				<< "IKDidNotReachEnd,IKObstacleCollision,IKJointLimitViolation,"
-				<< "InverseVelFail,PushStartPoseUnreachable,PushStartPoseInObstacle\n";
+				<< "IKFail,PushStartPoseUnreachable,PushStartPoseInObstacle\n";
 	}
 
 	STATS << scene_id << ','
@@ -3777,7 +3784,7 @@ bool Robot::SavePushDebugData(int scene_id)
 			<< m_debug_push_info["ik_ended_early"] << ','
 			<< m_debug_push_info["obstacle_collision"] << ','
 			<< m_debug_push_info["ik_joint_limit"] << ','
-			<< m_debug_push_info["ik_inv_vel_fail"] << ','
+			<< m_debug_push_info["ik_fail"] << ','
 			<< m_debug_push_info["start_unreachable"] << ','
 			<< m_debug_push_info["start_inside_obstacle"] << '\n';
 	STATS.close();
