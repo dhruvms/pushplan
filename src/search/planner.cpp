@@ -175,6 +175,7 @@ bool Planner::SetupNGR()
 	if (!m_robot->PlanRetrieval(movable_obstacles))	{
 		return false;
 	}
+	ROS_WARN("Planner::SetupNGR > Robot::PlanRetrieval took %f seconds!", GetTime() - m_timer);
 	m_stats["robot_planner_time"] = GetTime() - m_timer;
 	m_robot->ProcessObstacles({ m_ooi->GetObject() });
 
@@ -252,6 +253,7 @@ bool Planner::FinalisePlan(
 		m_stats["robot_planner_time"] += GetTime() - m_timer;
 		return false;
 	}
+	ROS_WARN("Planner::FinalisePlan > Robot::PlanRetrieval took %f seconds!", GetTime() - m_timer);
 	m_robot->ProcessObstacles({ m_ooi->GetObject() });
 	solution = m_robot->GetLastPlanProfiled();
 
@@ -427,9 +429,9 @@ std::uint32_t Planner::RunSim(bool save)
 	}
 	m_stats["sim_time"] += GetTime() - m_timer;
 
-	if (save) {
-		writeState("SOLUTION");
-	}
+	// if (save) {
+	// 	writeState("SOLUTION");
+	// }
 
 	return m_violation;
 }

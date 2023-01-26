@@ -38,8 +38,10 @@ m_rng(m_dev())
 
 void CollisionChecker::ReinitMovableCC(const std::vector<std::shared_ptr<Agent> >& movables)
 {
-	if (m_fcl_mov != nullptr) {
+	if (m_fcl_mov != nullptr)
+	{
 		m_fcl_mov->clear();
+		delete m_fcl_mov;
 	}
 
 	m_fcl_mov = new fcl::DynamicAABBTreeCollisionManager();

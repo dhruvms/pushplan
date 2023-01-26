@@ -9,12 +9,16 @@ namespace clutter
 {
 
 void MAMONode::InitAgents(
-	const std::vector<std::shared_ptr<Agent> >& agents,
-	const comms::ObjectsPoses& all_objects)
+	const std::vector<std::shared_ptr<Agent> > &agents,
+	const comms::ObjectsPoses& all_objects,
+	const std::vector<int> &reachable_ids)
 {
 	m_all_objects = all_objects;
-	for (size_t i = 0; i < agents.size(); ++i) {
-		this->addAgent(agents.at(i), i);
+	for (size_t i = 0; i < agents.size(); ++i)
+	{
+		// if (std::find(reachable_ids.begin(), reachable_ids.end(), agents.at(i)->GetID()) != reachable_ids.end()) {
+			this->addAgent(agents.at(i), i);
+		// }
 	}
 }
 
@@ -517,6 +521,7 @@ void MAMONode::addAgent(
 {
 	m_agents.push_back(agent);
 	m_agent_map[agent->GetID()] = m_agents.size() - 1;
+	// SMPL_INFO("Agent ID %d added to MAMONode!", agent->GetID());
 
 	assert(m_agents.back()->GetID() == m_all_objects.poses.at(pidx).id);
 	m_agents.back()->SetObjectPose(m_all_objects.poses.at(pidx).xyz, m_all_objects.poses.at(pidx).rpy);
@@ -574,8 +579,9 @@ void MAMONode::SaveNode(unsigned int my_id,	unsigned int parent_id)
 		std::ofstream DATA;
 		DATA.open(filename, std::ofstream::out);
 
+		const auto &all_agents = m_planner->GetAllAgents();
 		DATA << 'O' << '\n';
-		int o = m_cc->NumObstacles() + m_agents.size();
+		int o = m_cc->NumObstacles() + all_agents.size();
 		DATA << o << '\n';
 
 		std::string movable;
@@ -607,7 +613,15 @@ void MAMONode::SaveNode(unsigned int my_id,	unsigned int parent_id)
 		for (size_t oidx = 0; oidx < m_agents.size(); ++oidx)
 		{
 			auto agent_obs = m_agents[oidx]->GetObject();
-			auto agent_pose = m_all_objects.poses.at(oidx);
+			comms::ObjectPose agent_pose;
+			for (const auto &o : m_all_objects.poses)
+			{
+				if (o.id == agent_obs->desc.id)
+				{
+					agent_pose = o;
+					break;
+				}
+			}
 			DATA << agent_obs->desc.id << ','
 				<< agent_obs->Shape() << ','
 				<< agent_obs->desc.type << ','
@@ -623,6 +637,31 @@ void MAMONode::SaveNode(unsigned int my_id,	unsigned int parent_id)
 				<< agent_obs->desc.mass << ','
 				<< agent_obs->desc.mu << ','
 				<< movable << '\n';
+		}
+
+		int xid = 998;
+		for (size_t i = 0; i < all_agents.size(); ++i)
+		{
+			if (m_agent_map.find(all_agents.at(i)->GetID()) == m_agent_map.end())
+			{
+				auto agent_obs = all_agents.at(i)->GetObject();
+				auto agent_pose = m_all_objects.poses.at(i);
+				DATA << xid-- << ','
+						<< agent_obs->Shape() << ','
+						<< agent_obs->desc.type << ','
+						<< agent_pose.xyz[0] << ','
+						<< agent_pose.xyz[1] << ','
+						<< agent_pose.xyz[2] << ','
+						<< agent_pose.rpy[0] << ','
+						<< agent_pose.rpy[1] << ','
+						<< agent_pose.rpy[2] << ','
+						<< agent_obs->desc.x_size << ','
+						<< agent_obs->desc.y_size << ','
+						<< agent_obs->desc.z_size << ','
+						<< agent_obs->desc.mass << ','
+						<< agent_obs->desc.mu << ','
+						<< movable << '\n';
+			}
 		}
 
 		// write solution trajs

@@ -33,7 +33,9 @@ bool MAMOSearch::CreateRoot()
 	m_root_node->SetRobot(m_planner->GetRobot());
 	m_root_node->SetEdgeTo(-1, -1);
 
-	m_root_node->InitAgents(m_planner->GetAllAgents(), m_planner->GetStartObjects()); // inits required fields for hashing
+	std::vector<int> reachable_ids;
+	// m_planner->GetRobot()->IdentifyReachableMovables(m_planner->GetAllAgents(), reachable_ids);
+	m_root_node->InitAgents(m_planner->GetAllAgents(), m_planner->GetStartObjects(), reachable_ids); // inits required fields for hashing
 
 	m_root_id = m_hashtable.GetStateIDForceful(m_root_node);
 	m_root_search = getSearchState(m_root_id);
@@ -303,7 +305,9 @@ void MAMOSearch::createSuccs(
 		succ->SetRobot(m_planner->GetRobot());
 		succ->SetEdgeTo(succ_object_centric_actions->at(i).first, succ_object_centric_actions->at(i).second);
 
-		succ->InitAgents(m_planner->GetAllAgents(), succ_objects->at(i)); // inits required fields for hashing
+		std::vector<int> reachable_ids;
+		// m_planner->GetRobot()->IdentifyReachableMovables(m_planner->GetAllAgents(), reachable_ids);
+		succ->InitAgents(m_planner->GetAllAgents(), succ_objects->at(i), reachable_ids); // inits required fields for hashing
 
 		// check if we have visited this mamo state before
 		unsigned int old_id;

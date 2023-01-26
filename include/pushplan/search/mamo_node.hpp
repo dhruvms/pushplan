@@ -31,8 +31,9 @@ public:
 		m_hash_set_l1(false), m_hash_set_l2(false) {} ;
 
 	void InitAgents(
-		const std::vector<std::shared_ptr<Agent> >& agents,
-		const comms::ObjectsPoses& all_objects);
+		const std::vector<std::shared_ptr<Agent> > &agents,
+		const comms::ObjectsPoses& all_objects,
+		const std::vector<int> &reachable_ids);
 	std::vector<double>* GetCurrentStartState();
 	bool RunMAPF();
 	void GetSuccs(

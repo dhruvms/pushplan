@@ -140,14 +140,19 @@ def DrawScene(filepath, objs, trajs, invalids, ngr, goals, pushes, alpha=1.0):
 		ec = 'b' if obj_movable else 'r'
 		fc = 'b' if obj_movable else 'r'
 		tc = 'w'
+		fill = True
 		if obj_id >= 100 and obj_id <= 102:
 			ec = 'gray'
 			fc = 'gray'
 			tc = 'k'
-		if obj_id == 999:
+		elif obj_id == 999:
 			ec = 'gold'
 			fc = 'gold'
 			tc = 'k'
+		elif obj_id > 102 and obj_id <= 998:
+			tc = 'k'
+			fc = None
+			fill = False
 
 		obj_cent = np.array(obj[2:4])
 
@@ -167,7 +172,7 @@ def DrawScene(filepath, objs, trajs, invalids, ngr, goals, pushes, alpha=1.0):
 			obj_pts = obj_pts + obj_cent # translate back
 
 			path = Path(obj_pts, codes)
-			obj_rect = patches.PathPatch(path, ec=ec, fc=fc, lw=1,
+			obj_rect = patches.PathPatch(path, ec=ec, fc=fc, lw=1, fill=fill,
 								alpha=alpha, zorder=2)
 
 			AX.add_artist(obj_rect)
@@ -178,7 +183,7 @@ def DrawScene(filepath, objs, trajs, invalids, ngr, goals, pushes, alpha=1.0):
 			obj_rad = obj[8]
 			obj_circ = patches.Circle(
 						obj_cent, radius=obj_rad,
-						ec=ec, fc=fc, lw=1,
+						ec=ec, fc=fc, lw=1, fill=fill,
 						alpha=alpha, zorder=2)
 
 			AX.add_artist(obj_circ)
