@@ -37,11 +37,8 @@ robot:
     samples: 5
     plan_time: 0.2
     control:
-      dt: 0.01
-      Kp: 0.5
-      Ki: 0.1
-      Kd: 0.01
-      iters: 1000
+      dt: 0.025
+      T: 5.0
     input: false
   grasping:
     tries: 100

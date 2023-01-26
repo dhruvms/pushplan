@@ -232,11 +232,8 @@ bool Robot::Setup()
 	m_ph.getParam("robot/grasping/lift", m_grasp_lift);
 
 	m_ph.getParam("robot/pushing/plan_time", m_plan_push_time);
-	m_ph.param<double>("robot/pushing/control/Kp", m_Kp, 1.0);
-	m_ph.param<double>("robot/pushing/control/Ki", m_Ki, 1.0);
-	m_ph.param<double>("robot/pushing/control/Kd", m_Kd, 1.0);
 	m_ph.param<double>("robot/pushing/control/dt", m_dt, 0.01);
-	m_ph.param<int>("robot/pushing/control/iters", m_invvel_iters, 1000);
+	m_ph.param<double>("robot/pushing/control/T", m_push_T, 3.0);
 
 	m_vis_pub = m_nh.advertise<visualization_msgs::Marker>( "/visualization_marker", 10);
 
@@ -1463,7 +1460,7 @@ bool Robot::SatisfyPath(HighLevelNode* ct_node, Trajectory** sol_path, int& expa
 	*sol_path = &(this->m_solve);
 
 	// SMPL_INFO("Robot has complete plan! m_solve.size() = %d", m_solve.size());
-	// SV_SHOW_INFO_NAMED("trajectory", makePathVisualisation());
+	// visTrajectory(m_solve, "solve_trajectory");
 	return true;
 }
 
@@ -1639,179 +1636,17 @@ bool Robot::planToPoseGoal(
 	return true;
 }
 
-int Robot::computePushAction(
+int Robot::computePushPoint(
 	const double time_start,
 	const smpl::RobotState& jnt_positions,
-	const smpl::RobotState& jnt_velocities,
 	const Eigen::Affine3d& end_pose,
 	trajectory_msgs::JointTrajectory& action)
 {
 	int result = 0;
-	// Constants
-	double xy_thresh = 0.01;
-
-	// Variables
-	Eigen::Affine3d x_;
-	auto q_ = jnt_positions;
-	auto q_dot = jnt_velocities;
-	std::vector<double> x_dot(6, 0.0), error(6, 0.0), integral(6, 0.0), derivative(6, 0.0), previous(6, 0.0);
-	Eigen::Affine3d xo_ = end_pose;
-
-	bool push_end = false;
-	for (int iter = 0; iter < m_invvel_iters; iter++)
-	{
-
-		// Get difference between current EE pose and desired EE pose
-		x_ = m_rm->computeFK(q_);
-		auto diff = xo_ * x_.inverse();
-		// auto rot = diff.rotation().eulerAngles(2, 1, 0);
-
-		// Update P error terms
-		error[0] = xo_.translation().x() - x_.translation().x();
-		error[1] = xo_.translation().y() - x_.translation().y();
-		error[2] = xo_.translation().z() - x_.translation().z();
-		// error[3] = 0.0; // rot[2];
-		// error[4] = 0.0; // rot[1];
-		// error[5] = 0.0; // rot[0];
-
-		// Update I error terms
-		integral[0] += error[0] * m_dt;
-		integral[1] += error[1] * m_dt;
-		integral[2] += error[2] * m_dt;
-		// integral[3] += error[3] * m_dt;
-		// integral[4] += error[4] * m_dt;
-		// integral[5] += error[5] * m_dt;
-
-		// Update D error terms
-		derivative[0] = (error[0] - previous[0]) / m_dt;
-		derivative[1] = (error[1] - previous[1]) / m_dt;
-		derivative[2] = (error[2] - previous[2]) / m_dt;
-		// derivative[3] = (error[3] - previous[3]) / m_dt;
-		// derivative[4] = (error[4] - previous[4]) / m_dt;
-		// derivative[5] = (error[5] - previous[5]) / m_dt;
-
-		// Compute Cartesian velocities
-		x_dot[0] = m_Kp * error[0] + m_Ki * integral[0] + m_Kd * derivative[0];
-		x_dot[1] = m_Kp * error[1] + m_Ki * integral[1] + m_Kd * derivative[1];
-		x_dot[2] = m_Kp * error[2] + m_Ki * integral[2] + m_Kd * derivative[2];
-		// x_dot[3] = m_Kp * error[3] + m_Ki * integral[3] + m_Kd * derivative[3];
-		// x_dot[4] = m_Kp * error[4] + m_Ki * integral[4] + m_Kd * derivative[4];
-		// x_dot[5] = m_Kp * error[5] + m_Ki * integral[5] + m_Kd * derivative[5];
-
-		// Update previous error term
-		previous = error;
-		if (!m_rm->computeInverseVelocity(q_, x_dot, q_dot))
-		{
-			// SMPL_INFO("Failed to compute inverse velocity");
-			result = 4;
-			++m_debug_push_info["ik_inv_vel_fail"];
-			// return false;
-			action.points.pop_back();
-			return result;
-		}
-
-		// Add waypoint to action
-		trajectory_msgs::JointTrajectoryPoint action_pt;
-		action_pt.positions = q_;
-		action_pt.time_from_start = ros::Duration(time_start + m_dt * (iter));
-		action.points.push_back(std::move(action_pt));
-
-		// has the EE reached the push_end_pose
-		double dx = std::fabs(xo_.translation().x() - x_.translation().x());
-		double dy = std::fabs(xo_.translation().y() - x_.translation().y());
-		double dz = std::fabs(xo_.translation().z() - x_.translation().z());
-
-		if (dx <= xy_thresh && dy <= xy_thresh && dz <= xy_thresh)
-		{
-			// if so, we are done
-			// SMPL_INFO("SUCCESS - reached end point");
-			std::vector<smpl::visual::Marker> ma;
-
-			auto cinc = 1.0f / float(action.points.size());
-			for (size_t i = 0; i < action.points.size(); ++i) {
-				auto markers = m_cc_i->getCollisionModelVisualization(action.points[i].positions);
-
-				for (auto& marker : markers) {
-					auto r = 0.1f;
-					auto g = cinc * (float)(action.points.size() - (i + 1));
-					auto b = cinc * (float)i;
-					marker.color = smpl::visual::Color{ r, g, b, 1.0f };
-				}
-
-				for (auto& m : markers) {
-					ma.push_back(std::move(m));
-				}
-			}
-
-			for (size_t i = 0; i < ma.size(); ++i) {
-				auto& marker = ma[i];
-				marker.ns = "push_action";
-				marker.id = i;
-			}
-			SV_SHOW_INFO_NAMED("push_action", ma);
-
-			return result; // result = 0 here
-		}
-
-		// Move arm joints
-		for (size_t i = 0; i < q_.size(); ++i)
-		{
-			// q_[i] += (q_dot[i] * m_dt);
-			double limit = m_rm->velLimit(i);
-			q_[i] += std::min(std::max(-limit, q_dot[i]), limit) * m_dt;
-			if (m_rm->isContinuous(i)) {
-				q_[i] = smpl::angles::normalize_angle(q_[i]);
-			}
-		}
-
-		auto markers = m_cc_i->getCollisionRobotVisualization(q_);
-		for (auto& m : markers.markers) {
-			m.ns = "push_action_state";
-		}
-		SV_SHOW_INFO(markers);
-
-		// TODO: check velocity limit
-		// Check joint limits
-		if (!m_rm->checkJointLimits(q_))
-		{
-			result = 3;
-			++m_debug_push_info["ik_joint_limit"];
-			// return false;
-			action.points.pop_back();
-			return result;
-		}
-		if (!m_cc_i->isStateValid(q_))
-		{
-			result = 2;
-			++m_debug_push_info["obstacle_collision"];
-			// return false;
-			action.points.pop_back();
-			return result;
-		}
-	}
-
-	if (result == 0)
-	{
-		SMPL_WARN("Push action failed to reach end pose.");
-		result = 1;
-		++m_debug_push_info["ik_ended_early"];
-	}
-	return result;
-}
-
-int Robot::computePushPath(
-	const double time_start,
-	const smpl::RobotState& jnt_positions,
-	const smpl::RobotState& jnt_velocities,
-	const Trajectory* path,
-	trajectory_msgs::JointTrajectory& action)
-{
-	// visMAPFPath(path);
-	int result = 0;
 
 	// Variables
 	auto q_ = jnt_positions;
-	Eigen::Affine3d xo_ = m_rm->computeFK(q_);
+	Eigen::Affine3d x_ = m_rm->computeFK(q_), xo_ = x_;
 
 	// Add waypoint to action
 	trajectory_msgs::JointTrajectoryPoint action_pt;
@@ -1819,15 +1654,17 @@ int Robot::computePushPath(
 	action_pt.time_from_start = ros::Duration(time_start + m_dt);
 	action.points.push_back(action_pt);
 
-	for (size_t i = 1; i < path->size(); ++i)
+	int N = m_push_T / m_dt;
+	for (int i = 1; i <= N; ++i)
 	{
+	    double t = i / (double)N;
 		// move waypoint
-		xo_.translation().x() += path->at(i).state[0] - path->at(i-1).state[0];
-		xo_.translation().y() += path->at(i).state[1] - path->at(i-1).state[1];
-		xo_.translation().z() += path->at(i).state[2] - path->at(i-1).state[2];
+		xo_.translation().x() = (1.0 - t) * x_.translation().x() + t * end_pose.translation().x();
+		xo_.translation().y() = (1.0 - t) * x_.translation().y() + t * end_pose.translation().y();
+		xo_.translation().z() = (1.0 - t) * x_.translation().z() + t * end_pose.translation().z();
 
 		// run ik for new state
-		if (m_rm->computeIKSearch(xo_, action_pt.positions, q_))
+		if (m_rm->computeIKPos(xo_, action_pt.positions, q_))
 		{
 			auto markers = m_cc_i->getCollisionRobotVisualization(q_);
 			for (auto& m : markers.markers) {
@@ -1858,7 +1695,7 @@ int Robot::computePushPath(
 		}
 		else
 		{
-			// SMPL_INFO("Failed to compute inverse velocity");
+			// SMPL_INFO("IK call failed!");
 			result = 4;
 			++m_debug_push_info["ik_inv_vel_fail"];
 			// return false;
@@ -1866,33 +1703,81 @@ int Robot::computePushPath(
 			return result;
 		}
 	}
-
 	// we are done
 	// SMPL_INFO("SUCCESS - reached end point");
-	std::vector<smpl::visual::Marker> ma;
+	visTrajectory(action, "push_action");
+	return result;
+}
 
-	auto cinc = 1.0f / float(action.points.size());
-	for (size_t i = 0; i < action.points.size(); ++i) {
-		auto markers = m_cc_i->getCollisionModelVisualization(action.points[i].positions);
+int Robot::computePushPath(
+	const double time_start,
+	const smpl::RobotState& jnt_positions,
+	const Trajectory* path,
+	trajectory_msgs::JointTrajectory& action)
+{
+	visMAPFPath(path);
+	int result = 0;
 
-		for (auto& marker : markers) {
-			auto r = 0.1f;
-			auto g = cinc * (float)(action.points.size() - (i + 1));
-			auto b = cinc * (float)i;
-			marker.color = smpl::visual::Color{ r, g, b, 1.0f };
+	// Variables
+	auto q_ = jnt_positions;
+	Eigen::Affine3d xo_ = m_rm->computeFK(q_);
+
+	// Add waypoint to action
+	trajectory_msgs::JointTrajectoryPoint action_pt;
+	action_pt.positions = q_;
+	action_pt.time_from_start = ros::Duration(time_start + m_dt);
+	action.points.push_back(action_pt);
+
+	for (size_t i = 1; i < path->size(); ++i)
+	{
+		// move waypoint
+		xo_.translation().x() += path->at(i).state[0] - path->at(i-1).state[0];
+		xo_.translation().y() += path->at(i).state[1] - path->at(i-1).state[1];
+		xo_.translation().z() += path->at(i).state[2] - path->at(i-1).state[2];
+
+		// run ik for new state
+		if (m_rm->computeIKPos(xo_, action_pt.positions, q_))
+		{
+			auto markers = m_cc_i->getCollisionRobotVisualization(q_);
+			for (auto& m : markers.markers) {
+				m.ns = "push_action_state";
+			}
+			SV_SHOW_INFO(markers);
+
+			if (!m_rm->checkJointLimits(q_))
+			{
+				result = 3;
+				++m_debug_push_info["ik_joint_limit"];
+				// return false;
+				action.points.pop_back();
+				return result;
+			}
+			if (!m_cc_i->isStateValid(q_))
+			{
+				result = 2;
+				++m_debug_push_info["obstacle_collision"];
+				// return false;
+				action.points.pop_back();
+				return result;
+			}
+
+			action_pt.positions = q_;
+			action_pt.time_from_start += ros::Duration(m_dt);
+			action.points.push_back(action_pt);
 		}
-
-		for (auto& m : markers) {
-			ma.push_back(std::move(m));
+		else
+		{
+			// SMPL_INFO("IK call failed!");
+			result = 4;
+			++m_debug_push_info["ik_inv_vel_fail"];
+			// return false;
+			action.points.pop_back();
+			return result;
 		}
 	}
-
-	for (size_t i = 0; i < ma.size(); ++i) {
-		auto& marker = ma[i];
-		marker.ns = "push_action";
-		marker.id = i;
-	}
-	SV_SHOW_INFO_NAMED("push_action", ma);
+	// we are done
+	// SMPL_INFO("SUCCESS - reached end point");
+	visTrajectory(action, "push_action");
 	return result;
 }
 
@@ -2125,28 +2010,25 @@ bool Robot::PlanPush(
 				push[3] - push_end_pose.translation().x());
 	}
 
+	trajectory_msgs::JointTrajectory push_action;
+	// 1. get push action trajectory via inverse kinematics to end point
 	// compute push action end pose
 	push_end_pose.translation().x() += std::cos(push_at_angle) * push_dist * push_frac + (m_distG(m_rng));
 	push_end_pose.translation().y() += std::sin(push_at_angle) * push_dist * push_frac + (m_distG(m_rng));
-	debug_push_end = { push_end_pose.translation().x(), push_end_pose.translation().y() };
 	// SV_SHOW_INFO_NAMED("push_end_pose", smpl::visual::MakePoseMarkers(
 	// 	push_end_pose, m_grid_i->getReferenceFrame(), "push_end_pose"));
-
-	// get push action trajectory via inverse velocity
-	trajectory_msgs::JointTrajectory push_action;
-	smpl::RobotState joint_vel(m_rm->jointVariableCount(), 0.0);
-	push_result = computePushAction(
+	debug_push_end = { push_end_pose.translation().x(), push_end_pose.translation().y() };
+	push_result = computePushPoint(
 						push_traj.points.back().time_from_start.toSec(),
 						push_traj.points.back().positions,
-						joint_vel,
 						push_end_pose,
 						push_action);
+	// // 2. get push action trajectory via inverse kinematics along MAPF path
 	// debug_push_end = { obj_traj->back().state.at(0) + std::cos(push[2] + M_PI) * push[3],
 	// 			obj_traj->back().state.at(1) + std::sin(push[2] + M_PI) * push[3] };
 	// push_result = computePushPath(
 	// 					push_traj.points.back().time_from_start.toSec(),
 	// 					push_traj.points.back().positions,
-	// 					joint_vel,
 	// 					obj_traj,
 	// 					push_action);
 
@@ -2301,13 +2183,11 @@ bool Robot::GenMovablePush(
 	SV_SHOW_INFO_NAMED("push_end_pose", smpl::visual::MakePoseMarkers(
 		push_end_pose, m_grid_i->getReferenceFrame(), "push_end_pose"));
 
-	// get push action trajectory via inverse velocity
+	// get push action trajectory via inverse kinematics
 	std::vector<trajectory_msgs::JointTrajectory> push_action(1);
-	smpl::RobotState joint_vel(m_rm->jointVariableCount(), 0.0);
-	push_result = computePushAction(
+	push_result = computePushPoint(
 						push_traj.points.back().time_from_start.toSec(),
 						push_traj.points.back().positions,
-						joint_vel,
 						push_end_pose,
 						push_action.front());
 
@@ -2387,7 +2267,7 @@ bool Robot::GenMovablePush(
 
 void Robot::AnimateSolution()
 {
-	SV_SHOW_INFO_NAMED("trajectory", makePathVisualisation());
+	visTrajectory(m_solve, "solve_trajectory");
 
 	size_t pidx = 0;
 	while (ros::ok())
@@ -3379,40 +3259,6 @@ bool Robot::setCollisionRobotState()
 	return true;
 }
 
-auto Robot::makePathVisualisation() const
-	-> std::vector<smpl::visual::Marker>
-{
-	std::vector<smpl::visual::Marker> ma;
-
-	if (m_solve.empty()) {
-		return ma;
-	}
-
-	auto cinc = 1.0f / float(m_solve.size());
-	for (size_t i = 0; i < m_solve.size(); ++i) {
-		auto markers = m_cc_i->getCollisionModelVisualization(m_solve[i].state);
-
-		for (auto& marker : markers) {
-			auto r = 0.1f;
-			auto g = cinc * (float)(m_solve.size() - (i + 1));
-			auto b = cinc * (float)i;
-			marker.color = smpl::visual::Color{ r, g, b, 1.0f };
-		}
-
-		for (auto& m : markers) {
-			ma.push_back(std::move(m));
-		}
-	}
-
-	for (size_t i = 0; i < ma.size(); ++i) {
-		auto& marker = ma[i];
-		marker.ns = "trajectory";
-		marker.id = i;
-	}
-
-	return ma;
-}
-
 bool Robot::initPlanner()
 {
 	if (!readPlannerConfig(ros::NodeHandle("~planning"))) {
@@ -3848,13 +3694,11 @@ void Robot::RunPushIKStudy(int N)
 				SV_SHOW_INFO_NAMED("push_end_pose", smpl::visual::MakePoseMarkers(
 					push_end_pose, m_grid_i->getReferenceFrame(), "push_end_pose"));
 
-				// 7. get push action trajectory via inverse velocity
+				// 7. get push action trajectory via inverse kinematics
 				trajectory_msgs::JointTrajectory push_action;
-				smpl::RobotState joint_vel(m_rm->jointVariableCount(), 0.0);
-				int failure = computePushAction(
+				int failure = computePushPoint(
 								path.points.back().time_from_start.toSec(),
 								path.points.back().positions,
-								joint_vel,
 								push_end_pose,
 								push_action);
 				DATA << x0 << ',' << y0 << ',' << yaw0 << ','
@@ -4094,6 +3938,66 @@ void Robot::visMAPFPath(const Trajectory* path)
 
 	m_vis_pub.publish(points);
 	m_vis_pub.publish(line_strip);
+}
+
+void Robot::visTrajectory(
+	const trajectory_msgs::JointTrajectory &traj,
+	const std::string &name)
+{
+	std::vector<smpl::visual::Marker> ma;
+
+	auto cinc = 1.0f / float(traj.points.size());
+	for (size_t i = 0; i < traj.points.size(); ++i) {
+		auto markers = m_cc_i->getCollisionModelVisualization(traj.points[i].positions);
+
+		for (auto& marker : markers) {
+			auto r = 0.1f;
+			auto g = cinc * (float)(traj.points.size() - (i + 1));
+			auto b = cinc * (float)i;
+			marker.color = smpl::visual::Color{ r, g, b, 1.0f };
+		}
+
+		for (auto& m : markers) {
+			ma.push_back(std::move(m));
+		}
+	}
+
+	for (size_t i = 0; i < ma.size(); ++i) {
+		auto& marker = ma[i];
+		marker.ns = name;
+		marker.id = i;
+	}
+	SV_SHOW_INFO_NAMED(name, ma);
+}
+
+void Robot::visTrajectory(
+	const Trajectory &traj,
+	const std::string &name)
+{
+	std::vector<smpl::visual::Marker> ma;
+
+	auto cinc = 1.0f / float(traj.size());
+	for (size_t i = 0; i < traj.size(); ++i) {
+		auto markers = m_cc_i->getCollisionModelVisualization(traj[i].state);
+
+		for (auto& marker : markers) {
+			auto r = 0.1f;
+			auto g = cinc * (float)(traj.size() - (i + 1));
+			auto b = cinc * (float)i;
+			marker.color = smpl::visual::Color{ r, g, b, 1.0f };
+		}
+
+		for (auto& m : markers) {
+			ma.push_back(std::move(m));
+		}
+	}
+
+	for (size_t i = 0; i < ma.size(); ++i) {
+		auto& marker = ma[i];
+		marker.ns = name;
+		marker.id = i;
+	}
+	SV_SHOW_INFO_NAMED(name, ma);
 }
 
 } // namespace clutter

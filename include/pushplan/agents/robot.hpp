@@ -277,8 +277,8 @@ private:
 
 	BulletSim* m_sim = nullptr;
 	std::vector<trajectory_msgs::JointTrajectory> m_push_trajs, m_push_actions;
-	int m_grasp_tries, m_invvel_iters;
-	double m_plan_push_time, m_grasp_lift, m_grasp_z, m_Kp, m_Ki, m_Kd, m_dt;
+	int m_grasp_tries;
+	double m_plan_push_time, m_grasp_lift, m_grasp_z, m_dt, m_push_T;
 
 	std::map<std::string, double> m_stats, m_debug_push_info;
 	double m_planner_time, m_sim_time;
@@ -301,16 +301,14 @@ private:
 		const Eigen::Affine3d& pose_goal,
 		trajectory_msgs::JointTrajectory& push_traj,
 		double t=0.1);
-	int computePushAction(
+	int computePushPoint(
 		const double time_start,
 		const smpl::RobotState& jnt_positions,
-		const smpl::RobotState& jnt_velocities,
 		const Eigen::Affine3d& end_pose,
 		trajectory_msgs::JointTrajectory& action);
 	int computePushPath(
 		const double time_start,
 		const smpl::RobotState& jnt_positions,
-		const smpl::RobotState& jnt_velocities,
 		const Trajectory* path,
 		trajectory_msgs::JointTrajectory& action);
 
@@ -354,9 +352,6 @@ private:
 	auto findCollisionObject(const std::string& id, bool movable) const
 		-> smpl::collision::CollisionObject*;
 	bool setCollisionRobotState();
-
-	auto makePathVisualisation() const
-	-> std::vector<smpl::visual::Marker>;
 
 	bool initPlanner();
 	bool readPlannerConfig(const ros::NodeHandle &nh);
@@ -419,6 +414,12 @@ private:
 	void profileTrajectoryMoveIt(trajectory_msgs::JointTrajectory& traj);
 
 	void visMAPFPath(const Trajectory* path);
+	void visTrajectory(
+		const trajectory_msgs::JointTrajectory &traj,
+		const std::string &name);
+	void visTrajectory(
+		const Trajectory &traj,
+		const std::string &name);
 };
 
 } // namespace clutter
