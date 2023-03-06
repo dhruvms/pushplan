@@ -487,6 +487,32 @@ class BulletSim:
 										childFrameOrientation=sim.getQuaternionFromEuler([0., 0., 0.]))
 
 				# elif (point == req.traj.points[grasp_at+2]):
+				# 	input("OOI lifted!")
+				# 	# For scene 100020
+				# 	movable_id = 15
+				# 	movable_traj = np.array([[0.619541,-0.36661],[0.62,-0.38],[0.62,-0.39],[0.62,-0.4],[0.63,-0.4],[0.64,-0.4],[0.65,-0.4],[0.66,-0.4],[0.67,-0.4],[0.68,-0.4],[0.69,-0.4],[0.7,-0.4],[0.71,-0.4],[0.72,-0.4],[0.73,-0.4]])
+
+				# 	for joint in get_joints(robot_id, sim=sim):
+				# 		sim.changeVisualShape(robot_id, joint, rgbaColor=[0.66, 0.66, 0.66, 0.66])
+
+				# 	input("Start sim-ing MAPF solution?")
+				# 	movable_pos = None
+				# 	movable_orn = None
+				# 	for oid in sim_data['objs']:
+				# 		if (oid == movable_id):
+				# 			movable_pos, movable_orn = sim.getBasePositionAndOrientation(oid)
+				# 			movable_pos = np.asarray(movable_pos)
+				# 			movable_orn = np.asarray(movable_orn)
+				# 			break
+				# 	for pt in movable_traj:
+				# 		movable_pos[0] = pt[0]
+				# 		movable_pos[1] = pt[1]
+				# 		sim.resetBasePositionAndOrientation(movable_id,
+				# 						posObj=movable_pos,
+				# 						ornObj=movable_orn)
+				# 		time.sleep(0.33)
+				# 	input("DONE")
+
 				# 	if not self.grasped(req.ooi, sim_id):
 				# 		cause = 99
 				# 		violation_flag = True
