@@ -1,7 +1,11 @@
 # usual imports
 import numpy as np
-import matplotlib.pyplot as plt
 import pandas as pd
+import copy
+import matplotlib.pyplot as plt
+import matplotlib.cm as cm
+from matplotlib.path import Path
+import matplotlib.patches as patches
 
 # scikit imports
 from sklearn.model_selection import train_test_split
@@ -9,13 +13,27 @@ from sklearn.pipeline import Pipeline
 from sklearn.kernel_approximation import RBFSampler
 from sklearn.linear_model import SGDClassifier
 from sklearn.model_selection import GridSearchCV
-
-import matplotlib.cm as cm
-from matplotlib.path import Path
-import matplotlib.patches as patches
+# for classifier comparison
+from sklearn.preprocessing import StandardScaler
+from sklearn.pipeline import make_pipeline
+from sklearn.neural_network import MLPClassifier
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn.svm import SVC
+from sklearn.gaussian_process import GaussianProcessClassifier
+from sklearn.gaussian_process.kernels import RBF
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.ensemble import RandomForestClassifier, AdaBoostClassifier
+from sklearn.naive_bayes import GaussianNB
+from sklearn.discriminant_analysis import QuadraticDiscriminantAnalysis
 
 TABLE = np.array([0.78, -0.5])
+TABLE_SIZE = np.array([0.3, 0.4])
 
+############################
+# Robot push success model #
+############################
+# Predict if robot IK will succeed from point-to-point,
+# no obstacles inside shelf
 def robot_ik_model():
 	P = pd.read_csv("../dat/PUSHES_IK_2s.csv")
 	P = P[P.x1 != -1]
@@ -93,7 +111,7 @@ def robot_ik_model():
 			Path.LINETO,
 			Path.CLOSEPOLY,
 		]
-	base_extents = np.array([0.3, 0.4])
+	base_extents = TABLE_SIZE
 	base_bl = TABLE
 	base_bl = base_bl - base_extents
 	base_rect = patches.Rectangle(
@@ -134,6 +152,11 @@ def robot_ik_model():
 			AX.scatter(x1 + TABLE[0], y1 + TABLE[1], c=[cmap(C+1)], zorder=1)
 	plt.show()
 
+
+###################################
+# Object-aware push success model #
+###################################
+# Predict if robot will succeed in pushing object along (direction, distance)
 def object_push_model():
 	P = pd.read_csv("../dat/push_data/PUSH_DATA_SIM.csv")
 
@@ -210,7 +233,7 @@ def object_push_model():
 			Path.LINETO,
 			Path.CLOSEPOLY,
 		]
-	base_extents = np.array([0.3, 0.4])
+	base_extents = TABLE_SIZE
 	base_bl = TABLE
 	base_bl = base_bl - base_extents
 	base_rect = patches.Rectangle(
@@ -245,5 +268,322 @@ def object_push_model():
 			AX.scatter(x1 + TABLE[0], y1 + TABLE[1], c=[cmap(C+1)], zorder=1)
 	plt.show()
 
+###################################
+# Classifier Comparison - sklearn #
+###################################
+
+def read_push_db(filename):
+	P = pd.read_csv(filename)
+
+	# we do not want to use these push pose columns for training
+	P = P.drop('p_x', axis=1)
+	P = P.drop('p_y', axis=1)
+	P = P.drop('p_z', axis=1)
+	P = P.drop('p_r11', axis=1)
+	P = P.drop('p_r21', axis=1)
+	P = P.drop('p_r31', axis=1)
+	P = P.drop('p_r12', axis=1)
+	P = P.drop('p_r22', axis=1)
+	P = P.drop('p_r32', axis=1)
+	P = P.drop('p_r13', axis=1)
+	P = P.drop('p_r23', axis=1)
+	P = P.drop('p_r33', axis=1)
+
+	# scale data to be centered around (0, 0) being the shelf center
+	P.loc[:, 'o_ox'] -= TABLE[0]
+	P.loc[:, 'o_oy'] -= TABLE[1]
+
+	# normalise yaw angle
+	sin = np.sin(P.loc[:, 'o_oyaw'])
+	cos = np.cos(P.loc[:, 'o_oyaw'])
+	P.loc[:, 'o_oyaw'] = np.arctan2(sin, cos)
+
+	# reassign values
+	P.loc[P.r == 0, 'r'] = 0 # push success => class 0
+	P.loc[P.r != 0, 'r'] = 1 # push failed in sim => class 0
+	P.loc[P.o_shape == 2, 'o_shape'] = 1
+
+	# drop some additional columns
+	P = P.drop('o_oz', axis=1)
+	P = P.drop('o_shape', axis=1)
+
+	# get train/test data
+	# X = copy.deepcopy(P.loc[:, ['o_ox','o_oy','o_oz','o_oyaw','o_shape','o_xs','o_ys','o_zs','o_mass','o_mu','m_dir','m_dist']])
+	X = copy.deepcopy(P.loc[:, ['o_ox','o_oy','o_oyaw','o_xs','o_ys','o_zs','o_mass','o_mu','m_dir','m_dist']])
+	y = copy.deepcopy(P.r)
+
+	return (X, y)
+
+def compare_classifiers():
+	h = .01  # step size in the mesh
+
+	D1_X, D1_y = read_push_db("../dat/push_data/polar_push_fixed_z_all.csv")
+	# D2_X, D2_y = read_push_db("../dat/push_data/polar_push_rand_z_simmed.csv")
+	# D3_X = pd.concat([D1_X, D2_X])
+	# D3_y = pd.concat([D1_y, D2_y])
+
+	datasets = [
+		(D1_X, D1_y),
+		# (D2_X, D2_y),
+		# (D3_X, D3_y),
+	]
+	weights = np.bincount(D1_y).sum()/(2 * np.bincount(D1_y))
+	class_weights = { 0: weights[0] * 2, 1: weights[1] }
+
+	names = [
+		# "RBF SVM Grid Search",
+		"Nearest Neighbors",
+		"Linear SVM",
+		"RBF SVM",
+		# "Gaussian Process",
+		"Decision Tree",
+		"Random Forest",
+		"Neural Net",
+		"AdaBoost",
+		"Naive Bayes",
+		"QDA",
+	]
+
+	# # grid search
+	# svc = SVC()
+	# grid = {
+	# 	# 'rbf__gamma' : list(np.logspace(-4, 4, 25)) + ['scale'],
+	#     'C': [0.1, 1, 10, 100, 1000],
+	#     'gamma': [100, 10, 5, 2, 1, 0.1, 0.01, 0.001, 0.0001],
+	#     'kernel': ['rbf'],
+	# }
+	# gs = GridSearchCV(svc, grid, n_jobs=-1, verbose=1)
+
+	classifiers = [
+		# gs,
+		KNeighborsClassifier(3),
+		SVC(kernel="linear", C=0.025),
+		SVC(gamma=2, C=1, class_weight=class_weights),
+		# GaussianProcessClassifier(1.0 * RBF(1.0)),
+		DecisionTreeClassifier(max_depth=5),
+		RandomForestClassifier(max_depth=5, n_estimators=10, max_features=1),
+		MLPClassifier(alpha=1, max_iter=1000),
+		AdaBoostClassifier(),
+		GaussianNB(),
+		QuadraticDiscriminantAnalysis(),
+		]
+
+	objs = [
+		np.array([0.5396405594291757,-0.6202659961061698,0.86,3.968932883363816,0,0.05894977023814522,0.06382387226194496,0.09,0.4047051216355124,0.8664349515856553]),
+		np.array([0.5265759323356647,-0.44525114248804787,0.86,3.162050919275471,0,0.03,0.037425523935246584,0.09,0.0993357633340925,0.9985290606712391]),
+		np.array([0.696405594291757,-0.702659961061698,0.86,3.968932883363816,0,0.05894977023814522,0.16382387226194496,0.09,0.4047051216355124,0.8664349515856553]),
+		np.array([0.619540968861,-0.366610269647,0.86,4.80544933564,0,0.03,0.0713504225141,0.09,0.0734181112928,0.845070518711]),
+		np.array([0.8154373669513246,-0.7878776846316444,0.86,4.354556175210488,0,0.03,0.06002629182662351,0.09,0.34528948312182245,0.9162874932518031]),
+		np.array([0.5228407362622941,-0.5994011525625002,0.9060119187406109,4.145721344530907,0,0.03385179269754395,0.03890820111658584,0.1360119187406109,0.2967886596541951,0.9059203586194849])
+	]
+
+	figure = plt.figure(figsize=(27, 9))
+	i = 1
+	cb = None
+	# iterate over datasets
+	for ds_cnt, ds in enumerate(datasets):
+		# preprocess dataset, split into training and test part
+		X, y = ds
+		# X = StandardScaler().fit_transform(X)
+		X_train, X_test, y_train, y_test = \
+			train_test_split(X, y, test_size=.25, random_state=42)
+
+		x_min, x_max = TABLE[0] - TABLE_SIZE[0], TABLE[0] + TABLE_SIZE[0]
+		y_min, y_max = TABLE[1] - TABLE_SIZE[1], TABLE[1] + TABLE_SIZE[1]
+		xx, yy = np.meshgrid(np.arange(x_min, x_max, h),
+							 np.arange(y_min, y_max, h))
+		test_pts_xy = np.c_[xx.ravel(), yy.ravel()]
+
+		# Plot the decision boundary. For that, we will assign a color to each
+		# point in the mesh [x_min, x_max]x[y_min, y_max].
+		for obj_cnt, obj in enumerate(objs):
+
+			# iterate over classifiers
+			for name, clf in zip(names, classifiers):
+				print("Train {}".format(name))
+				clf = make_pipeline(StandardScaler(), clf)
+				clf.fit(X_train, y_train)
+				# if 'Grid' in name:
+				# 	import ipdb
+				# 	ipdb.set_trace()
+				# 	clf = clf.best_estimator_
+				score = clf.score(X_test, y_test)
+				print("{} trained! Score = {}".format(name, score))
+
+				ax = plt.subplot(len(objs), len(classifiers), i)
+
+				test_m_dirs = np.arctan2(test_pts_xy[:,1] - obj[1], test_pts_xy[:,0] - obj[0])
+				test_m_dists = ((test_pts_xy[:,0] - obj[0])**2 + (test_pts_xy[:,1] - obj[1])**2)**0.5
+				objs_stack = np.repeat(obj[None, :], test_m_dirs.shape[0], axis=0)
+				test_pts = np.hstack([objs_stack, test_m_dirs[:, None], test_m_dists[:, None]])
+				test_pts[:, 0] -= TABLE[0]
+				test_pts[:, 1] -= TABLE[1]
+				sin = np.sin(test_pts[:, 3])
+				cos = np.cos(test_pts[:, 3])
+				test_pts[:, 3] = np.arctan2(sin, cos)
+				test_pts = np.delete(test_pts, [2, 4], axis=1)
+
+				if hasattr(clf, "decision_function"):
+					Z = clf.decision_function(test_pts)
+				else:
+					Z = clf.predict_proba(test_pts)[:, 1]
+
+				# Put the result into a color plot
+				Z = Z.reshape(xx.shape)
+				if cb is None:
+					cb = ax.contourf(xx, yy, Z, cm=plt.cm.RdGy, alpha=.8)
+				else:
+					ax.contourf(xx, yy, Z, cm=plt.cm.RdGy, alpha=.8)
+
+				# draw shelf base rectangle
+				codes = [
+						Path.MOVETO,
+						Path.LINETO,
+						Path.LINETO,
+						Path.LINETO,
+						Path.CLOSEPOLY,
+					]
+				base_bl = TABLE - TABLE_SIZE
+				base_rect = patches.Rectangle(
+											(base_bl[0], base_bl[1]),
+											2 * TABLE_SIZE[0], 2 * TABLE_SIZE[1],
+											linewidth=2, edgecolor='k', facecolor='none',
+											alpha=1, zorder=2)
+				ax.add_artist(base_rect)
+
+				# draw object
+				obj_shape = obj[4]
+				ec = 'b'
+				fc = 'b'
+				fill = False
+				obj_cent = obj[0:2]
+
+				if (obj_shape == 0): # rectangle
+					obj_extents = obj[5:7]
+					obj_pts = np.vstack([	obj_cent - (obj_extents * [1, 1]),
+											obj_cent - (obj_extents * [-1, 1]),
+											obj_cent - (obj_extents * [-1, -1]),
+											obj_cent - (obj_extents * [1, -1]),
+											obj_cent - (obj_extents * [1, 1])]) # axis-aligned
+
+					R = np.array([
+							[np.cos(obj[3]), -np.sin(obj[3])],
+							[np.sin(obj[3]), np.cos(obj[3])]]) # rotation matrix
+					obj_pts = obj_pts - obj_cent # axis-aligned, at origin
+					obj_pts = np.dot(obj_pts, R.T) # rotate at origin
+					obj_pts = obj_pts + obj_cent # translate back
+
+					path = Path(obj_pts, codes)
+					obj_rect = patches.PathPatch(path, ec=ec, fc=fc, lw=2, fill=fill,
+										alpha=1, zorder=3)
+
+					ax.add_artist(obj_rect)
+
+				elif (obj_shape == 2): # circle
+					obj_rad = obj[5]
+					obj_circ = patches.Circle(
+								obj_cent, radius=obj_rad,
+								ec=ec, fc=fc, lw=2, fill=fill,
+								alpha=1, zorder=3)
+
+					ax.add_artist(obj_circ)
+
+				ax.set_xlim(xx.min() - 0.05, xx.max() + 0.05)
+				ax.set_ylim(yy.min() - 0.05, yy.max() + 0.05)
+				ax.set_xticks(())
+				ax.set_yticks(())
+				ax.axis('equal')
+				if ds_cnt == 0:
+					ax.set_title(name)
+				ax.text(xx.max() - .3, yy.min() + .3, ('%.2f' % score).lstrip('0'),
+						size=15, horizontalalignment='right')
+				i += 1
+
+	plt.colorbar(cb)
+	plt.tight_layout()
+	plt.show()
+
+
+def vis_push_data():
+	codes = [
+			Path.MOVETO,
+			Path.LINETO,
+			Path.LINETO,
+			Path.LINETO,
+			Path.CLOSEPOLY,
+		]
+	base_bl = TABLE - TABLE_SIZE
+	base_rect = patches.Rectangle(
+								(base_bl[0], base_bl[1]),
+								2 * TABLE_SIZE[0], 2 * TABLE_SIZE[1],
+								linewidth=2, edgecolor='k', facecolor='none',
+								alpha=1, zorder=2)
+
+	FIG = plt.figure(figsize=(13, 13))
+	AX = plt.subplot(1, 1, 1)
+	AX.add_artist(base_rect)
+
+	ec = 'b'
+	fc = 'b'
+	fill = False
+	obj = np.array([0.71679,-0.398789,0.86,2.00804,0,0.0669627,0.03,0.09,0.210207,0.0902199])
+	obj_cent = obj[0:2]
+	obj_extents = obj[5:7]
+	obj_pts = np.vstack([	obj_cent - (obj_extents * [1, 1]),
+							obj_cent - (obj_extents * [-1, 1]),
+							obj_cent - (obj_extents * [-1, -1]),
+							obj_cent - (obj_extents * [1, -1]),
+							obj_cent - (obj_extents * [1, 1])]) # axis-aligned
+	R = np.array([
+			[np.cos(obj[3]), -np.sin(obj[3])],
+			[np.sin(obj[3]), np.cos(obj[3])]]) # rotation matrix
+	obj_pts = obj_pts - obj_cent # axis-aligned, at origin
+	obj_pts = np.dot(obj_pts, R.T) # rotate at origin
+	obj_pts = obj_pts + obj_cent # translate back
+
+	path = Path(obj_pts, codes)
+	obj_rect = patches.PathPatch(path, ec=ec, fc=fc, lw=2, fill=fill,
+						alpha=1, zorder=3)
+	AX.add_artist(obj_rect)
+
+	push_legend = []
+	colors = {
+		-2: 'gray',
+		0: 'g',
+		2: 'magenta',
+		3: 'cyan',
+		5: 'red',
+	}
+	failure_modes = {
+		-2: 'sim fail',
+		0: 'success',
+		2: 'obs coll',
+		3: 'joint lim',
+		5: 'start not reached',
+	}
+	for i in failure_modes:
+		push_legend.append(patches.Patch(color=colors[i], label=failure_modes[i]))
+
+	AX.legend(handles=push_legend)
+
+	data = {
+				'm_dir' : [5.97057,-1.13238,-0.499256,3.50443,0.530529,1.87608,1.25147,5.69356,3.91114,0.297185,6.05162,3.03643,3.35799,1.36624,6.05406,5.86822,0.520798,0.635112,0.475216,4.14273,4.29956,6.04036,2.53342,4.97596,0.0705303],
+				'm_dist' : [0.239911,0.0639314,0.0813124,0.138217,0.212767,0.184396,0.220826,0.211332,0.232508,0.206531,0.167234,0.153184,0.206785,0.134149,0.143504,0.121415,0.28215,0.270935,0.11742,0.242368,0.141954,0.221639,0.249751,0.128959,0.29456],
+				'r' : [3,0,0,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5]
+			}
+	df = pd.DataFrame(data=data)
+	# df = pd.read_csv("../dat/push_data/one_obj.csv")
+	for index, row in df.iterrows():
+		push_pt = obj_cent + (row['m_dist'] * np.array([np.cos(row['m_dir']), np.sin(row['m_dir'])]))
+		AX.scatter(push_pt[0], push_pt[1], s=50, c=colors[row['r']])
+
+	AX.set_xlim(TABLE[0] - TABLE_SIZE[0] - 0.05, TABLE[0] + TABLE_SIZE[0] + 0.05)
+	AX.set_ylim(TABLE[1] - TABLE_SIZE[1] - 0.05, TABLE[1] + TABLE_SIZE[1] + 0.05)
+	# AX.set_xticks(())
+	# AX.set_yticks(())
+	AX.axis('equal')
+
+	plt.show()
+
 if __name__ == '__main__':
-	object_push_model()
+	vis_push_data()
