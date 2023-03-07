@@ -234,6 +234,8 @@ bool Robot::Setup()
 	m_ph.getParam("robot/pushing/plan_time", m_plan_push_time);
 	m_ph.param<double>("robot/pushing/control/dt", m_dt, 0.01);
 	m_ph.param<double>("robot/pushing/control/T", m_push_T, 3.0);
+	m_ph.param<double>("robot/vel_scale", m_vel_scale, 0.05);
+	m_ph.param<double>("robot/acc_scale", m_acc_scale, 1.0);
 
 	m_vis_pub = m_nh.advertise<visualization_msgs::Marker>( "/visualization_marker", 10);
 
@@ -1798,7 +1800,7 @@ void Robot::profileTrajectoryMoveIt(trajectory_msgs::JointTrajectory& traj)
 	m_moveit_trajectory_ptr->setRobotTrajectoryMsg(*m_moveit_robot_state, traj);
 
 	trajectory_processing::IterativeParabolicTimeParameterization iptp;
-	bool success = iptp.computeTimeStamps(*m_moveit_trajectory_ptr, 0.05, 1.0);
+	bool success = iptp.computeTimeStamps(*m_moveit_trajectory_ptr, m_vel_scale, m_acc_scale);
 	moveit_msgs::RobotTrajectory trajectory_msg;
 	m_moveit_trajectory_ptr->getRobotTrajectoryMsg(trajectory_msg);
 	traj = trajectory_msg.joint_trajectory;
@@ -2150,7 +2152,9 @@ bool Robot::PlanPush(
 
 bool Robot::GenMovablePush(
 	Object& movable,
-	std::vector<double>& push, double& move_dir, double& move_dist,
+	std::vector<double>& push,
+	double& to_move_dir, double& to_move_dist,
+	double& moved_dir, double& moved_dist,
 	Eigen::Affine3d& push_start_pose,
 	int& push_result)
 {
@@ -2160,13 +2164,17 @@ bool Robot::GenMovablePush(
 
 	// get push start pose
 	samplePushStartPose(push, movable, push_start_pose);
+	SV_SHOW_INFO_NAMED("push_start_pose", smpl::visual::MakePoseMarkers(
+		push_start_pose, m_grid_i->getReferenceFrame(), "push_start_pose"));
 	// set/sample push parameters - direction and distance
-	move_dir = push[2];
-	move_dist = 0.1 + m_distD(m_rng) * 0.2;
+	to_move_dir = push[2];
+	to_move_dist = 0.1 + m_distD(m_rng) * 0.2;
+	moved_dir = to_move_dir;
+	moved_dist = to_move_dist;
 
 	// plan path to push start pose
 	trajectory_msgs::JointTrajectory push_traj;
-	if (!planToPoseGoal(m_start_state, push_start_pose, push_traj, 10.0)) {
+	if (!planToPoseGoal(m_start_state, push_start_pose, push_traj, 2.0)) {
 		push_result = 5;
 	}
 
@@ -2180,13 +2188,15 @@ bool Robot::GenMovablePush(
 	size_t push_traj_approach_size = push_traj.points.size();
 	// actual push start pose achieved by the robot
 	push_start_pose = m_rm->computeFK(push_traj.points.back().positions);
+	SV_SHOW_INFO_NAMED("push_start_pose", smpl::visual::MakePoseMarkers(
+		push_start_pose, m_grid_i->getReferenceFrame(), "push_start_pose"));
 
 	// compute push action end pose based on ee pose achieved at the end of the
 	// trajectory to the push start pose
-	// translate pose along move_dir by move_dist
+	// translate pose along to_move_dir by to_move_dist
 	Eigen::Affine3d push_end_pose = push_start_pose;
-	push_end_pose.translation().x() += std::cos(move_dir) * move_dist;
-	push_end_pose.translation().y() += std::sin(move_dir) * move_dist;
+	push_end_pose.translation().x() += std::cos(to_move_dir) * (to_move_dist + push[3]);
+	push_end_pose.translation().y() += std::sin(to_move_dir) * (to_move_dist + push[3]);
 	SV_SHOW_INFO_NAMED("push_end_pose", smpl::visual::MakePoseMarkers(
 		push_end_pose, m_grid_i->getReferenceFrame(), "push_end_pose"));
 
@@ -2223,19 +2233,17 @@ bool Robot::GenMovablePush(
 			return false;
 		}
 
-		// append waypoint to retract to push start pose
-		push_action.front().points.push_back(push_action.front().points.at(0));
-		push_action.front().points.back().time_from_start = push_action.front().points.at(push_action.front().points.size() - 2).time_from_start + ros::Duration(1.0);
+		// // append waypoint to retract to push start pose
+		// push_action.front().points.push_back(push_action.front().points.at(0));
+		// push_action.front().points.back().time_from_start = push_action.front().points.at(push_action.front().points.size() - 2).time_from_start + ros::Duration(1.0);
 
 		// append push_action to push_traj
 		auto t_prev = push_traj.points.back().time_from_start;
 		for (auto it = push_action.front().points.begin() + 1; it != push_action.front().points.end(); ++it)
 		{
 			auto tdiff = it->time_from_start - t_prev;
-			// last two points in push_action must be appended to push_traj
-			// they are the final state in the push action and the retraction
-			// to the first state
-			if ((it < push_action.front().points.end() - 2) && tdiff.toSec() < 0.3) {
+			// last point in push_action must be appended to push_traj
+			if ((it < push_action.front().points.end() - 1) && tdiff.toSec() < 0.3) {
 				continue;
 			}
 			push_traj.points.push_back(*it);
@@ -2261,13 +2269,13 @@ bool Robot::GenMovablePush(
 		return false;
 	}
 
-	// update move_dir and move_dist based on what actually happened in sim
+	// set moved_dir and moved_dist based on what actually happened in sim
 	// HER style
-	move_dir = std::atan2(
+	moved_dir = std::atan2(
 				dummy_o.poses[0].xyz[1] - movable.desc.o_y,
 				dummy_o.poses[0].xyz[0] - movable.desc.o_x);
 	std::vector<double> mstart = { movable.desc.o_x, movable.desc.o_y }, mend = { dummy_o.poses[0].xyz[0], dummy_o.poses[0].xyz[1] };
-	move_dist = EuclideanDist(mstart, mend);
+	moved_dist = EuclideanDist(mstart, mend);
 
 	return true;
 }
@@ -2376,8 +2384,8 @@ void Robot::samplePushStartPose(
 		done = true;
 	}
 
-	SV_SHOW_INFO_NAMED("sampled_start_pose", smpl::visual::MakePoseMarkers(
-		start_pose, m_grid_i->getReferenceFrame(), "sampled_start_pose"));
+	// SV_SHOW_INFO_NAMED("sampled_start_pose", smpl::visual::MakePoseMarkers(
+	// 	start_pose, m_grid_i->getReferenceFrame(), "sampled_start_pose"));
 }
 
 void Robot::GetRandomState(smpl::RobotState& s)
@@ -3376,31 +3384,6 @@ bool Robot::createPlanner(bool interp)
 	return true;
 }
 
-void Robot::fillGoalConstraint()
-{
-	m_goal.position_constraints.resize(1);
-	m_goal.orientation_constraints.resize(1);
-	m_goal.position_constraints[0].header.frame_id = m_planning_frame;
-
-	m_goal.position_constraints[0].constraint_region.primitives.resize(1);
-	m_goal.position_constraints[0].constraint_region.primitive_poses.resize(1);
-	m_goal.position_constraints[0].constraint_region.primitives[0].type = shape_msgs::SolidPrimitive::BOX;
-	m_goal.position_constraints[0].constraint_region.primitive_poses[0].position.x = m_goal_vec[0];
-	m_goal.position_constraints[0].constraint_region.primitive_poses[0].position.y = m_goal_vec[1];
-	m_goal.position_constraints[0].constraint_region.primitive_poses[0].position.z = m_goal_vec[2];
-
-	Eigen::Quaterniond q;
-	smpl::angles::from_euler_zyx(m_goal_vec[5], m_goal_vec[4], m_goal_vec[3], q);
-	tf::quaternionEigenToMsg(q, m_goal.orientation_constraints[0].orientation);
-
-	// set tolerances
-	m_goal.position_constraints[0].constraint_region.primitives[0].dimensions.resize(3, 0.015);
-	m_goal.position_constraints[0].constraint_region.primitives[0].dimensions[2] = 0.025;
-	m_goal.orientation_constraints[0].absolute_x_axis_tolerance = M_PI;
-	m_goal.orientation_constraints[0].absolute_y_axis_tolerance = M_PI;
-	m_goal.orientation_constraints[0].absolute_z_axis_tolerance = M_PI;
-}
-
 void Robot::createMultiPoseGoalConstraint(moveit_msgs::MotionPlanRequest& req)
 {
 	req.goal_constraints.clear();
@@ -3420,16 +3403,22 @@ void Robot::createMultiPoseGoalConstraint(moveit_msgs::MotionPlanRequest& req)
 void Robot::createPoseGoalConstraint(
 	const Eigen::Affine3d& pose, moveit_msgs::MotionPlanRequest& req)
 {
-	m_goal_vec.clear();
-	m_goal_vec.resize(6, 0.0);
 
-	m_goal_vec[0] = pose.translation().x(); // x
-	m_goal_vec[1] = pose.translation().y(); // y
-	m_goal_vec[2] = pose.translation().z(); // z
-	smpl::angles::get_euler_zyx(pose.rotation(), m_goal_vec[5], m_goal_vec[4], m_goal_vec[3]);
+	m_goal.position_constraints.resize(1);
+	m_goal.orientation_constraints.resize(1);
+	m_goal.position_constraints[0].header.frame_id = m_planning_frame;
 
-	fillGoalConstraint();
-	// set tight tolerances
+	m_goal.position_constraints[0].constraint_region.primitives.resize(1);
+	m_goal.position_constraints[0].constraint_region.primitive_poses.resize(1);
+	m_goal.position_constraints[0].constraint_region.primitives[0].type = shape_msgs::SolidPrimitive::BOX;
+	m_goal.position_constraints[0].constraint_region.primitive_poses[0].position.x = pose.translation().x();
+	m_goal.position_constraints[0].constraint_region.primitive_poses[0].position.y = pose.translation().y();
+	m_goal.position_constraints[0].constraint_region.primitive_poses[0].position.z = pose.translation().z();
+
+	Eigen::Quaterniond q(pose.rotation());
+	tf::quaternionEigenToMsg(q, m_goal.orientation_constraints[0].orientation);
+
+	// set tolerances
 	m_goal.position_constraints[0].constraint_region.primitives[0].dimensions.resize(3, 0.05);
 	m_goal.orientation_constraints[0].absolute_x_axis_tolerance = M_PI;
 	m_goal.orientation_constraints[0].absolute_y_axis_tolerance = M_PI;

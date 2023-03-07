@@ -105,7 +105,9 @@ public:
 		double &sim_time, bool input=false);
 	bool GenMovablePush(
 		Object& movable,
-		std::vector<double>& push, double& move_dir, double& move_dist,
+		std::vector<double>& push,
+		double& to_move_dir, double& to_move_dist,
+		double& moved_dir, double& moved_dist,
 		Eigen::Affine3d& push_start_pose,
 		int& push_result);
 	void IdentifyReachableMovables(
@@ -278,7 +280,7 @@ private:
 	BulletSim* m_sim = nullptr;
 	std::vector<trajectory_msgs::JointTrajectory> m_push_trajs, m_push_actions;
 	int m_grasp_tries;
-	double m_plan_push_time, m_grasp_lift, m_grasp_z, m_dt, m_push_T;
+	double m_plan_push_time, m_grasp_lift, m_grasp_z, m_dt, m_push_T, m_vel_scale, m_acc_scale;
 
 	std::map<std::string, double> m_stats, m_debug_push_info;
 	double m_planner_time, m_sim_time;
@@ -362,7 +364,6 @@ private:
 	bool initPlanner();
 	bool readPlannerConfig(const ros::NodeHandle &nh);
 	bool createPlanner(bool interp);
-	void fillGoalConstraint();
 	void createMultiPoseGoalConstraint(moveit_msgs::MotionPlanRequest& req);
 	void createPoseGoalConstraint(
 		const Eigen::Affine3d& pose,

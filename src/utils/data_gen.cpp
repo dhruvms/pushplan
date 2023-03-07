@@ -29,7 +29,7 @@ void DataGeneration::Reset()
 	m_sim = std::make_unique<BulletSim>(
 				tables, false,
 				-1, std::string(),
-				0, 1, true); // z_offset = true randomly displaces table/shelf along z-axis
+				0, 1, false); // z_offset = true randomly displaces table/shelf along z-axis
 
 	m_robot = std::make_unique<Robot>();
 	m_robot->SetSim(m_sim.get());
@@ -97,23 +97,35 @@ void DataGeneration::GetPushData()
 	if (!exists)
 	{
 		DATA 	<< "o_ox,o_oy,o_oz,o_oyaw,o_shape,o_xs,o_ys,o_zs,o_mass,o_mu,"
-				<< "m_dir,m_dist,"
+				<< "m_dir_des,m_dist_des,"
 				<< "p_x,p_y,p_z,"
 				<< "p_r11,p_r21,p_r31,p_r12,p_r22,p_r32,p_r13,p_r23,p_r33,"
+				<< "m_dir_ach,m_dist_ach,"
 				<< "r\n";
 	}
 
+	int unreachable_count = 0;
 	for (int i = 0; i < 25; ++i)
 	{
 		std::vector<double> push;
-		double move_dir, move_dist;
+		double to_move_dir, to_move_dist, moved_dir, moved_dist;
 		Eigen::Affine3d start_pose;
-		int result;
+		int result = 0;
 		m_robot->GenMovablePush(
 			movable,
-			push, move_dir, move_dist, start_pose,
+			push,
+			to_move_dir, to_move_dist, moved_dir, moved_dist,
+			start_pose,
 			result);
 		ROS_WARN("Push sample result: %d", result);
+		unreachable_count += result <= 0 ? -unreachable_count : 1;
+
+		if (unreachable_count == 5) {
+			break;
+		}
+		if (moved_dist < 0.05) {
+			continue;
+		}
 
 		DATA 	<< movable.desc.o_x << ','
 				<< movable.desc.o_y << ','
@@ -125,8 +137,8 @@ void DataGeneration::GetPushData()
 				<< movable.desc.z_size << ','
 				<< movable.desc.mass << ','
 				<< movable.desc.mu << ','
-				<< move_dir << ','
-				<< move_dist << ','
+				<< to_move_dir << ','
+				<< to_move_dist << ','
 				<< start_pose.translation().x() << ','
 				<< start_pose.translation().y() << ','
 				<< start_pose.translation().z() << ','
@@ -139,6 +151,8 @@ void DataGeneration::GetPushData()
 				<< start_pose.rotation()(0, 2) << ','
 				<< start_pose.rotation()(1, 2) << ','
 				<< start_pose.rotation()(2, 2) << ','
+				<< moved_dir << ','
+				<< moved_dist << ','
 				<< result << '\n';
 	}
 	DATA.close();

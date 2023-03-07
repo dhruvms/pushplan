@@ -144,9 +144,9 @@ class BulletSim:
 				obj_id = -1
 
 			if obj_id != -1:
-				friction_min = rospy.get_param("objects/friction_min", 0.8)
+				friction_min = rospy.get_param("objects/friction_min", 0.5)
 				friction_max = rospy.get_param("objects/friction_max", 1.2)
-				mu = np.random.uniform(friction_min, friction_max) if req.mu < 0 else req.mu
+				mu = np.random.uniform(friction_min, friction_max) if req.mu < friction_min else req.mu
 				if obj_id in table_id:
 					mu = friction_min
 
@@ -204,9 +204,9 @@ class BulletSim:
 				body_id = -1
 
 			if body_id != -1:
-				friction_min = rospy.get_param("objects/friction_min", 0.8)
+				friction_min = rospy.get_param("objects/friction_min", 0.5)
 				friction_max = rospy.get_param("objects/friction_max", 1.2)
-				mu = np.random.uniform(friction_min, friction_max)
+				mu = np.random.uniform(friction_min, friction_max) if req.mu < friction_min else req.mu
 
 				sim.changeDynamics(body_id, -1, lateralFriction=mu)
 				sim_data['objs'][body_id]['mu'] = mu

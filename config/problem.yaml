@@ -51,6 +51,8 @@ robot:
   yoshikawa_tries: 20
   push_ik_ends: 20
   replay: false
+  vel_scale: 0.025
+  acc_scale: 1.0
 
 mapf:
   res: 0.01
@@ -80,8 +82,8 @@ objects:
     ox       0.0
     oy       0.0
   z_offset_scale: 0.1
-  friction_min: 0.001
-  friction_max: 0.5
+  friction_min: 0.5
+  friction_max: 1.2
 
 sampling:
   samples: 25000
