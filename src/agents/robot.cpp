@@ -2368,8 +2368,8 @@ void Robot::samplePushStartPose(
 		double x0 = push[0] + std::cos(push[2] + M_PI) * 0.05 + (m_distG(m_rng));
 		double y0 = push[1] + std::sin(push[2] + M_PI) * 0.05 + (m_distG(m_rng));
 
-		// z is 3-10cm above table height
-		double z0 = m_table_z + 0.03 + m_distD(m_rng) * 0.07;
+		// z is 3cm above table height
+		double z0 = m_table_z + 0.03;
 
 		// check if sampled (x, y, z) is inside collision voxels
 		if (m_grid_i->getDistanceFromPoint(x0, y0, z0) <= m_grid_i->resolution()) {
@@ -2378,9 +2378,9 @@ void Robot::samplePushStartPose(
 
 		// complete push start pose by sampling rotational dofs
 		start_pose = Eigen::Translation3d(x0, y0, z0) *
-					Eigen::AngleAxisd(-M_PI_2 + m_distD(m_rng) * M_PI, Eigen::Vector3d::UnitZ()) *
-					Eigen::AngleAxisd(m_distD(m_rng) * M_PI/3.0, Eigen::Vector3d::UnitY()) *
-					Eigen::AngleAxisd(m_distD(m_rng) * M_PI/3.0, Eigen::Vector3d::UnitX());
+					Eigen::AngleAxisd(push[2], Eigen::Vector3d::UnitZ()) *
+					Eigen::AngleAxisd(M_PI/6.0, Eigen::Vector3d::UnitY()) *
+					Eigen::AngleAxisd(0.0, Eigen::Vector3d::UnitX());
 		done = true;
 	}
 
