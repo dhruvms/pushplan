@@ -11,7 +11,7 @@ import matplotlib.patches as patches
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 from sklearn.kernel_approximation import RBFSampler
-from sklearn.linear_model import SGDClassifier
+from sklearn.linear_model import SGDClassifier, LinearRegression, Ridge, Lasso
 from sklearn.model_selection import GridSearchCV
 # for classifier comparison
 from sklearn.preprocessing import StandardScaler
@@ -272,44 +272,72 @@ def object_push_model():
 # Classifier Comparison - sklearn #
 ###################################
 
-def read_push_db(filename):
+def read_push_db(filename, robot=False):
 	P = pd.read_csv(filename)
 
-	# we do not want to use these push pose columns for training
-	P = P.drop('p_x', axis=1)
-	P = P.drop('p_y', axis=1)
-	P = P.drop('p_z', axis=1)
-	P = P.drop('p_r11', axis=1)
-	P = P.drop('p_r21', axis=1)
-	P = P.drop('p_r31', axis=1)
-	P = P.drop('p_r12', axis=1)
-	P = P.drop('p_r22', axis=1)
-	P = P.drop('p_r32', axis=1)
-	P = P.drop('p_r13', axis=1)
-	P = P.drop('p_r23', axis=1)
-	P = P.drop('p_r33', axis=1)
+	# # we do not want to use these push pose columns for training
+	# P = P.drop('p_x', axis=1)
+	# P = P.drop('p_y', axis=1)
+	# P = P.drop('p_z', axis=1)
+	# P = P.drop('p_r11', axis=1)
+	# P = P.drop('p_r21', axis=1)
+	# P = P.drop('p_r31', axis=1)
+	# P = P.drop('p_r12', axis=1)
+	# P = P.drop('p_r22', axis=1)
+	# P = P.drop('p_r32', axis=1)
+	# P = P.drop('p_r13', axis=1)
+	# P = P.drop('p_r23', axis=1)
+	# P = P.drop('p_r33', axis=1)
+
+	# normalise angles
+	sin = np.sin(P.loc[:, 'o_oyaw'])
+	cos = np.cos(P.loc[:, 'o_oyaw'])
+	P.loc[:, 'o_oyaw'] = np.arctan2(sin, cos)
+	sin = np.sin(P.loc[:, 'm_dir_des'])
+	cos = np.cos(P.loc[:, 'm_dir_des'])
+	P.loc[:, 'm_dir_des'] = np.arctan2(sin, cos)
+
+	# reassign values
+	if robot:
+		P.loc[P.r > 0, 'r'] = 1 # push IK failed => class 1
+		P.loc[P.r <= 0, 'r'] = 0 # push IK succeeded => class 0
+	else:
+		# P.loc[P.r == 0, 'r'] = 0 # push success => class 0
+		P.loc[P.r != 0, 'r'] = 1 # push failed (in sim?) => class 0
+	P.loc[P.o_shape == 2, 'o_zs'] /= 2
+	P.loc[P.o_shape == 2, 'o_shape'] = 1
+
+	# # drop some additional columns
+	# P = P.drop('o_oz', axis=1)
+	# P = P.drop('o_shape', axis=1)
+
+	# add some new columns
+	P['delta_x'] = P['o_ox'] + (P['m_dist_des'].values * np.cos(P['m_dir_des'].values))
+	P['delta_y'] = P['o_oy'] + (P['m_dist_des'].values * np.sin(P['m_dir_des'].values))
+	if robot:
+		P.loc[:, 'delta_x'] -= TABLE[0]
+		P.loc[:, 'delta_y'] -= TABLE[1]
+	else:
+		P.loc[:, 'delta_x'] -= P.loc[:, 'o_ox'].values
+		P.loc[:, 'delta_y'] -= P.loc[:, 'o_oy'].values
 
 	# scale data to be centered around (0, 0) being the shelf center
 	P.loc[:, 'o_ox'] -= TABLE[0]
 	P.loc[:, 'o_oy'] -= TABLE[1]
 
-	# normalise yaw angle
-	sin = np.sin(P.loc[:, 'o_oyaw'])
-	cos = np.cos(P.loc[:, 'o_oyaw'])
-	P.loc[:, 'o_oyaw'] = np.arctan2(sin, cos)
-
-	# reassign values
-	P.loc[P.r == 0, 'r'] = 0 # push success => class 0
-	P.loc[P.r != 0, 'r'] = 1 # push failed in sim => class 0
-	P.loc[P.o_shape == 2, 'o_shape'] = 1
-
-	# drop some additional columns
-	P = P.drop('o_oz', axis=1)
-	P = P.drop('o_shape', axis=1)
-
 	# get train/test data
-	# X = copy.deepcopy(P.loc[:, ['o_ox','o_oy','o_oz','o_oyaw','o_shape','o_xs','o_ys','o_zs','o_mass','o_mu','m_dir','m_dist']])
-	X = copy.deepcopy(P.loc[:, ['o_ox','o_oy','o_oyaw','o_xs','o_ys','o_zs','o_mass','o_mu','m_dir','m_dist']])
+	X = None
+	if robot:
+		P.loc[:, 'p_x'] -= TABLE[0]
+		P.loc[:, 'p_y'] -= TABLE[1]
+		# X = copy.deepcopy(P.loc[:, ['o_ox','o_oy','delta_x','delta_y']])
+		X = copy.deepcopy(P.loc[:, ['p_x','p_y','delta_x','delta_y']])
+		# X = copy.deepcopy(P.loc[:, ['p_x','p_y','o_ox','o_oy','delta_x','delta_y']])
+	else:
+		# X = copy.deepcopy(P.loc[:, ['o_ox','o_oy','o_oz','o_oyaw','o_shape','o_xs','o_ys','o_zs','o_mass','o_mu','m_dir_des','m_dist_des']])
+		# X = copy.deepcopy(P.loc[:, ['o_ox','o_oy','o_oyaw','o_xs','o_ys','o_zs','o_mass','o_mu','m_dir_des','m_dist_des']])
+		X = copy.deepcopy(P.loc[:, ['o_ox','o_oy','o_oyaw','o_xs','o_ys','o_zs','o_mass','o_mu','delta_x','delta_y']])
+
 	y = copy.deepcopy(P.r)
 
 	return (X, y)
@@ -317,8 +345,9 @@ def read_push_db(filename):
 def compare_classifiers():
 	h = .01  # step size in the mesh
 
-	D1_X, D1_y = read_push_db("../dat/push_data/polar_push_fixed_z_all.csv")
-	# D2_X, D2_y = read_push_db("../dat/push_data/polar_push_rand_z_simmed.csv")
+	robot = True
+	D1_X, D1_y = read_push_db("../dat/push_data/pushes_fixed_z_all.csv", robot=robot)
+	# D2_X, D2_y = read_push_db("../dat/push_data/pushes_fixed_z_simmed.csv")
 	# D3_X = pd.concat([D1_X, D2_X])
 	# D3_y = pd.concat([D1_y, D2_y])
 
@@ -327,21 +356,24 @@ def compare_classifiers():
 		# (D2_X, D2_y),
 		# (D3_X, D3_y),
 	]
-	weights = np.bincount(D1_y).sum()/(2 * np.bincount(D1_y))
-	class_weights = { 0: weights[0] * 2, 1: weights[1] }
+	weights = np.bincount(datasets[0][1]).sum()/(2 * np.bincount(datasets[0][1]))
+	class_weights = { 0: weights[0] * 4, 1: weights[1] }
 
 	names = [
 		# "RBF SVM Grid Search",
-		"Nearest Neighbors",
+		# "Nearest Neighbors",
 		"Linear SVM",
-		"RBF SVM",
+		# "RBF SVM",
 		# "Gaussian Process",
-		"Decision Tree",
-		"Random Forest",
-		"Neural Net",
-		"AdaBoost",
-		"Naive Bayes",
-		"QDA",
+		# "Decision Tree",
+		# "Random Forest",
+		# "Neural Net",
+		# "AdaBoost",
+		# "Naive Bayes",
+		# "QDA",
+		"Linear Regression",
+		"Ridge Regression",
+		"Best Robot Only",
 	]
 
 	# # grid search
@@ -354,18 +386,25 @@ def compare_classifiers():
 	# }
 	# gs = GridSearchCV(svc, grid, n_jobs=-1, verbose=1)
 
+	rbf_r = RBFSampler(gamma=10.0)
+	clf_r = SGDClassifier(alpha=0.0001, penalty='l1', loss='modified_huber')
+	best_r = Pipeline(steps=[('rbf', rbf_r), ('clf', clf_r)])
+
 	classifiers = [
 		# gs,
-		KNeighborsClassifier(3),
-		SVC(kernel="linear", C=0.025),
-		SVC(gamma=2, C=1, class_weight=class_weights),
+		# KNeighborsClassifier(3),
+		SVC(kernel="linear", C=1),
+		# SVC(gamma=2, C=1, class_weight=class_weights),
 		# GaussianProcessClassifier(1.0 * RBF(1.0)),
-		DecisionTreeClassifier(max_depth=5),
-		RandomForestClassifier(max_depth=5, n_estimators=10, max_features=1),
-		MLPClassifier(alpha=1, max_iter=1000),
-		AdaBoostClassifier(),
-		GaussianNB(),
-		QuadraticDiscriminantAnalysis(),
+		# DecisionTreeClassifier(max_depth=5),
+		# RandomForestClassifier(max_depth=5, n_estimators=10, max_features=1),
+		# MLPClassifier(alpha=1, max_iter=1000),
+		# AdaBoostClassifier(),
+		# GaussianNB(),
+		# QuadraticDiscriminantAnalysis(),
+		LinearRegression(fit_intercept=True, n_jobs=-1),
+		Ridge(fit_intercept=True),
+		best_r,
 		]
 
 	objs = [
@@ -377,7 +416,8 @@ def compare_classifiers():
 		np.array([0.5228407362622941,-0.5994011525625002,0.9060119187406109,4.145721344530907,0,0.03385179269754395,0.03890820111658584,0.1360119187406109,0.2967886596541951,0.9059203586194849])
 	]
 
-	figure = plt.figure(figsize=(27, 9))
+	# figure = plt.figure(figsize=(27, 9))
+	figure = plt.figure()
 	i = 1
 	cb = None
 	# iterate over datasets
@@ -393,113 +433,159 @@ def compare_classifiers():
 		xx, yy = np.meshgrid(np.arange(x_min, x_max, h),
 							 np.arange(y_min, y_max, h))
 		test_pts_xy = np.c_[xx.ravel(), yy.ravel()]
+		# test_pts_xy[:,0] -= TABLE[0]
+		# test_pts_xy[:,1] -= TABLE[1]
 
-		# Plot the decision boundary. For that, we will assign a color to each
-		# point in the mesh [x_min, x_max]x[y_min, y_max].
-		for obj_cnt, obj in enumerate(objs):
+		# iterate over classifiers
+		for name, clf in zip(names, classifiers):
+			print("Train {}".format(name))
+			# clf = make_pipeline(StandardScaler(), clf)
+			clf = Pipeline(steps=[('rbf', rbf_r), ('clf', clf)]) if 'Best' not in name else clf
+			clf.fit(X_train, y_train)
+			# if 'Grid' in name:
+			# 	import ipdb
+			# 	ipdb.set_trace()
+			# 	clf = clf.best_estimator_
+			score = clf.score(X_test, y_test)
+			print("{} trained! Score = {}".format(name, score))
 
-			# iterate over classifiers
-			for name, clf in zip(names, classifiers):
-				print("Train {}".format(name))
-				clf = make_pipeline(StandardScaler(), clf)
-				clf.fit(X_train, y_train)
-				# if 'Grid' in name:
-				# 	import ipdb
-				# 	ipdb.set_trace()
-				# 	clf = clf.best_estimator_
-				score = clf.score(X_test, y_test)
-				print("{} trained! Score = {}".format(name, score))
+			if robot:
+				for obj_cnt, obj in enumerate(objs):
+					ax = plt.subplot(len(classifiers), len(objs), i)
 
-				ax = plt.subplot(len(objs), len(classifiers), i)
+					test_pts = np.array([obj[0], obj[1]])
+					test_pts = np.repeat(test_pts[None, :], test_pts_xy.shape[0], axis=0)
+					test_pts = np.hstack([test_pts, test_pts_xy])
+					test_pts[:,0] -= TABLE[0]
+					test_pts[:,1] -= TABLE[1]
+					test_pts[:,2] -= TABLE[0]
+					test_pts[:,3] -= TABLE[1]
 
-				test_m_dirs = np.arctan2(test_pts_xy[:,1] - obj[1], test_pts_xy[:,0] - obj[0])
-				test_m_dists = ((test_pts_xy[:,0] - obj[0])**2 + (test_pts_xy[:,1] - obj[1])**2)**0.5
-				objs_stack = np.repeat(obj[None, :], test_m_dirs.shape[0], axis=0)
-				test_pts = np.hstack([objs_stack, test_m_dirs[:, None], test_m_dists[:, None]])
-				test_pts[:, 0] -= TABLE[0]
-				test_pts[:, 1] -= TABLE[1]
-				sin = np.sin(test_pts[:, 3])
-				cos = np.cos(test_pts[:, 3])
-				test_pts[:, 3] = np.arctan2(sin, cos)
-				test_pts = np.delete(test_pts, [2, 4], axis=1)
+					if hasattr(clf, "decision_function"):
+						Z = clf.decision_function(test_pts)
+					elif hasattr(clf, "predict_proba"):
+						Z = clf.predict_proba(test_pts)[:, 1]
+					else:
+						Z = clf.predict(test_pts)
 
-				if hasattr(clf, "decision_function"):
-					Z = clf.decision_function(test_pts)
-				else:
-					Z = clf.predict_proba(test_pts)[:, 1]
+					# Put the result into a color plot
+					Z = Z.reshape(xx.shape)
+					if cb is None:
+						cb = ax.contourf(xx, yy, Z, cmap=plt.cm.RdGy, alpha=.8)
+					else:
+						ax.contourf(xx, yy, Z, cmap=plt.cm.RdGy, alpha=.8)
 
-				# Put the result into a color plot
-				Z = Z.reshape(xx.shape)
-				if cb is None:
-					cb = ax.contourf(xx, yy, Z, cm=plt.cm.RdGy, alpha=.8)
-				else:
-					ax.contourf(xx, yy, Z, cm=plt.cm.RdGy, alpha=.8)
+					ax.scatter(test_pts[0,0] + TABLE[0], test_pts[0,1] + TABLE[1], s=50, marker='*', c='gold')
 
-				# draw shelf base rectangle
-				codes = [
-						Path.MOVETO,
-						Path.LINETO,
-						Path.LINETO,
-						Path.LINETO,
-						Path.CLOSEPOLY,
-					]
-				base_bl = TABLE - TABLE_SIZE
-				base_rect = patches.Rectangle(
-											(base_bl[0], base_bl[1]),
-											2 * TABLE_SIZE[0], 2 * TABLE_SIZE[1],
-											linewidth=2, edgecolor='k', facecolor='none',
-											alpha=1, zorder=2)
-				ax.add_artist(base_rect)
+					ax.set_xlim(left=xx.min() - 0.05, right=xx.max() + 0.05)
+					ax.set_ylim(bottom=yy.min() - 0.05, top=yy.max() + 0.05)
+					ax.set_xticks(())
+					ax.set_yticks(())
+					ax.set_aspect('equal')
+					if ds_cnt == 0 and (i % len(objs) == 1):
+						ax.set_title(name)
+					ax.text(xx.max() - .3, yy.min() + .3, ('%.2f' % score).lstrip('0'),
+							size=15, horizontalalignment='right')
+					i += 1
+			else:
+				# Plot the decision boundary. For that, we will assign a color to each
+				# point in the mesh [x_min, x_max]x[y_min, y_max].
+				for obj_cnt, obj in enumerate(objs):
+					ax = plt.subplot(len(classifiers), len(objs), i)
 
-				# draw object
-				obj_shape = obj[4]
-				ec = 'b'
-				fc = 'b'
-				fill = False
-				obj_cent = obj[0:2]
+					# test_m_dirs = np.arctan2(test_pts_xy[:,1] - obj[1], test_pts_xy[:,0] - obj[0])
+					# test_m_dists = ((test_pts_xy[:,0] - obj[0])**2 + (test_pts_xy[:,1] - obj[1])**2)**0.5
+					test_pts_xy[:,0] -= obj[0]
+					test_pts_xy[:,1] -= obj[1]
+					objs_stack = np.repeat(obj[None, :], test_pts_xy.shape[0], axis=0)
+					# test_pts = np.hstack([objs_stack, test_m_dirs[:, None], test_m_dists[:, None]])
+					test_pts = np.hstack([objs_stack, test_pts_xy])
+					test_pts[:, 0] -= TABLE[0]
+					test_pts[:, 1] -= TABLE[1]
+					sin = np.sin(test_pts[:, 3])
+					cos = np.cos(test_pts[:, 3])
+					test_pts[:, 3] = np.arctan2(sin, cos)
+					test_pts = np.delete(test_pts, [2, 4], axis=1)
 
-				if (obj_shape == 0): # rectangle
-					obj_extents = obj[5:7]
-					obj_pts = np.vstack([	obj_cent - (obj_extents * [1, 1]),
-											obj_cent - (obj_extents * [-1, 1]),
-											obj_cent - (obj_extents * [-1, -1]),
-											obj_cent - (obj_extents * [1, -1]),
-											obj_cent - (obj_extents * [1, 1])]) # axis-aligned
+					if hasattr(clf, "decision_function"):
+						Z = clf.decision_function(test_pts)
+					elif hasattr(clf, "predict_proba"):
+						Z = clf.predict_proba(test_pts)[:, 1]
+					else:
+						Z = clf.predict(test_pts)
 
-					R = np.array([
-							[np.cos(obj[3]), -np.sin(obj[3])],
-							[np.sin(obj[3]), np.cos(obj[3])]]) # rotation matrix
-					obj_pts = obj_pts - obj_cent # axis-aligned, at origin
-					obj_pts = np.dot(obj_pts, R.T) # rotate at origin
-					obj_pts = obj_pts + obj_cent # translate back
+					# Put the result into a color plot
+					Z = Z.reshape(xx.shape)
+					if cb is None:
+						cb = ax.contourf(xx, yy, Z, cmap=plt.cm.RdGy, alpha=.8)
+					else:
+						ax.contourf(xx, yy, Z, cmap=plt.cm.RdGy, alpha=.8)
 
-					path = Path(obj_pts, codes)
-					obj_rect = patches.PathPatch(path, ec=ec, fc=fc, lw=2, fill=fill,
-										alpha=1, zorder=3)
+					# draw shelf base rectangle
+					codes = [
+							Path.MOVETO,
+							Path.LINETO,
+							Path.LINETO,
+							Path.LINETO,
+							Path.CLOSEPOLY,
+						]
+					base_bl = TABLE - TABLE_SIZE
+					base_rect = patches.Rectangle(
+												(base_bl[0], base_bl[1]),
+												2 * TABLE_SIZE[0], 2 * TABLE_SIZE[1],
+												linewidth=2, edgecolor='k', facecolor='none',
+												alpha=1, zorder=2)
+					ax.add_artist(base_rect)
 
-					ax.add_artist(obj_rect)
+					# draw object
+					obj_shape = obj[4]
+					ec = 'b'
+					fc = 'b'
+					fill = False
+					obj_cent = obj[0:2]
 
-				elif (obj_shape == 2): # circle
-					obj_rad = obj[5]
-					obj_circ = patches.Circle(
-								obj_cent, radius=obj_rad,
-								ec=ec, fc=fc, lw=2, fill=fill,
-								alpha=1, zorder=3)
+					if (obj_shape == 0): # rectangle
+						obj_extents = obj[5:7]
+						obj_pts = np.vstack([	obj_cent - (obj_extents * [1, 1]),
+												obj_cent - (obj_extents * [-1, 1]),
+												obj_cent - (obj_extents * [-1, -1]),
+												obj_cent - (obj_extents * [1, -1]),
+												obj_cent - (obj_extents * [1, 1])]) # axis-aligned
 
-					ax.add_artist(obj_circ)
+						R = np.array([
+								[np.cos(obj[3]), -np.sin(obj[3])],
+								[np.sin(obj[3]), np.cos(obj[3])]]) # rotation matrix
+						obj_pts = obj_pts - obj_cent # axis-aligned, at origin
+						obj_pts = np.dot(obj_pts, R.T) # rotate at origin
+						obj_pts = obj_pts + obj_cent # translate back
 
-				ax.set_xlim(xx.min() - 0.05, xx.max() + 0.05)
-				ax.set_ylim(yy.min() - 0.05, yy.max() + 0.05)
-				ax.set_xticks(())
-				ax.set_yticks(())
-				ax.axis('equal')
-				if ds_cnt == 0:
-					ax.set_title(name)
-				ax.text(xx.max() - .3, yy.min() + .3, ('%.2f' % score).lstrip('0'),
-						size=15, horizontalalignment='right')
-				i += 1
+						path = Path(obj_pts, codes)
+						obj_rect = patches.PathPatch(path, ec=ec, fc=fc, lw=2, fill=fill,
+											alpha=1, zorder=3)
 
-	plt.colorbar(cb)
+						ax.add_artist(obj_rect)
+
+					elif (obj_shape == 2): # circle
+						obj_rad = obj[5]
+						obj_circ = patches.Circle(
+									obj_cent, radius=obj_rad,
+									ec=ec, fc=fc, lw=2, fill=fill,
+									alpha=1, zorder=3)
+
+						ax.add_artist(obj_circ)
+
+					ax.set_xlim(left=xx.min() - 0.05, right=xx.max() + 0.05)
+					ax.set_ylim(bottom=yy.min() - 0.05, top=yy.max() + 0.05)
+					ax.set_xticks(())
+					ax.set_yticks(())
+					ax.set_aspect('equal')
+					if ds_cnt == 0 and (i % len(objs) == 1):
+						ax.set_title(name)
+					ax.text(xx.max() - .3, yy.min() + .3, ('%.2f' % score).lstrip('0'),
+							size=15, horizontalalignment='right')
+					i += 1
+
+	# plt.colorbar(cb)
 	plt.tight_layout()
 	plt.show()
 
@@ -523,32 +609,54 @@ def vis_push_data():
 	AX = plt.subplot(1, 1, 1)
 	AX.add_artist(base_rect)
 
+	# data = {
+	# 			'm_dir' : [5.97057,-1.13238,-0.499256,3.50443,0.530529,1.87608,1.25147,5.69356,3.91114,0.297185,6.05162,3.03643,3.35799,1.36624,6.05406,5.86822,0.520798,0.635112,0.475216,4.14273,4.29956,6.04036,2.53342,4.97596,0.0705303],
+	# 			'm_dist' : [0.239911,0.0639314,0.0813124,0.138217,0.212767,0.184396,0.220826,0.211332,0.232508,0.206531,0.167234,0.153184,0.206785,0.134149,0.143504,0.121415,0.28215,0.270935,0.11742,0.242368,0.141954,0.221639,0.249751,0.128959,0.29456],
+	# 			'r' : [3,0,0,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5]
+	# 		}
+	# df = pd.DataFrame(data=data)
+	df = pd.read_csv("../dat/push_data/one_obj.csv")
+
 	ec = 'b'
 	fc = 'b'
 	fill = False
-	obj = np.array([0.71679,-0.398789,0.86,2.00804,0,0.0669627,0.03,0.09,0.210207,0.0902199])
-	obj_cent = obj[0:2]
-	obj_extents = obj[5:7]
-	obj_pts = np.vstack([	obj_cent - (obj_extents * [1, 1]),
-							obj_cent - (obj_extents * [-1, 1]),
-							obj_cent - (obj_extents * [-1, -1]),
-							obj_cent - (obj_extents * [1, -1]),
-							obj_cent - (obj_extents * [1, 1])]) # axis-aligned
-	R = np.array([
-			[np.cos(obj[3]), -np.sin(obj[3])],
-			[np.sin(obj[3]), np.cos(obj[3])]]) # rotation matrix
-	obj_pts = obj_pts - obj_cent # axis-aligned, at origin
-	obj_pts = np.dot(obj_pts, R.T) # rotate at origin
-	obj_pts = obj_pts + obj_cent # translate back
 
-	path = Path(obj_pts, codes)
-	obj_rect = patches.PathPatch(path, ec=ec, fc=fc, lw=2, fill=fill,
-						alpha=1, zorder=3)
-	AX.add_artist(obj_rect)
+	# obj = np.array([0.71679,-0.398789,0.86,2.00804,0,0.0669627,0.03,0.09,0.210207,0.0902199])
+	obj_cent = np.array([df['o_ox'][0], df['o_oy'][0]])
+
+	if (df['o_shape'][0] == 0): # rectangle
+		obj_extents = np.array([df['o_xs'][0], df['o_ys'][0]])
+		obj_pts = np.vstack([	obj_cent - (obj_extents * [1, 1]),
+								obj_cent - (obj_extents * [-1, 1]),
+								obj_cent - (obj_extents * [-1, -1]),
+								obj_cent - (obj_extents * [1, -1]),
+								obj_cent - (obj_extents * [1, 1])]) # axis-aligned
+		R = np.array([
+				[np.cos(df['o_oyaw'][0]), -np.sin(df['o_oyaw'][0])],
+				[np.sin(df['o_oyaw'][0]), np.cos(df['o_oyaw'][0])]]) # rotation matrix
+		obj_pts = obj_pts - obj_cent # axis-aligned, at origin
+		obj_pts = np.dot(obj_pts, R.T) # rotate at origin
+		obj_pts = obj_pts + obj_cent # translate back
+
+		path = Path(obj_pts, codes)
+		obj_rect = patches.PathPatch(path, ec=ec, fc=fc, lw=2, fill=fill,
+							alpha=1, zorder=3)
+
+		AX.add_artist(obj_rect)
+
+	elif (df['o_shape'][0] == 2): # circle
+		obj_rad = df['o_xs'][0]
+		obj_circ = patches.Circle(
+					obj_cent, radius=obj_rad,
+					ec=ec, fc=fc, lw=2, fill=fill,
+					alpha=1, zorder=3)
+
+		AX.add_artist(obj_circ)
 
 	push_legend = []
 	colors = {
-		-2: 'gray',
+		-2: 'darkgray',
+		-1: 'lightgray',
 		0: 'g',
 		2: 'magenta',
 		3: 'cyan',
@@ -556,6 +664,7 @@ def vis_push_data():
 	}
 	failure_modes = {
 		-2: 'sim fail',
+		-1: 'no contact',
 		0: 'success',
 		2: 'obs coll',
 		3: 'joint lim',
@@ -566,16 +675,13 @@ def vis_push_data():
 
 	AX.legend(handles=push_legend)
 
-	data = {
-				'm_dir' : [5.97057,-1.13238,-0.499256,3.50443,0.530529,1.87608,1.25147,5.69356,3.91114,0.297185,6.05162,3.03643,3.35799,1.36624,6.05406,5.86822,0.520798,0.635112,0.475216,4.14273,4.29956,6.04036,2.53342,4.97596,0.0705303],
-				'm_dist' : [0.239911,0.0639314,0.0813124,0.138217,0.212767,0.184396,0.220826,0.211332,0.232508,0.206531,0.167234,0.153184,0.206785,0.134149,0.143504,0.121415,0.28215,0.270935,0.11742,0.242368,0.141954,0.221639,0.249751,0.128959,0.29456],
-				'r' : [3,0,0,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5,5]
-			}
-	df = pd.DataFrame(data=data)
-	# df = pd.read_csv("../dat/push_data/one_obj.csv")
 	for index, row in df.iterrows():
-		push_pt = obj_cent + (row['m_dist'] * np.array([np.cos(row['m_dir']), np.sin(row['m_dir'])]))
-		AX.scatter(push_pt[0], push_pt[1], s=50, c=colors[row['r']])
+		push_pt_des = obj_cent + (row['m_dist_des'] * np.array([np.cos(row['m_dir_des']), np.sin(row['m_dir_des'])]))
+		push_pt_ach = obj_cent + (row['m_dist_ach'] * np.array([np.cos(row['m_dir_ach']), np.sin(row['m_dir_ach'])]))
+		print(push_pt_des, push_pt_ach, row['r'])
+		AX.plot([push_pt_des[0], push_pt_ach[0]], [push_pt_des[1], push_pt_ach[1]], c=colors[row['r']])
+		AX.scatter(push_pt_des[0], push_pt_des[1], s=50, c=colors[row['r']], marker='D')
+		AX.scatter(push_pt_ach[0], push_pt_ach[1], s=50, c=colors[row['r']], marker='*')
 
 	AX.set_xlim(TABLE[0] - TABLE_SIZE[0] - 0.05, TABLE[0] + TABLE_SIZE[0] + 0.05)
 	AX.set_ylim(TABLE[1] - TABLE_SIZE[1] - 0.05, TABLE[1] + TABLE_SIZE[1] + 0.05)
