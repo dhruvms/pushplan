@@ -290,6 +290,7 @@ void Robot::AddObstaclesFromSim()
 		o.CreateCollisionObjects();
 		o.CreateSMPLCollisionObject();
 		o.GenerateCollisionModels();
+		o.InitProperties();
 		obstacles.push_back(std::move(o));
 	}
 
@@ -302,6 +303,7 @@ void Robot::AddObstaclesFromSim()
 	virtual_table.CreateCollisionObjects();
 	virtual_table.CreateSMPLCollisionObject();
 	virtual_table.GenerateCollisionModels();
+	virtual_table.InitProperties();
 	obstacles.push_back(std::move(virtual_table));
 
 	ProcessObstacles(obstacles);
@@ -320,6 +322,7 @@ void Robot::CreateVirtualTable()
 	virtual_table.CreateCollisionObjects();
 	virtual_table.CreateSMPLCollisionObject();
 	virtual_table.GenerateCollisionModels();
+	virtual_table.InitProperties();
 	ProcessObstacles({ &virtual_table });
 	ProcessFCLObstacles({ &virtual_table });
 }
@@ -3519,39 +3522,7 @@ bool Robot::getStateNearPose(
 
 void Robot::displayObjectMarker(const Object& object)
 {
-	visualization_msgs::Marker marker;
-	marker.header.frame_id = "base_footprint";
-	marker.header.stamp = ros::Time();
-	marker.ns = "object";
-	marker.id = object.desc.id;
-	marker.action = visualization_msgs::Marker::ADD;
-	marker.type = object.Shape() == 0 ? visualization_msgs::Marker::CUBE : visualization_msgs::Marker::CYLINDER;
-
-	geometry_msgs::Pose pose;
-	pose.position.x = object.desc.o_x;
-	pose.position.y = object.desc.o_y;
-	pose.position.z = object.desc.o_z;
-
-	Eigen::Quaterniond q;
-	smpl::angles::from_euler_zyx(
-			object.desc.o_yaw, object.desc.o_pitch, object.desc.o_roll, q);
-
-	geometry_msgs::Quaternion orientation;
-	tf::quaternionEigenToMsg(q, orientation);
-	pose.orientation = orientation;
-
-	marker.pose = pose;
-
-	marker.scale.x = 2 * object.desc.x_size;
-	marker.scale.y = 2 * object.desc.y_size;
-	marker.scale.z = 2 * object.desc.z_size;
-	marker.scale.z /= object.Shape() == 2 ? 2.0 : 1.0;
-
-	marker.color.a = 0.5; // Don't forget to set the alpha!
-	marker.color.r = 0.86;
-	marker.color.g = 0.34;
-	marker.color.b = 0.16;
-
+	auto marker = object.GetMarker();
 	m_vis_pub.publish(marker);
 }
 

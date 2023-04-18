@@ -18,6 +18,7 @@ public:
 	DataGeneration();
 	void Reset();
 	void GetPushData();
+	void VisObject();
 
 private:
 	std::unique_ptr<Robot> m_robot;
@@ -28,6 +29,9 @@ private:
 	std::uniform_real_distribution<double> m_distD;
 
 	ros::NodeHandle m_ph, m_nh;
+	ros::Publisher m_vis_pub;
+
+	void createObject(Object &movable);
 };
 
 } // namespace clutter

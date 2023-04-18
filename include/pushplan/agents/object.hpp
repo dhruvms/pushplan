@@ -8,6 +8,8 @@
 #include <sbpl_collision_checking/shapes.h>
 #include <fcl/collision_object.h>
 #include <moveit_msgs/CollisionObject.h>
+#include <moveit_msgs/Constraints.h>
+#include <visualization_msgs/Marker.h>
 
 #include <memory>
 
@@ -43,15 +45,19 @@ struct Object
     smpl::collision::CollisionVoxelsState* voxels_state = nullptr;
 
 	int Shape() const;
-	double Height() const;
 	bool Symmetric() const;
+	bool Graspable() const;
+	double Height() const;
 	double GaussianCost(double x, double y) const;
 	bool GetSE2Push(std::vector<double>& push, double dir, LatticeState from);
+	void GetPregrasps(std::vector<Eigen::Affine3d> &pregrasps);
+	visualization_msgs::Marker GetMarker() const;
 
 	void SetupGaussianCost();
 	bool CreateCollisionObjects();
 	bool CreateSMPLCollisionObject();
 	bool GenerateCollisionModels();
+    void InitProperties();
 
 	void SetTransform(const Eigen::Affine3d& T) { m_T = T; };
 	void updateSphereState(const smpl::collision::SphereIndex& sidx);
@@ -75,9 +81,14 @@ struct Object
 		msg = *moveit_obj;
 	};
 	fcl::CollisionObject* GetFCLObject() { return fcl_obj; };
+	void GetPoseGoal(moveit_msgs::Constraints &goal) { goal = m_goal; };
 
 private:
 	Eigen::Affine3d m_T;
+	moveit_msgs::Constraints m_goal;
+	int m_shape, m_symmetric, m_graspable;
+	double m_height;
+	std::vector<Eigen::Affine3d> m_pregrasps;
 
 	double m_log_det;
 	Eigen::Matrix2d m_U;
@@ -98,6 +109,9 @@ private:
 		const std::vector<shapes::ShapeConstPtr>& shapes,
 		const smpl::collision::Affine3dVector& transforms,
 		smpl::collision::CollisionVoxelsModel& model) const;
+
+	void updatePoseGoal();
+	void initPregrasps();
 };
 
 class ContPose;

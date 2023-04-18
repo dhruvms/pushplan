@@ -76,3 +76,5 @@ double clutter::DEG5 = 0.0872665;
 double clutter::LOG2PI = std::log(2 * M_PI);
 
 int clutter::SAMPLES;
+
+double clutter::GRIPPER_WIDTH_2 = 0.045;

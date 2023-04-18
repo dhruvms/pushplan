@@ -20,45 +20,22 @@ namespace clutter
 
 int Object::Shape() const
 {
-	if (!desc.ycb) {
-		return desc.shape;
-	}
-	else {
-		if (desc.shape == 36) {
-			return 0;
-		}
-		int s = desc.x_size == desc.y_size ? 2 : 0;
-		return s;
-	}
-}
-
-double Object::Height() const
-{
-	if (this->Shape() == 0) {
-		return desc.z_size * 2;
-	}
-	return desc.z_size;
+	return m_shape;
 }
 
 bool Object::Symmetric() const
 {
-	if (!desc.ycb)
-	{
-		if (desc.shape == 0) {
-			return std::abs(desc.x_size - desc.y_size) <= RES; // cuboids are symmetric up to resolution
-		}
-		return true; // cylinders are symmetric
-	}
-	else
-	{
-		if (desc.shape == 2 || desc.shape == 5 || desc.shape == 19 ||
-				desc.shape == 25 || desc.shape == 36) {
-			return true;
-		}
-		else {
-			return false;
-		}
-	}
+	return m_symmetric;
+}
+
+bool Object::Graspable() const
+{
+	return m_graspable;
+}
+
+double Object::Height() const
+{
+	return m_height;
 }
 
 double Object::GaussianCost(double x, double y) const
@@ -151,6 +128,58 @@ bool Object::GetSE2Push(std::vector<double>& push, double dir, LatticeState from
 	return true;
 }
 
+void Object::GetPregrasps(std::vector<Eigen::Affine3d> &pregrasps)
+{
+	pregrasps.clear();
+	if (this->Graspable())
+	{
+		if (m_pregrasps.empty()) {
+			initPregrasps();
+		}
+
+		for (const auto &pg : m_pregrasps) {
+			pregrasps.push_back(m_T * pg);
+		}
+	}
+}
+
+visualization_msgs::Marker Object::GetMarker() const
+{
+	visualization_msgs::Marker marker;
+	marker.header.frame_id = "base_footprint";
+	marker.header.stamp = ros::Time();
+	marker.ns = "object";
+	marker.id = desc.id;
+	marker.action = visualization_msgs::Marker::ADD;
+	marker.type = m_shape == 0 ? visualization_msgs::Marker::CUBE : visualization_msgs::Marker::CYLINDER;
+
+	geometry_msgs::Pose pose;
+	pose.position.x = m_T.translation().x();
+	pose.position.y = m_T.translation().y();
+	pose.position.z = m_T.translation().z();
+
+	Eigen::Quaterniond q(m_T.rotation());
+	geometry_msgs::Quaternion orientation;
+	tf::quaternionEigenToMsg(q, orientation);
+	pose.orientation = orientation;
+
+	marker.pose = pose;
+
+	marker.scale.x = 2 * desc.x_size;
+	marker.scale.y = 2 * desc.y_size;
+	marker.scale.z = 2 * desc.z_size;
+	if (m_shape == 2) {
+		marker.scale.z /=  2.0;
+	}
+
+	marker.color.a = 0.5; // Don't forget to set the alpha!
+	marker.color.r = 0.86;
+	marker.color.g = 0.34;
+	marker.color.b = 0.16;
+
+	return marker;
+}
+
 void Object::SetupGaussianCost()
 {
 	double sx2, sy2, cth, sth, cth2, sth2, cov;
@@ -230,8 +259,9 @@ bool Object::CreateCollisionObjects()
 
 		smpl::angles::from_euler_zyx(desc.o_yaw, desc.o_pitch, desc.o_roll, q);
 		tf::quaternionEigenToMsg(q, orientation);
-
 		pose.orientation = orientation;
+		tf::poseMsgToEigen(pose, m_T);
+
 		moveit_obj->primitives.push_back(prim);
 		moveit_obj->primitive_poses.push_back(pose);
 	}
@@ -276,6 +306,7 @@ bool Object::CreateCollisionObjects()
 				desc.o_yaw - desc.yaw_offset, desc.o_pitch, desc.o_roll, q);
 		tf::quaternionEigenToMsg(q, orientation);
 		pose.orientation = orientation;
+		tf::poseMsgToEigen(pose, m_T);
 
 		moveit_obj->meshes.push_back(mesh_msg);
 		moveit_obj->mesh_poses.push_back(pose);
@@ -455,6 +486,61 @@ bool Object::GenerateCollisionModels()
 	return true;
 }
 
+void Object::InitProperties()
+{
+	// shape
+	if (!desc.ycb) {
+		m_shape = desc.shape;
+	}
+	else {
+		if (desc.shape == 36) {
+			m_shape =  0;
+		}
+		else
+		{
+			int s = desc.x_size == desc.y_size ? 2 : 0;
+			m_shape =  s;
+		}
+	}
+
+	// symmetric
+	if (!desc.ycb)
+	{
+		if (desc.shape == 0) {
+			m_symmetric = std::abs(desc.x_size - desc.y_size) <= RES; // cuboids are symmetric up to resolution
+		}
+		else {
+			m_symmetric = 1; // cylinders are symmetric
+		}
+	}
+	else
+	{
+		if (desc.shape == 2 || desc.shape == 5 || desc.shape == 19 ||
+				desc.shape == 25 || desc.shape == 36) {
+			m_symmetric = 1;
+		}
+		else {
+			m_symmetric = 0;
+		}
+	}
+
+	// graspable
+	if (!desc.ycb) {
+		m_graspable = desc.x_size < GRIPPER_WIDTH_2 || desc.y_size < GRIPPER_WIDTH_2;
+	}
+	else
+	{
+		auto obj = YCB_OBJECT_DIMS.find(this->desc.shape);
+		m_graspable = obj->second[0] < GRIPPER_WIDTH_2 || obj->second[1] < GRIPPER_WIDTH_2;
+	}
+
+	// height
+	m_height = desc.z_size;
+	if (m_shape == 0) {
+		m_height *= 2;
+	}
+}
+
 // bool Object::TransformAndVoxelise(
 // 	const Eigen::Affine3d& transform,
 // 	const double& res, const Eigen::Vector3d& origin,
@@ -547,6 +633,23 @@ void Object::UpdatePose(const LatticeState& s)
 
 	fcl_obj->setTransform(fcl_pose);
 	fcl_obj->computeAABB();
+
+	// update goal region
+	updatePoseGoal();
+
+	// set transform
+	double r = 0.0, p = 0.0, y = 0.0;
+	if (s.state.size() == 6)
+	{
+		r = s.state[3];
+		p = s.state[4];
+		y = s.state[5];
+	}
+
+	m_T = Eigen::Translation3d(s.state[0], s.state[1], this->desc.o_z) *
+			Eigen::AngleAxisd(y, Eigen::Vector3d::UnitZ()) *
+			Eigen::AngleAxisd(p, Eigen::Vector3d::UnitY()) *
+			Eigen::AngleAxisd(r, Eigen::Vector3d::UnitX());
 }
 
 fcl::AABB Object::ComputeAABBTight()
@@ -740,6 +843,115 @@ bool Object::voxelizeAttachedBody(
 	}
 
 	return true;
+}
+
+void Object::updatePoseGoal()
+{
+	if (m_goal.position_constraints.empty())
+	{
+		m_goal.position_constraints.resize(1);
+		m_goal.position_constraints[0].constraint_region.primitives.resize(1);
+		m_goal.position_constraints[0].constraint_region.primitive_poses.resize(1);
+		m_goal.position_constraints[0].header.frame_id = "odom_combined";
+
+		m_goal.orientation_constraints.resize(1);
+		m_goal.orientation_constraints[0].absolute_x_axis_tolerance = 2 * M_PI;
+	}
+
+	if (!moveit_obj->primitives.empty()) // primitive object
+	{
+		m_goal.position_constraints[0].constraint_region.primitives[0] = moveit_obj->primitives[0];
+		m_goal.position_constraints[0].constraint_region.primitive_poses[0] = moveit_obj->primitive_poses[0];
+
+		m_goal.orientation_constraints[0].orientation = moveit_obj->primitive_poses[0].orientation;
+	}
+	else // YCB object
+	{
+		auto obj = YCB_OBJECT_DIMS.find(this->desc.shape);
+		m_goal.position_constraints[0].constraint_region.primitives[0].dimensions.resize(3, 0.0);
+		if (this->Shape() == 0)
+		{
+			m_goal.position_constraints[0].constraint_region.primitives[0].type = shape_msgs::SolidPrimitive::BOX;
+			m_goal.position_constraints[0].constraint_region.primitives[0].dimensions[0] = 2 * obj->second[0];
+			m_goal.position_constraints[0].constraint_region.primitives[0].dimensions[1] = 2 * obj->second[1];
+			m_goal.position_constraints[0].constraint_region.primitives[0].dimensions[2] = 2 * obj->second[2];
+		}
+		else
+		{
+			m_goal.position_constraints[0].constraint_region.primitives[0].type = shape_msgs::SolidPrimitive::CYLINDER;
+			m_goal.position_constraints[0].constraint_region.primitives[0].dimensions[0] = 2 * obj->second[2];
+			m_goal.position_constraints[0].constraint_region.primitives[0].dimensions[1] = obj->second[0];
+		}
+
+		m_goal.position_constraints[0].constraint_region.primitive_poses[0] = moveit_obj->mesh_poses[0];
+		m_goal.orientation_constraints[0].orientation = moveit_obj->mesh_poses[0].orientation;
+	}
+}
+
+void Object::initPregrasps()
+{
+	if (this->Graspable())
+	{
+		double half_xs, half_ys;
+		if (!this->desc.ycb)
+		{
+			half_xs = this->desc.x_size;
+			half_ys = this->desc.y_size;
+		}
+		else
+		{
+			auto obj = YCB_OBJECT_DIMS.find(this->desc.shape);
+			half_xs = obj->second[0];
+			half_ys = obj->second[1];
+		}
+
+		if (m_shape == 0)
+		{
+			std::vector<std::pair<int, int> > dirs = { {-1, 0}, {1, 0}, {0, -1}, {0, 1}};
+			for (const auto &d : dirs)
+			{
+				double x = 0, y = 0, yaw = 0;
+				bool add = false;
+				if (d.first != 0 && half_ys < GRIPPER_WIDTH_2)
+				{
+					x += d.first * (half_xs + 0.025);
+					yaw -= M_PI * (d.first > 0);
+					add = true;
+				}
+				else if (d.second != 0 && half_xs < GRIPPER_WIDTH_2)
+				{
+					y += d.second * (half_ys + 0.025);
+					yaw += M_PI_2 * d.second * -1;
+					add = true;
+				}
+
+				if (add)
+				{
+					Eigen::Affine3d pose = Eigen::Translation3d(x, y, -(this->desc.z_size)/2.0) *
+											Eigen::AngleAxisd(yaw, Eigen::Vector3d::UnitZ()) *
+											Eigen::AngleAxisd(0.0, Eigen::Vector3d::UnitY()) *
+											Eigen::AngleAxisd(0.0, Eigen::Vector3d::UnitX());
+					m_pregrasps.push_back(std::move(pose));
+				}
+			}
+		}
+		else
+		{
+			double r = 0.025 + half_xs;
+			for (int i = 0; i < 8; ++i)
+			{
+				double yaw = 0.0 + i * M_PI_4;
+				double x = r * std::cos(yaw);
+				double y = r * std::sin(yaw);
+
+				Eigen::Affine3d pose = Eigen::Translation3d(x, y, -(this->desc.z_size)/4.0) *
+										Eigen::AngleAxisd(yaw + M_PI, Eigen::Vector3d::UnitZ()) *
+										Eigen::AngleAxisd(0.0, Eigen::Vector3d::UnitY()) *
+										Eigen::AngleAxisd(0.0, Eigen::Vector3d::UnitX());
+				m_pregrasps.push_back(std::move(pose));
+			}
+		}
+	}
 }
 
 constexpr double kFloatingPointTolerance = 1e-5;

@@ -577,6 +577,7 @@ void Planner::init_agents(
 		o.CreateCollisionObjects();
 		o.CreateSMPLCollisionObject();
 		o.GenerateCollisionModels();
+		o.InitProperties();
 
 		obstacles.push_back(o);
 	}
@@ -621,6 +622,7 @@ void Planner::init_agents(
 		o.CreateCollisionObjects();
 		o.CreateSMPLCollisionObject();
 		o.GenerateCollisionModels();
+		o.InitProperties();
 
 		std::shared_ptr<Agent> movable(new Agent(o));
 		m_agents.push_back(std::move(movable));
@@ -685,6 +687,7 @@ void Planner::parse_scene(std::vector<Object>& obstacles)
 					o.CreateCollisionObjects();
 					o.CreateSMPLCollisionObject();
 					o.GenerateCollisionModels();
+					o.InitProperties();
 
 					if (o.desc.movable)
 					{

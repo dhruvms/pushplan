@@ -1,6 +1,8 @@
 #include <pushplan/utils/data_gen.hpp>
 #include <pushplan/utils/helpers.hpp>
 
+#include <eigen_conversions/eigen_msg.h>
+
 #include <string>
 
 namespace clutter
@@ -37,51 +39,13 @@ void DataGeneration::Reset()
 	m_robot->AddObstaclesFromSim();
 
 	setupSim(m_sim.get(), m_robot->GetStartState()->joint_state, -1);
+	m_vis_pub = m_nh.advertise<visualization_msgs::Marker>( "/visualization_marker", 10);
 }
 
 void DataGeneration::GetPushData()
 {
-	auto mov_objs = m_sim->GetMovableObjs();
-	auto mov_obj_ids = m_sim->GetMovableObjIDs();
 	Object movable;
-	movable.desc.id = mov_obj_ids->front().first;
-	movable.desc.shape = mov_obj_ids->front().second;
-	movable.desc.type = 1; // movable
-	movable.desc.o_x = mov_objs->front().at(0);
-	movable.desc.o_y = mov_objs->front().at(1);
-	movable.desc.o_z = mov_objs->front().at(2);
-	movable.desc.o_roll = mov_objs->front().at(3);
-	movable.desc.o_pitch = mov_objs->front().at(4);
-	movable.desc.o_yaw = mov_objs->front().at(5);
-	movable.desc.ycb = (bool)mov_objs->front().back();
-
-	if (movable.desc.ycb)
-	{
-		auto itr = YCB_OBJECT_DIMS.find(mov_obj_ids->front().second);
-		if (itr != YCB_OBJECT_DIMS.end())
-		{
-			movable.desc.x_size = itr->second.at(0);
-			movable.desc.y_size = itr->second.at(1);
-			movable.desc.z_size = itr->second.at(2);
-			movable.desc.o_yaw += itr->second.at(3);
-		}
-		movable.desc.mass = -1;
-		movable.desc.mu = mov_objs->front().at(6);
-	}
-	else
-	{
-		movable.desc.x_size = mov_objs->front().at(6);
-		movable.desc.y_size = mov_objs->front().at(7);
-		movable.desc.z_size = mov_objs->front().at(8);
-		movable.desc.mass = mov_objs->front().at(9);
-		movable.desc.mu = mov_objs->front().at(10);
-	}
-	movable.desc.movable = true;
-	movable.desc.locked = false;
-
-	movable.CreateCollisionObjects();
-	movable.CreateSMPLCollisionObject();
-	movable.GenerateCollisionModels();
+	createObject(movable);
 
 	std::string filename(__FILE__);
 	auto found = filename.find_last_of("/\\");
@@ -156,6 +120,100 @@ void DataGeneration::GetPushData()
 				<< result << '\n';
 	}
 	DATA.close();
+}
+
+void DataGeneration::VisObject()
+{
+	Object movable;
+	createObject(movable);
+	auto marker = movable.GetMarker();
+	m_vis_pub.publish(marker);
+
+	std::vector<Eigen::Affine3d> pregrasps;
+	movable.GetPregrasps(pregrasps);
+	if (!pregrasps.empty())
+	{
+		for (int i = 0; i < pregrasps.size(); ++i)
+		{
+			visualization_msgs::Marker marker;
+			marker.header.frame_id = "base_footprint";
+			marker.header.stamp = ros::Time();
+			marker.ns = "object_pregrasp_poses";
+			marker.id = i;
+			marker.action = visualization_msgs::Marker::ADD;
+			marker.type = visualization_msgs::Marker::ARROW;
+
+			geometry_msgs::Pose pose;
+			tf::poseEigenToMsg(pregrasps[i], pose);
+			marker.pose = pose;
+
+			marker.scale.x = 0.1;
+			marker.scale.y = 0.015;
+			marker.scale.z = 0.015;
+
+			marker.color.a = 0.7; // Don't forget to set the alpha!
+			marker.color.r = 0.0;
+			marker.color.g = 0.7;
+			marker.color.b = 0.6;
+
+			m_vis_pub.publish(marker);
+
+			// marker.id = i + pregrasps.size();
+			// marker.type = visualization_msgs::Marker::SPHERE;
+
+			// marker.scale.x = 2.0 * 0.07;
+			// marker.scale.y = 2.0 * 0.07;
+			// marker.scale.z = 2.0 * 0.1;
+
+			// m_vis_pub.publish(marker);
+		}
+	}
+	SMPL_INFO("Done visualising object and pregrasps!");
+}
+
+void DataGeneration::createObject(Object &movable)
+{
+	auto mov_objs = m_sim->GetMovableObjs();
+	auto mov_obj_ids = m_sim->GetMovableObjIDs();
+	movable.desc.id = mov_obj_ids->front().first;
+	movable.desc.shape = mov_obj_ids->front().second;
+	movable.desc.type = 1; // movable
+	movable.desc.o_x = mov_objs->front().at(0);
+	movable.desc.o_y = mov_objs->front().at(1);
+	movable.desc.o_z = mov_objs->front().at(2);
+	movable.desc.o_roll = mov_objs->front().at(3);
+	movable.desc.o_pitch = mov_objs->front().at(4);
+	movable.desc.o_yaw = mov_objs->front().at(5);
+	movable.desc.ycb = (bool)mov_objs->front().back();
+
+	if (movable.desc.ycb)
+	{
+		auto itr = YCB_OBJECT_DIMS.find(mov_obj_ids->front().second);
+		if (itr != YCB_OBJECT_DIMS.end())
+		{
+			movable.desc.x_size = itr->second.at(0);
+			movable.desc.y_size = itr->second.at(1);
+			movable.desc.z_size = itr->second.at(2);
+			movable.desc.o_yaw += itr->second.at(3);
+		}
+		movable.desc.mass = -1;
+		movable.desc.mu = mov_objs->front().at(6);
+	}
+	else
+	{
+		movable.desc.x_size = mov_objs->front().at(6);
+		movable.desc.y_size = mov_objs->front().at(7);
+		movable.desc.z_size = mov_objs->front().at(8);
+		movable.desc.mass = mov_objs->front().at(9);
+		movable.desc.mu = mov_objs->front().at(10);
+	}
+	movable.desc.movable = true;
+	movable.desc.locked = false;
+
+	movable.CreateCollisionObjects();
+	movable.CreateSMPLCollisionObject();
+	movable.GenerateCollisionModels();
+	movable.InitProperties();
 }
 
 } // namespace clutter

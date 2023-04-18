@@ -75,6 +75,8 @@ extern double LOG2PI;
 
 extern int SAMPLES;
 
+extern double GRIPPER_WIDTH_2;
+
 } // namespace clutter
 
 
