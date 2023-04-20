@@ -15,6 +15,8 @@ FIG, AX = plt.subplots(figsize=(13, 13))
 cid = FIG.canvas.mpl_connect('button_press_event', onclick)
 FRIDGE = True
 RES = 0.01
+TABLE = np.array([0.78, -0.5])
+TABLE_SIZE = np.array([0.3, 0.4])
 
 def ParseFile(filepath, saving=True):
 	objs = {}
@@ -299,10 +301,24 @@ def DrawScene(filepath, objs, trajs, invalids, ngr, goals, pushes, alpha=1.0):
 			if (invalid_gs.shape[0] > 0):
 				AX.scatter(invalid_gs[:, 0], invalid_gs[:, 1], c=[cmap(float(i/len(invalids)))], zorder=31, marker='D')
 
-	AX.axis('equal')
-	AX.set_xlim([0.0, 1.2])
-	AX.set_ylim([-1.1, 0.0])
-	plt.savefig(filepath.replace('txt', 'png'), bbox_inches='tight')
+	# AX.set_xlim([0.0, 1.2])
+	# AX.set_ylim([-1.1, 0.0])
+	AX.set_xlim(TABLE[0] - TABLE_SIZE[0] - 0.01, TABLE[0] + TABLE_SIZE[0] + 0.01)
+	AX.set_ylim(TABLE[1] - TABLE_SIZE[1] - 0.01, TABLE[1] + TABLE_SIZE[1] + 0.01)
+	AX.set_xticks(())
+	AX.set_yticks(())
+	# AX.axis('equal')
+	plt.gca().set_aspect('equal')
+
+	# newfilepath = filepath.split('/')
+	# newfilename = newfilepath[-1].split('.')
+	# newfilename[0] = str(np.random.randint(1000000000))
+	# newfilename = '.'.join(newfilename)
+	# newfilepath[-1] = newfilename
+	# newfilepath = '/'.join(newfilepath)
+	newfilepath = filepath
+	plt.savefig(newfilepath.replace('txt', 'png'), bbox_inches='tight')
+
 	# plt.savefig(filepath.replace('.txt', '.svg').replace('txt', 'png'), format='svg', dpi=1200, bbox_inches='tight')
 	# plt.savefig(filepath.replace('.txt', '.eps').replace('txt', 'png'), format='eps', bbox_inches='tight')
 	# plt.show()
