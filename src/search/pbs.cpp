@@ -45,7 +45,6 @@ bool PBS::Solve()
 		auto next = m_OPEN.back();
 		m_OPEN.pop_back();
 
-		selectConflict(next);
 		if (done(next)) {
 			m_search_time += GetTime() - start_time;
 			SMPL_WARN("YAYAYAY! We did it!");
@@ -55,6 +54,7 @@ bool PBS::Solve()
 		++m_ct_expanded;
 		next->m_expand = m_ct_expanded;
 
+		selectConflict(next);
 		growConstraintTree(next);
 
 		m_search_time += GetTime() - start_time;
