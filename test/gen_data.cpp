@@ -37,6 +37,7 @@ int main(int argc, char** argv)
 	{
 		dg.Reset();
 		dg.GetPushData();
+		// dg.VisObject();
 	}
 
 	return 0;
