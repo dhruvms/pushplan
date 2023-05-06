@@ -109,6 +109,7 @@ public:
 		double& to_move_dir, double& to_move_dist,
 		double& moved_dir, double& moved_dist,
 		Eigen::Affine3d& push_start_pose,
+		Eigen::Affine3d& push_result_pose,
 		int& push_result);
 	void IdentifyReachableMovables(
 		const std::vector<std::shared_ptr<Agent> >& agents,

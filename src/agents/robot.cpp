@@ -2159,6 +2159,7 @@ bool Robot::GenMovablePush(
 	double& to_move_dir, double& to_move_dist,
 	double& moved_dir, double& moved_dist,
 	Eigen::Affine3d& push_start_pose,
+	Eigen::Affine3d& push_result_pose,
 	int& push_result)
 {
 	// add object to be pushed to collision space
@@ -2174,6 +2175,7 @@ bool Robot::GenMovablePush(
 	to_move_dist = 0.1 + m_distD(m_rng) * 0.2;
 	moved_dir = to_move_dir;
 	moved_dist = to_move_dist;
+	push_result_pose = push_start_pose;
 
 	// plan path to push start pose
 	trajectory_msgs::JointTrajectory push_traj;
@@ -2279,6 +2281,10 @@ bool Robot::GenMovablePush(
 				dummy_o.poses[0].xyz[0] - movable.desc.o_x);
 	std::vector<double> mstart = { movable.desc.o_x, movable.desc.o_y }, mend = { dummy_o.poses[0].xyz[0], dummy_o.poses[0].xyz[1] };
 	moved_dist = EuclideanDist(mstart, mend);
+	push_result_pose = Eigen::Translation3d(dummy_o.poses[0].xyz[0], dummy_o.poses[0].xyz[1], dummy_o.poses[0].xyz[2]) *
+						Eigen::AngleAxisd(dummy_o.poses[0].rpy[2], Eigen::Vector3d::UnitZ()) *
+						Eigen::AngleAxisd(dummy_o.poses[0].rpy[1], Eigen::Vector3d::UnitY()) *
+						Eigen::AngleAxisd(dummy_o.poses[0].rpy[0], Eigen::Vector3d::UnitX());
 
 	return true;
 }

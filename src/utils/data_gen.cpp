@@ -62,9 +62,11 @@ void DataGeneration::GetPushData()
 	{
 		DATA 	<< "o_ox,o_oy,o_oz,o_oyaw,o_shape,o_xs,o_ys,o_zs,o_mass,o_mu,"
 				<< "m_dir_des,m_dist_des,"
-				<< "p_x,p_y,p_z,"
-				<< "p_r11,p_r21,p_r31,p_r12,p_r22,p_r32,p_r13,p_r23,p_r33,"
+				<< "s_x,s_y,s_z,"
+				<< "s_r11,s_r21,s_r31,s_r12,s_r22,s_r32,s_r13,s_r23,s_r33,"
 				<< "m_dir_ach,m_dist_ach,"
+				<< "e_x,e_y,e_z,"
+				<< "e_r11,e_r21,e_r31,e_r12,e_r22,e_r32,e_r13,e_r23,e_r33,"
 				<< "r\n";
 	}
 
@@ -73,13 +75,13 @@ void DataGeneration::GetPushData()
 	{
 		std::vector<double> push;
 		double to_move_dir, to_move_dist, moved_dir, moved_dist;
-		Eigen::Affine3d start_pose;
+		Eigen::Affine3d start_pose, result_pose;
 		int result = 0;
 		m_robot->GenMovablePush(
 			movable,
 			push,
 			to_move_dir, to_move_dist, moved_dir, moved_dist,
-			start_pose,
+			start_pose, result_pose,
 			result);
 		ROS_WARN("Push sample result: %d", result);
 		unreachable_count += result <= 0 ? -unreachable_count : 1;
@@ -117,6 +119,18 @@ void DataGeneration::GetPushData()
 				<< start_pose.rotation()(2, 2) << ','
 				<< moved_dir << ','
 				<< moved_dist << ','
+				<< result_pose.translation().x() << ','
+				<< result_pose.translation().y() << ','
+				<< result_pose.translation().z() << ','
+				<< result_pose.rotation()(0, 0) << ','
+				<< result_pose.rotation()(1, 0) << ','
+				<< result_pose.rotation()(2, 0) << ','
+				<< result_pose.rotation()(0, 1) << ','
+				<< result_pose.rotation()(1, 1) << ','
+				<< result_pose.rotation()(2, 1) << ','
+				<< result_pose.rotation()(0, 2) << ','
+				<< result_pose.rotation()(1, 2) << ','
+				<< result_pose.rotation()(2, 2) << ','
 				<< result << '\n';
 	}
 	DATA.close();
