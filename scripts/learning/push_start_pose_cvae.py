@@ -31,6 +31,20 @@ def process_data():
 	data = data.drop('m_dir_des', axis=1)
 	data = data.drop('m_dist_des', axis=1)
 
+	# do not care about final object pose to predict ee start pose
+	data = data.drop('e_x', axis=1)
+	data = data.drop('e_y', axis=1)
+	data = data.drop('e_z', axis=1)
+	data = data.drop('e_r11', axis=1)
+	data = data.drop('e_r21', axis=1)
+	data = data.drop('e_r31', axis=1)
+	data = data.drop('e_r12', axis=1)
+	data = data.drop('e_r22', axis=1)
+	data = data.drop('e_r32', axis=1)
+	data = data.drop('e_r13', axis=1)
+	data = data.drop('e_r23', axis=1)
+	data = data.drop('e_r33', axis=1)
+
 	# center object coordinates at origin
 	data.loc[:, 'o_ox'] -= TABLE[0]
 	data.loc[:, 'o_oy'] -= TABLE[1]
@@ -46,23 +60,20 @@ def process_data():
 	data.loc[:, 's_y'] -= TABLE[1]
 	data.loc[:, 's_z'] -= TABLE[2] + TABLE_SIZE[2]
 
-	# center push end pose coordinates at origin
-	data.loc[:, 'e_x'] -= TABLE[0]
-	data.loc[:, 'e_y'] -= TABLE[1]
-	data.loc[:, 'e_z'] -= TABLE[2] + TABLE_SIZE[2]
-
 	# # predicting first two columns of rotation matrix, so we drop the third
-	# data = data.drop('e_r13', axis=1)
-	# data = data.drop('e_r23', axis=1)
-	# data = data.drop('e_r33', axis=1)
+	# data = data.drop('s_r13', axis=1)
+	# data = data.drop('s_r23', axis=1)
+	# data = data.drop('s_r33', axis=1)
 
 	# normalise push direction angle
 	sin = np.sin(data.loc[:, 'm_dir_ach'])
 	cos = np.cos(data.loc[:, 'm_dir_ach'])
 	data.loc[:, 'm_dir_ach'] = np.arctan2(sin, cos)
-	# # try to predict without any push parameters
-	# data = data.drop('m_dir_ach', axis=1)
-	# data = data.drop('m_dist_ach', axis=1)
+
+	# reorder columns for easy train/test split
+	cols = data.columns.tolist()
+	cols = cols[:10] + cols[-2:] + cols[10:-2]
+	data = data[cols]
 
 	return data
 
@@ -181,8 +192,8 @@ if __name__ == '__main__':
 	data = process_data()
 	C = data.iloc[:, :-12]
 	X = data.iloc[:, -12:]
-	# Input columns - ['o_ox', 'o_oy', 'o_oz', 'o_oyaw', 'o_shape', 'o_xs', 'o_ys', 'o_zs', 'o_mass', 'o_mu', 's_x', 's_y', 's_z', 's_r11', 's_r21', 's_r31', 's_r12', 's_r22', 's_r32', 's_r13', 's_r23', 's_r33', 'm_dir_ach', 'm_dist_ach']
-	# Predicted columns - ['e_x', 'e_y', 'e_z', 'e_r11', 'e_r21', 'e_r31', 'e_r12', 'e_r22', 'e_r32', {'e_r13', 'e_r23', 'e_r33'}]
+	# Input columns - ['o_ox', 'o_oy', 'o_oz', 'o_oyaw', 'o_shape', 'o_xs', 'o_ys', 'o_zs', 'o_mass', 'o_mu', 'm_dir_ach', 'm_dist_ach']
+	# Predicted columns - ['s_x', 's_y', 's_z', 's_r11', 's_r21', 's_r31', 's_r12', 's_r22', 's_r32', {'s_r13', 's_r23', 's_r33'}]
 
 	# Convert to 2D PyTorch tensors
 	C = torch.tensor(C.values, dtype=torch.float32).to(DEVICE)
@@ -219,7 +230,7 @@ if __name__ == '__main__':
 			model1.eval()
 
 			test_plots = 3
-			pred_samples = 10
+			pred_samples = 100
 			with torch.no_grad():
 				plot_count = 1
 				axes = []
@@ -230,7 +241,6 @@ if __name__ == '__main__':
 					ctest_torch = torch.tensor(ctest).to(DEVICE)
 					ztest_torch = torch.randn(pred_samples, latent_dims[L]).to(DEVICE)
 
-					xtest = X_test[pidx, :].cpu().numpy()
 					xpred = model1.decode(ztest_torch, ctest_torch)
 					xpred_rot = model1.get_rotation_matrix(xpred[:, -6:])
 					xpred = xpred[:, :3].cpu().numpy()
@@ -242,31 +252,24 @@ if __name__ == '__main__':
 
 					draw_base_rect(ax)
 					draw_object(ax, ctest, alpha=1, zorder=2)
+					push_to = ctest[0, :2] + (ctest[0, -1] * np.array([np.cos(ctest[0, -2]), np.sin(ctest[0, -2])]))
+					ax.plot([ctest[0, 0], push_to[0]], [ctest[0, 1], push_to[1]], c='k', lw=2)
+					ax.scatter(ctest[0, 0], ctest[0, 1], s=50, c='g', marker='*', zorder=2)
+					ax.scatter(push_to[0], push_to[1], s=50, c='r', marker='*', zorder=2)
 
-					push_start = ctest[0, 10:12]
-					push_params = ctest[0, -2:]
-					push_end = push_start + np.array([np.cos(push_params[0]), np.sin(push_params[0])]) * push_params[1]
-					ax.plot([push_start[0], push_end[0]], [push_start[1], push_end[1]], c='k', lw=2)
-					ax.scatter(push_start[0], push_start[1], s=50, c='g', marker='*', zorder=2)
-					ax.scatter(push_end[0], push_end[1], s=50, c='r', marker='*', zorder=2)
-
-					onew = copy.deepcopy(ctest)
-					onew[0, 0] = xtest[0]
-					onew[0, 1] = xtest[1]
-					onew[0, 2] = xtest[2]
-					R = make_rotation_matrix(xtest[3:])
-					oyaw = get_yaw_from_R(R)
-					onew[0, 3] = oyaw
-					draw_object(ax, onew, alpha=1, zorder=2, colour='cyan')
-
+					asize = 0.08
 					for i in range(xpred.shape[0]):
-						obj = copy.deepcopy(ctest)
-						obj[0, 0] = xpred[i, 0]
-						obj[0, 1] = xpred[i, 1]
-						obj[0, 2] = xpred[i, 2]
-						oyaw = get_yaw_from_R(xpred_rot[i])
-						obj[0, 3] = oyaw
-						draw_object(ax, obj, alpha=0.5, zorder=3)
+						ayaw = get_yaw_from_R(xpred_rot[i])
+						ax.arrow(xpred[i, 0], xpred[i, 1], asize * np.cos(ayaw), asize * np.sin(ayaw),
+									length_includes_head=True, head_width=0.02, head_length=0.02,
+									ec='gold', fc='gold', alpha=0.8)
+
+					xtest = X_test[pidx, :].cpu().numpy()
+					R = make_rotation_matrix(xtest[3:])
+					true_yaw = get_yaw_from_R(R)
+					ax.arrow(xtest[0], xtest[1], asize * np.cos(true_yaw), asize * np.sin(true_yaw),
+								length_includes_head=True, head_width=0.02, head_length=0.02,
+								ec='magenta', fc='magenta')
 
 					ax.set_xlim(-TABLE_SIZE[0] - 0.01, TABLE_SIZE[0] + 0.01)
 					ax.set_ylim(-TABLE_SIZE[1] - 0.01, TABLE_SIZE[1] + 0.01)
@@ -279,5 +282,5 @@ if __name__ == '__main__':
 				# plt.colorbar(cb)
 				plt.tight_layout()
 				# plt.show()
-				plt.savefig('[{}]'.format(','.join(str(x) for x in h_sizes[H])) + '-[{}]-finalpose.png'.format(latent_dims[L]), bbox_inches='tight')
+				plt.savefig('[{}]'.format(','.join(str(x) for x in h_sizes[H])) + '-[{}]-startpose.png'.format(latent_dims[L]), bbox_inches='tight')
 				[ax.cla() for ax in axes]

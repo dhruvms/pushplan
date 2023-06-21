@@ -7,9 +7,9 @@ TABLE_SIZE = np.array([0.3, 0.4, 0.02])
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 CODES = [
-        Path.MOVETO,
-        Path.LINETO,
-        Path.LINETO,
-        Path.LINETO,
-        Path.CLOSEPOLY,
-    ]
+		Path.MOVETO,
+		Path.LINETO,
+		Path.LINETO,
+		Path.LINETO,
+		Path.CLOSEPOLY,
+	]

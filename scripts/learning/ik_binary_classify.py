@@ -17,204 +17,214 @@ from helpers import draw_object, draw_base_rect
 from constants import *
 
 def process_data():
-    # Read data
-    data = pd.read_csv("../../dat/push_data/push_data_for_ik_success.csv")
+	# Read data
+	# data = pd.read_csv("../../dat/push_data/push_data_for_ik_success.csv")
+	data = pd.read_csv("../../dat/push_data/push_data_with_final_object_pose.csv")
 
-    # center object coordinates at origin
-    data.loc[:, 'o_ox'] -= TABLE[0]
-    data.loc[:, 'o_oy'] -= TABLE[1]
-    data.loc[:, 'o_oz'] -= TABLE[2] + TABLE_SIZE[2]
+	# do not care about final object pose to predict ee start pose
+	data = data.drop('e_x', axis=1)
+	data = data.drop('e_y', axis=1)
+	data = data.drop('e_z', axis=1)
+	data = data.drop('e_r11', axis=1)
+	data = data.drop('e_r21', axis=1)
+	data = data.drop('e_r31', axis=1)
+	data = data.drop('e_r12', axis=1)
+	data = data.drop('e_r22', axis=1)
+	data = data.drop('e_r32', axis=1)
+	data = data.drop('e_r13', axis=1)
+	data = data.drop('e_r23', axis=1)
+	data = data.drop('e_r33', axis=1)
 
-    # normalise object yaw angle
-    sin = np.sin(data.loc[:, 'o_oyaw'])
-    cos = np.cos(data.loc[:, 'o_oyaw'])
-    data.loc[:, 'o_oyaw'] = np.arctan2(sin, cos)
+	# we will use desired push columns, not achieved
+	data = data.drop('m_dir_ach', axis=1)
+	data = data.drop('m_dist_ach', axis=1)
 
-    # normalise push direction angle
-    sin = np.sin(data.loc[:, 'm_dir_des'])
-    cos = np.cos(data.loc[:, 'm_dir_des'])
-    data.loc[:, 'm_dir_des'] = np.arctan2(sin, cos)
+	# we do not need object properties
+	data = data.drop('o_ox', axis=1)
+	data = data.drop('o_oy', axis=1)
+	data = data.drop('o_oz', axis=1)
+	data = data.drop('o_oyaw', axis=1)
+	data = data.drop('o_shape', axis=1)
+	data = data.drop('o_xs', axis=1)
+	data = data.drop('o_ys', axis=1)
+	data = data.drop('o_zs', axis=1)
+	data = data.drop('o_mass', axis=1)
+	data = data.drop('o_mu', axis=1)
 
-    # make binary labels
-    data.loc[data.r > 0, 'r'] = 2 # push IK failed => temporarily class 2
-    data.loc[data.r <= 0, 'r'] = 1 # push IK succeeded => class 1
-    data.loc[data.r == 2, 'r'] = 0 # push IK failed => class 0
+	# center push start pose coordinates at origin
+	data.loc[:, 's_x'] -= TABLE[0]
+	data.loc[:, 's_y'] -= TABLE[1]
+	data.loc[:, 's_z'] -= TABLE[2] + TABLE_SIZE[2]
 
-    return data
+	# normalise push direction angle
+	sin = np.sin(data.loc[:, 'm_dir_des'])
+	cos = np.cos(data.loc[:, 'm_dir_des'])
+	data.loc[:, 'm_dir_des'] = np.arctan2(sin, cos)
+
+	# make binary labels
+	data.loc[data.r > 0, 'r'] = 2 # push IK failed => temporarily class 2
+	data.loc[data.r <= 0, 'r'] = 1 # push IK succeeded => class 1
+	data.loc[data.r == 2, 'r'] = 0 # push IK failed => class 0
+
+	# reorder columns for easy train/test split
+	cols = data.columns.tolist()
+	cols = cols[2:-1] + cols[:2] + cols[-1:]
+	data = data[cols]
+	return data
 
 # Helper function to train one model
 def model_train(model, X_train, y_train, X_val, y_val):
-    model = model.to(DEVICE)
-    # loss function and optimizer
-    loss_fn = nn.BCELoss()  # binary cross entropy
-    optimizer = optim.Adam(model.parameters(), lr=0.0001)
+	model = model.to(DEVICE)
+	# loss function and optimizer
+	loss_fn = nn.BCELoss()  # binary cross entropy
+	optimizer = optim.Adam(model.parameters(), lr=0.0001)
 
-    n_epochs = 100   # number of epochs to run
-    batch_size = 128  # size of each batch
-    batch_start = torch.arange(0, len(X_train), batch_size)
+	N = X_train.shape[0]
+	n_epochs = 250   # number of epochs to run
+	batch_size = 1<<(int(np.sqrt(N))-1).bit_length()  # size of each batch
+	batch_start = torch.arange(0, len(X_train), batch_size)
 
-    # Hold the best model
-    best_acc = -np.inf   # init to negative infinity
-    best_weights = None
+	# Hold the best model
+	best_acc = -np.inf   # init to negative infinity
+	best_weights = None
+	best_acc_update_epoch = -1
 
-    for epoch in range(n_epochs):
-        model.train()
-        with tqdm.tqdm(batch_start, unit="batch", mininterval=0, disable=True) as bar:
-            bar.set_description("Epoch {}".format(epoch))
-            for start in bar:
-                # take a batch
-                X_batch = X_train[start:start+batch_size]
-                y_batch = y_train[start:start+batch_size]
+	for epoch in range(n_epochs):
+		idxs = torch.tensor(np.random.permutation(np.arange(0, N)))
+		model.train()
+		with tqdm.tqdm(batch_start, unit="batch", mininterval=0, disable=epoch % 50 != 0) as bar:
+			bar.set_description("Epoch {}".format(epoch))
+			for start in bar:
+				batch_idxs = idxs[start:start+batch_size]
+				# take a batch
+				X_batch = X_train[batch_idxs]
+				y_batch = y_train[batch_idxs]
 
-                # forward pass
-                y_pred = model(X_batch)
-                loss = loss_fn(y_pred, y_batch)
+				# forward pass
+				y_pred = model(X_batch)
+				loss = loss_fn(y_pred, y_batch)
 
-                # backward pass
-                optimizer.zero_grad()
-                loss.backward()
+				# backward pass
+				optimizer.zero_grad()
+				loss.backward()
 
-                # update weights
-                optimizer.step()
-                # print progress
+				# update weights
+				optimizer.step()
+				# print progress
 
-                acc = (y_pred.round() == y_batch).float().mean()
-                bar.set_postfix(
-                    loss=float(loss),
-                    acc=float(acc)
-                )
-        # evaluate accuracy at end of each epoch
-        model.eval()
-        y_pred = model(X_val)
-        acc = (y_pred.round() == y_val).float().mean()
-        acc = float(acc)
-        if acc > best_acc:
-            best_acc = acc
-            best_weights = copy.deepcopy(model.state_dict())
+				acc = (y_pred.round() == y_batch).float().mean()
+				bar.set_postfix(
+					loss=float(loss),
+					acc=float(acc)
+				)
+		# evaluate accuracy at end of each epoch
+		model.eval()
+		y_pred = model(X_val)
+		acc = (y_pred.round() == y_val).float().mean()
+		acc = float(acc)
+		if acc > best_acc:
+			# print('\tAccuracy improved at epoch {}'.format(epoch))
+			best_acc = acc
+			best_weights = copy.deepcopy(model.state_dict())
+			best_acc_update_epoch = epoch
+		elif ((best_acc_update_epoch >= 0) and epoch > best_acc_update_epoch + n_epochs//10):
+			print('Training stopped at epoch {}. Last acc update was at epoch {}.'.format(epoch, best_acc_update_epoch))
+			break
 
-    # restore model and return best accuracy
-    model.load_state_dict(best_weights)
-    return best_acc
+	# restore model and return best accuracy
+	model.load_state_dict(best_weights)
+	return best_acc
+
+def get_yaw_from_R(R):
+	return np.arctan2(R[1,0], R[0,0])
+
+def make_rotation_matrix(rotvec):
+	return np.reshape(rotvec, (3, 3)).transpose()
 
 if __name__ == '__main__':
-    # get training data
-    data = process_data()
-    X = data.iloc[:, :-1]
-    y = data.iloc[:, -1]
-    # Convert to 2D PyTorch tensors
-    X = torch.tensor(X.values, dtype=torch.float32).to(DEVICE)
-    y = torch.tensor(y, dtype=torch.float32).reshape(-1, 1).to(DEVICE)
-    # train-test split: Hold out the test set for final model evaluation
-    X_train, X_test, y_train, y_test = train_test_split(X, y, train_size=0.75, shuffle=True)
+	# get training data
+	data = process_data()
+	X = data.iloc[:, :-1]
+	y = data.iloc[:, -1]
+	# Input columns - ['s_x', 's_y', 's_z', 's_r11', 's_r21', 's_r31', 's_r12', 's_r22', 's_r32', 's_r13', 's_r23', 's_r33', 'm_dir_des', 'm_dist_des']
+	# Predicted columns = ['r']
 
-    # network params
-    in_dim = X.shape[1]
-    out_dim = 1
-    layers = 4
-    h_sizes = [32] * (layers-1)
-    activation = 'relu'
+	# Convert to 2D PyTorch tensors
+	X = torch.tensor(X.values, dtype=torch.float32).to(DEVICE)
+	y = torch.tensor(y, dtype=torch.float32).reshape(-1, 1).to(DEVICE)
+	# train-test split: Hold out the test set for final model evaluation
+	X_train, X_test, y_train, y_test = train_test_split(X, y, train_size=0.75, shuffle=True)
 
-    model1 = BCNet()
-    model1.initialise(in_dim, out_dim, activation=activation, layers=layers, h_sizes=h_sizes)
-    acc = model_train(model1, X_train, y_train, X_test, y_test)
-    # print(model1)
-    print("Final model1 accuracy (4x32 deep, relu): {:.2f}%", acc*100)
+	# network params
+	in_dim = X.shape[1]
+	out_dim = 1
+	# layers = 4
+	h_sizes = [
+				[32, 32, 32],
+				[256, 256, 256],
+				[32, 256, 32],
+				[128, 64, 32],
+				[64, 32, 64]
+			]
+	activation = 'relu'
 
-    # network params
-    layers = 2
-    h_sizes = [256] * (layers-1)
+	figure = plt.figure(figsize=(10,10))
+	for H in range(len(h_sizes)):
+		print("Train model: [{}]".format(', '.join(str(x) for x in h_sizes[H])))
 
-    model2 = BCNet()
-    model2.initialise(in_dim, out_dim, activation=activation, layers=layers, h_sizes=h_sizes)
-    acc = model_train(model2, X_train, y_train, X_test, y_test)
-    # print(model2)
-    print("Final model2 accuracy (2x256 wide, relu): {:.2f}%", acc*100)
+		layers = len(h_sizes[H]) + 1
+		model1 = BCNet()
+		model1.initialise(in_dim, out_dim, activation=activation, layers=layers, h_sizes=h_sizes[H])
+		acc = model_train(model1, X_train, y_train, X_test, y_test)
+		# print(model1)
+		print("Final model1 accuracy (4x32 deep, relu): {:.2f}%", acc*100)
 
-    # network params
-    layers = 4
-    h_sizes = [256] * (layers-1)
+		model1.eval()
 
-    model3 = BCNet()
-    model3.initialise(in_dim, out_dim, activation=activation, layers=layers, h_sizes=h_sizes)
-    acc = model_train(model3, X_train, y_train, X_test, y_test)
-    # print(model3)
-    print("Final model3 accuracy (4x256 deep+wide, relu): {:.2f}%", acc*100)
+		h = 0.01
+		xx, yy = np.meshgrid(np.arange(-TABLE_SIZE[0], TABLE_SIZE[0], h),
+							 np.arange(-TABLE_SIZE[1], TABLE_SIZE[1], h))
+		push_to_xy = np.c_[xx.ravel(), yy.ravel()]
 
-    model1.eval()
-    model2.eval()
-    model3.eval()
+		test_plots = 3
+		with torch.no_grad():
+			plot_count = 1
+			axes = []
+			for t in range(test_plots * test_plots):
+				pidx = np.random.randint(X_test.shape[0])
+				test_pose = X_test[pidx, :-2].cpu().numpy()[None, :]
+				in_pts = np.repeat(test_pose, push_to_xy.shape[0], axis=0)
 
-    test_plots = 5
-    with torch.no_grad():
-        # # Test out inference with 5 samples
-        # for i in range(5):
-        #     y_pred = model(X_test[i:i+1])
-        #     print("{} -> {} (expected {})".format(X_test[i].cpu().numpy(), y_pred[0].cpu().numpy(), y_test[i].cpu().numpy()))
+				dirs = np.arctan2(push_to_xy[:, 1] - in_pts[:, 1], push_to_xy[:, 0] - in_pts[:, 0])
+				dists = np.linalg.norm(in_pts[:, :2] - push_to_xy, axis=1)
 
-        # # Plot the ROC curve
-        # y_pred = model(X_test)
-        # fpr, tpr, thresholds = roc_curve(y_test.cpu(), y_pred.cpu())
-        # plt.plot(fpr, tpr) # ROC curve = TPR vs FPR
-        # plt.title("Receiver Operating Characteristics")
-        # plt.xlabel("False Positive Rate")
-        # plt.ylabel("True Positive Rate")
-        # plt.show()
+				in_pts = np.hstack([in_pts, dirs[:, None], dists[:, None]])
+				in_pts = torch.tensor(in_pts, dtype=torch.float32).to(DEVICE)
 
-        h = 0.01
-        xx, yy = np.meshgrid(np.arange(-TABLE_SIZE[0], TABLE_SIZE[0], h),
-                             np.arange(-TABLE_SIZE[1], TABLE_SIZE[1], h))
-        push_to_xy = np.c_[xx.ravel(), yy.ravel()]
+				preds = model1(in_pts)
+				preds = preds.cpu().numpy()
+				preds = preds.reshape(xx.shape)
 
-        figure = plt.figure(figsize=(15,15))
-        plot_count = 1
-        for t in range(test_plots):
-            pidx = np.random.randint(X_test.shape[0])
-            ptest = X_test[pidx, :-2].cpu().numpy()[None, :]
-            in_pts = np.repeat(ptest, push_to_xy.shape[0], axis=0)
+				ax = plt.subplot(test_plots + 1, test_plots, plot_count)
+				axes.append(ax)
+				plot_count += 1
 
-            dirs = np.arctan2(push_to_xy[:, 1] - in_pts[:, 1], push_to_xy[:, 0] - in_pts[:, 0])
-            dists = np.linalg.norm(in_pts[:, :2] - push_to_xy, axis=1)
+				draw_base_rect(ax)
 
-            in_pts = np.hstack([in_pts, dirs[:, None], dists[:, None]])
-            in_pts = torch.tensor(in_pts, dtype=torch.float32).to(DEVICE)
+				asize = 0.08
+				ayaw = get_yaw_from_R(make_rotation_matrix(test_pose[0, 3:]))
+				ax.arrow(test_pose[0, 0], test_pose[0, 1], asize * np.cos(ayaw), asize * np.sin(ayaw),
+							length_includes_head=True, head_width=0.02, head_length=0.02,
+							ec='gold', fc='gold', alpha=0.8)
+				cb = ax.contourf(xx, yy, preds, cmap=plt.cm.Greens, alpha=.8)
 
-            preds1 = model1(in_pts)
-            preds2 = model2(in_pts)
-            preds3 = model3(in_pts)
-            preds1 = preds1.cpu().numpy()
-            preds1 = preds1.reshape(xx.shape)
-            preds2 = preds2.cpu().numpy()
-            preds2 = preds2.reshape(xx.shape)
-            preds3 = preds3.cpu().numpy()
-            preds3 = preds3.reshape(xx.shape)
-
-            ax1 = plt.subplot(test_plots, 3, plot_count)
-            ax2 = plt.subplot(test_plots, 3, plot_count+1)
-            ax3 = plt.subplot(test_plots, 3, plot_count+2)
-            plot_count += 3
-
-            draw_base_rect(ax1)
-            draw_base_rect(ax2)
-            draw_base_rect(ax3)
-
-            draw_object(ax1, ptest)
-            draw_object(ax2, ptest)
-            draw_object(ax3, ptest)
-
-            cb1 = ax1.contourf(xx, yy, preds1, cmap=plt.cm.Greens, alpha=.8)
-            cb2 = ax2.contourf(xx, yy, preds2, cmap=plt.cm.Greens, alpha=.8)
-            cb3 = ax3.contourf(xx, yy, preds3, cmap=plt.cm.Greens, alpha=.8)
-            ax1.set_xticks(())
-            ax1.set_yticks(())
-            ax1.set_aspect('equal')
-            ax2.set_xticks(())
-            ax2.set_yticks(())
-            ax2.set_aspect('equal')
-            ax3.set_xticks(())
-            ax3.set_yticks(())
-            ax3.set_aspect('equal')
-        # ax.axis('equal')
-        # plt.gca().set_aspect('equal')
-        # plt.colorbar(cb)
-        plt.tight_layout()
-        plt.show()
+				ax.set_xticks(())
+				ax.set_yticks(())
+				ax.set_aspect('equal')
+			# ax.axis('equal')
+			# plt.gca().set_aspect('equal')
+			# plt.colorbar(cb)
+			plt.tight_layout()
+			# plt.show()
+			plt.savefig('[{}]'.format(','.join(str(x) for x in h_sizes[H])) + '-ikmap.png', bbox_inches='tight')
+			[ax.cla() for ax in axes]
