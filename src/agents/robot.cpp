@@ -3429,9 +3429,9 @@ void Robot::createPoseGoalConstraint(
 
 	// set tolerances
 	m_goal.position_constraints[0].constraint_region.primitives[0].dimensions.resize(3, 0.05);
-	m_goal.orientation_constraints[0].absolute_x_axis_tolerance = M_PI/3.0;
-	m_goal.orientation_constraints[0].absolute_y_axis_tolerance = M_PI/3.0; // these do not make a difference inside smpl
-	m_goal.orientation_constraints[0].absolute_z_axis_tolerance = M_PI/3.0; // these do not make a difference inside smpl
+	m_goal.orientation_constraints[0].absolute_x_axis_tolerance = 2.0 * M_PI;
+	m_goal.orientation_constraints[0].absolute_y_axis_tolerance = 2.0 * M_PI; // these do not make a difference inside smpl
+	m_goal.orientation_constraints[0].absolute_z_axis_tolerance = 2.0 * M_PI; // these do not make a difference inside smpl
 
 	req.goal_constraints.clear();
 	req.goal_constraints.resize(1);
