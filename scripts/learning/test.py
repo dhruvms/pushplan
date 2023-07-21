@@ -51,11 +51,6 @@ def process_data():
 	cos = np.cos(data.loc[:, 'm_dir_ach'])
 	data.loc[:, 'm_dir_ach'] = np.arctan2(sin, cos)
 
-	# make binary labels
-	data.loc[data.r > 0, 'r'] = 2 # push IK failed => temporarily class 2
-	data.loc[data.r <= 0, 'r'] = 1 # push IK succeeded => class 1
-	data.loc[data.r == 2, 'r'] = 0 # push IK failed => class 0
-
 	# reorder columns
 	# 0 : [o_ox, o_oy, o_oz, o_oyaw, o_shape, o_xs, o_ys, o_zs, o_mass, o_mu] : 9
 	# 10 : [s_x, s_y, s_z, s_r11, s_r21, s_r31, s_r12, s_r22, s_r32, s_r13, s_r23, s_r33] : 21
@@ -280,8 +275,14 @@ if __name__ == '__main__':
 	all_data = process_data()
 
 	# get training data - IK
-	X_ik = copy.deepcopy(all_data.iloc[:, 10:24])
+	X_ik = copy.deepcopy(all_data.iloc[:, :24])
+	X_ik = X_ik.drop('o_mass', axis=1)
+	X_ik = X_ik.drop('o_mu', axis=1)
 	y_ik = copy.deepcopy(all_data.iloc[:, -1])
+	# make binary labels
+	y_ik.loc[y_ik > 0] = 2 # push IK failed => temporarily class 2
+	y_ik.loc[y_ik <= 0] = 1 # push IK succeeded => class 1
+	y_ik.loc[y_ik == 2] = 0 # push IK failed => class 0
 	# Convert to 2D PyTorch tensors
 	X_ik = torch.tensor(X_ik.values, dtype=torch.float32).to(DEVICE)
 	y_ik = torch.tensor(y_ik, dtype=torch.float32).reshape(-1, 1).to(DEVICE)
@@ -289,8 +290,8 @@ if __name__ == '__main__':
 	X_ik_train, X_ik_test, y_ik_train, y_ik_test = train_test_split(X_ik, y_ik, train_size=0.85, shuffle=True)
 
 	# get training data - final pose
-	C_final = copy.deepcopy(all_data.loc[all_data.r == 1, [all_data.columns.tolist()[i] for i in list(range(0, 22)) + list(range(24, 26))]])
-	X_final = copy.deepcopy(all_data.loc[all_data.r == 1, [all_data.columns.tolist()[i] for i in list(range(-13, -1))]])
+	C_final = copy.deepcopy(all_data.loc[all_data.r == 0, [all_data.columns.tolist()[i] for i in list(range(0, 22)) + list(range(24, 26))]])
+	X_final = copy.deepcopy(all_data.loc[all_data.r == 0, [all_data.columns.tolist()[i] for i in list(range(-13, -1))]])
 	# Convert to 2D PyTorch tensors
 	C_final = torch.tensor(C_final.values, dtype=torch.float32).to(DEVICE)
 	X_final = torch.tensor(X_final.values, dtype=torch.float32).to(DEVICE)
@@ -299,8 +300,8 @@ if __name__ == '__main__':
 	X_final_train = X_final_train[:, :-3] # drop final column of rotation matrix to be predicted
 
 	# get training data - start pose
-	C_start = copy.deepcopy(all_data.loc[all_data.r == 1, [all_data.columns.tolist()[i] for i in list(range(0, 10)) + list(range(24, 26))]])
-	X_start = copy.deepcopy(all_data.loc[all_data.r == 1, [all_data.columns.tolist()[i] for i in list(range(10, 22))]])
+	C_start = copy.deepcopy(all_data.loc[all_data.r == 0, [all_data.columns.tolist()[i] for i in list(range(0, 10)) + list(range(24, 26))]])
+	X_start = copy.deepcopy(all_data.loc[all_data.r == 0, [all_data.columns.tolist()[i] for i in list(range(10, 22))]])
 	# Convert to 2D PyTorch tensors
 	C_start = torch.tensor(C_start.values, dtype=torch.float32).to(DEVICE)
 	X_start = torch.tensor(X_start.values, dtype=torch.float32).to(DEVICE)
@@ -387,7 +388,8 @@ if __name__ == '__main__':
 				start_pose_pred_rot = np.transpose(start_pose_pred_rot, axes=[0, 2, 1]).reshape(start_pose_pred_rot.shape[0], -1)
 				start_pose_pred = np.hstack([start_pose_pred, start_pose_pred_rot])
 
-				ik_score_input = np.hstack([start_pose_pred, desired_push_stack])
+				obj_props_stack_ik = np.repeat(obj_props[None, :8], start_pose_samples, axis=0)
+				ik_score_input = np.hstack([obj_props_stack_ik, start_pose_pred, desired_push_stack])
 				ik_score_input_torch = torch.tensor(ik_score_input, dtype=torch.float32).to(DEVICE)
 				ik_scores = ik_net(ik_score_input_torch).cpu().numpy() # start_pose_samples x 1
 				# print("IK success probabilities for generated start poses:")
@@ -396,7 +398,7 @@ if __name__ == '__main__':
 				# ik_scores /= np.sum(ik_scores) # normalise probabilities to sum to 1
 
 				obj_props_stack = np.repeat(obj_props[None, :], start_pose_samples, axis=0)
-				final_pose_c = np.hstack([obj_props_stack, ik_score_input])
+				final_pose_c = np.hstack([obj_props_stack, ik_score_input[:, 8:]])
 				final_pose_c = np.repeat(final_pose_c, repeats=final_pose_samples, axis=0)
 				final_pose_c_torch = torch.tensor(final_pose_c, dtype=torch.float32).to(DEVICE)
 				final_pose_z_torch = torch.randn(start_pose_samples * final_pose_samples, latent_dim).to(DEVICE)

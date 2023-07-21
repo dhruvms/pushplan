@@ -40,16 +40,26 @@ def process_data():
 	data = data.drop('m_dist_ach', axis=1)
 
 	# we do not need object properties
-	data = data.drop('o_ox', axis=1)
-	data = data.drop('o_oy', axis=1)
-	data = data.drop('o_oz', axis=1)
-	data = data.drop('o_oyaw', axis=1)
-	data = data.drop('o_shape', axis=1)
-	data = data.drop('o_xs', axis=1)
-	data = data.drop('o_ys', axis=1)
-	data = data.drop('o_zs', axis=1)
+	# data = data.drop('o_ox', axis=1)
+	# data = data.drop('o_oy', axis=1)
+	# data = data.drop('o_oz', axis=1)
+	# data = data.drop('o_oyaw', axis=1)
+	# data = data.drop('o_shape', axis=1)
+	# data = data.drop('o_xs', axis=1)
+	# data = data.drop('o_ys', axis=1)
+	# data = data.drop('o_zs', axis=1)
 	data = data.drop('o_mass', axis=1)
 	data = data.drop('o_mu', axis=1)
+
+	# center object coordinates at origin
+	data.loc[:, 'o_ox'] -= TABLE[0]
+	data.loc[:, 'o_oy'] -= TABLE[1]
+	data.loc[:, 'o_oz'] -= TABLE[2] + TABLE_SIZE[2]
+
+	# normalise object yaw angle
+	sin = np.sin(data.loc[:, 'o_oyaw'])
+	cos = np.cos(data.loc[:, 'o_oyaw'])
+	data.loc[:, 'o_oyaw'] = np.arctan2(sin, cos)
 
 	# center push start pose coordinates at origin
 	data.loc[:, 's_x'] -= TABLE[0]
@@ -68,7 +78,8 @@ def process_data():
 
 	# reorder columns for easy train/test split
 	cols = data.columns.tolist()
-	cols = cols[2:-1] + cols[:2] + cols[-1:]
+	# cols = cols[2:-1] + cols[:2] + cols[-1:]
+	cols = cols[:8] + cols[10:-1] + cols[8:10] + cols[-1:]
 	data = data[cols]
 	return data
 
@@ -80,7 +91,7 @@ def model_train(model, X_train, y_train, X_val, y_val):
 	optimizer = optim.Adam(model.parameters(), lr=0.0001)
 
 	N = X_train.shape[0]
-	n_epochs = 250   # number of epochs to run
+	n_epochs = 1000   # number of epochs to run
 	batch_size = 1<<(int(np.sqrt(N))-1).bit_length()  # size of each batch
 	batch_start = torch.arange(0, len(X_train), batch_size)
 
@@ -195,7 +206,8 @@ if __name__ == '__main__':
 				test_pose = X_test[pidx, :-2].cpu().numpy()[None, :]
 				in_pts = np.repeat(test_pose, push_to_xy.shape[0], axis=0)
 
-				dirs = np.arctan2(push_to_xy[:, 1] - in_pts[:, 1], push_to_xy[:, 0] - in_pts[:, 0])
+				# dirs = np.arctan2(push_to_xy[:, 1] - in_pts[:, 1], push_to_xy[:, 0] - in_pts[:, 0])
+				dirs = np.arctan2(push_to_xy[:, 1] - in_pts[:, 1+8], push_to_xy[:, 0] - in_pts[:, 0+8])
 				dists = np.linalg.norm(in_pts[:, :2] - push_to_xy, axis=1)
 
 				in_pts = np.hstack([in_pts, dirs[:, None], dists[:, None]])
@@ -210,10 +222,16 @@ if __name__ == '__main__':
 				plot_count += 1
 
 				draw_base_rect(ax)
+				obj_draw = in_pts[0, :8].unsqueeze(0).cpu().numpy()
+				draw_object(ax, obj_draw)
 
 				asize = 0.08
-				ayaw = get_yaw_from_R(make_rotation_matrix(test_pose[0, 3:]))
-				ax.arrow(test_pose[0, 0], test_pose[0, 1], asize * np.cos(ayaw), asize * np.sin(ayaw),
+				# ayaw = get_yaw_from_R(make_rotation_matrix(test_pose[0, 3:]))
+				ayaw = get_yaw_from_R(make_rotation_matrix(test_pose[0, 3+8:]))
+				# ax.arrow(test_pose[0, 0], test_pose[0, 1], asize * np.cos(ayaw), asize * np.sin(ayaw),
+				# 			length_includes_head=True, head_width=0.02, head_length=0.02,
+				# 			ec='gold', fc='gold', alpha=0.8)
+				ax.arrow(test_pose[0, 0+8], test_pose[0, 1+8], asize * np.cos(ayaw), asize * np.sin(ayaw),
 							length_includes_head=True, head_width=0.02, head_length=0.02,
 							ec='gold', fc='gold', alpha=0.8)
 				cb = ax.contourf(xx, yy, preds, cmap=plt.cm.Greens, alpha=.8)
