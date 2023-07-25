@@ -404,87 +404,105 @@ if __name__ == '__main__':
 	final_pose_net.eval()
 	start_pose_net.eval()
 
-	test_obj_grid_size = 5
-	test_objs = test_obj_grid_size**2
-	start_pose_samples = 3
+	test_obj_grid_num = 2
+	test_objs = test_obj_grid_num**2
+	start_pose_samples = 1
 	final_pose_samples = 10
 	with torch.no_grad():
-		figure = plt.figure(figsize=(test_objs,test_objs))
-		axes = []
-
-		h = 0.01
-		xx, yy = np.meshgrid(np.arange(-TABLE_SIZE[0], TABLE_SIZE[0], h),
-							 np.arange(-TABLE_SIZE[1], TABLE_SIZE[1], h))
-		push_to_xy = np.c_[xx.ravel(), yy.ravel()]
-		num_test_pts = push_to_xy.shape[0]
+		figure = plt.figure(figsize=(test_obj_grid_num,test_obj_grid_num))
 		for o in range(test_objs):
 			pidx = np.random.randint(all_data.shape[0])
 			obj_props = all_data.iloc[pidx, :10].values
 			start_pose = all_data.iloc[pidx, 10:22].values
 
-			desired_dirs = np.arctan2(push_to_xy[:, 1] - obj_props[1], push_to_xy[:, 0] - obj_props[0])[:, None]
-			desired_dists = np.linalg.norm(obj_props[:2] - push_to_xy, axis=1)[:, None]
-			# desired_push_stack = np.hstack([desired_dirs, desired_dists])
+			axes = []
+			for loc in range(9):
+				dx = (loc % 3) - 1
+				dy = 1 - (loc//3)
+				desired_final = np.array([TABLE_SIZE[0] * 0.8 * dx, TABLE_SIZE[1] * 0.8 * dy])
+				desired_dir = np.arctan2(desired_final[1] - obj_props[1], desired_final[0] - obj_props[0])
+				desired_dist = np.linalg.norm(obj_props[:2] - desired_final)
+				desired_push_stack = np.repeat(np.array([desired_dir, desired_dist])[None, :], start_pose_samples, axis=0)
 
-			ax = plt.subplot(test_obj_grid_size, test_obj_grid_size, o+1)
-			axes.append(ax)
-			draw_base_rect(ax)
-			draw_object(ax, obj_props[None, :], zorder=3)
+				ax = plt.subplot(3, 3, loc+1)
+				axes.append(ax)
+				draw_base_rect(ax)
+				draw_object(ax, obj_props[None, :], zorder=3)
+				desired_obj = copy.deepcopy(obj_props)
+				desired_obj[0] = desired_final[0]
+				desired_obj[1] = desired_final[1]
+				draw_object(ax, desired_obj[None, :], colour='cyan', zorder=3)
 
-			start_pose_c = np.hstack([np.repeat(obj_props[None, :], num_test_pts, axis=0), desired_dirs, desired_dists])
-			# start_pose_c = np.repeat(start_pose_c, start_pose_samples, axis=0)
-			start_pose_c_torch = torch.tensor(start_pose_c, dtype=torch.float32).to(DEVICE)
-			start_pose_z_torch = torch.randn(num_test_pts, latent_dim).to(DEVICE)
+				start_pose_c = np.hstack([np.repeat(obj_props[None, :], start_pose_samples, axis=0), desired_push_stack])
+				# start_pose_c = np.repeat(start_pose_c, start_pose_samples, axis=0)
+				start_pose_c_torch = torch.tensor(start_pose_c, dtype=torch.float32).to(DEVICE)
+				start_pose_z_torch = torch.randn(start_pose_samples, latent_dim).to(DEVICE)
 
-			start_pose_pred = start_pose_net.decode(start_pose_z_torch, start_pose_c_torch)
-			start_pose_pred_rot = start_pose_net.get_rotation_matrix(start_pose_pred[:, -6:])
-			start_pose_pred = start_pose_pred[:, :3].cpu().numpy()
-			start_pose_pred_rot = start_pose_pred_rot.cpu().numpy()
+				start_pose_pred = start_pose_net.decode(start_pose_z_torch, start_pose_c_torch)
+				start_pose_pred_rot = start_pose_net.get_rotation_matrix(start_pose_pred[:, -6:])
+				start_pose_pred = start_pose_pred[:, :3].cpu().numpy()
+				start_pose_pred_rot = start_pose_pred_rot.cpu().numpy()
 
-			start_pose_pred_rot = np.transpose(start_pose_pred_rot, axes=[0, 2, 1]).reshape(start_pose_pred_rot.shape[0], -1)
-			start_pose_pred = np.hstack([start_pose_pred, start_pose_pred_rot])
+				# print()
+				# print("Generated samples of start poses:")
+				# for i, R in enumerate(start_pose_pred_rot):
+				# 	roll, pitch, yaw = get_euler_from_R(R, deg=True)
+				# 	print("\tx = {x:.3f}, y = {y:.3f}, z = {z:.3f}, roll = {roll:.3f}, pitch = {pitch:.3f}, yaw = {yaw:.3f}".format(
+				# 		x=start_pose_pred[i, 0], y=start_pose_pred[i, 1], z=start_pose_pred[i, 2],
+				# 		roll=roll, pitch=pitch, yaw=yaw))
 
-			obj_props_stack_ik = np.repeat(obj_props[None, :8], num_test_pts, axis=0)
-			ik_score_input = np.hstack([obj_props_stack_ik, start_pose_pred, desired_dirs, desired_dists])
-			ik_score_input_torch = torch.tensor(ik_score_input, dtype=torch.float32).to(DEVICE)
-			ik_scores = ik_net(ik_score_input_torch).cpu().numpy() # num_test_pts x 1
+				asize = 0.08
+				for i in range(start_pose_pred.shape[0]):
+					ayaw = get_yaw_from_R(start_pose_pred_rot[i])
+					ax.arrow(start_pose_pred[i, 0], start_pose_pred[i, 1], asize * np.cos(ayaw), asize * np.sin(ayaw),
+								length_includes_head=True, head_width=0.02, head_length=0.02,
+								ec='gold', fc='gold', alpha=0.8, zorder=4)
 
-			# obj_props_stack = np.repeat(obj_props[None, :], num_test_pts, axis=0)
-			# final_pose_c = np.hstack([obj_props_stack, ik_score_input[:, 8:]])
-			# final_pose_c = np.repeat(final_pose_c, repeats=final_pose_samples, axis=0)
-			# final_pose_c_torch = torch.tensor(final_pose_c, dtype=torch.float32).to(DEVICE)
-			# final_pose_z_torch = torch.randn(num_test_pts * final_pose_samples, latent_dim).to(DEVICE)
+				start_pose_pred_rot = np.transpose(start_pose_pred_rot, axes=[0, 2, 1]).reshape(start_pose_pred_rot.shape[0], -1)
+				start_pose_pred = np.hstack([start_pose_pred, start_pose_pred_rot])
+				obj_props_stack_ik = np.repeat(obj_props[None, :8], start_pose_samples, axis=0)
+				ik_score_input = np.hstack([obj_props_stack_ik, start_pose_pred, desired_push_stack])
+				ik_score_input_torch = torch.tensor(ik_score_input, dtype=torch.float32).to(DEVICE)
+				ik_scores = ik_net(ik_score_input_torch).cpu().numpy() # start_pose_samples x 1
 
-			# final_pose_mu, final_pose_logvar = final_pose_net.output_dist(final_pose_z_torch, final_pose_c_torch)
-			# final_pose_mu = final_pose_mu.cpu().numpy()
-			# final_pose_logvar = final_pose_logvar.cpu().numpy()
-			# final_pose_half_logdet = -0.5 * final_pose_logvar.sum(axis=1, keepdims=True)
-			# final_pose_var_inv = 1.0/np.exp(final_pose_logvar)
-			# logpi = -0.5 * final_pose_mu.shape[1] * np.log(2 * np.pi)
+				obj_props_stack = np.repeat(obj_props[None, :], start_pose_samples, axis=0)
+				final_pose_c = np.hstack([obj_props_stack, ik_score_input[:, 8:]])
+				final_pose_c = np.repeat(final_pose_c, repeats=final_pose_samples, axis=0)
+				final_pose_c_torch = torch.tensor(final_pose_c, dtype=torch.float32).to(DEVICE)
+				final_pose_z_torch = torch.randn(start_pose_samples * final_pose_samples, latent_dim).to(DEVICE)
 
-			# obj_yaw_stack = np.repeat(normalize_angle(obj_props[3]), num_test_pts * final_pose_samples)[:, None]
-			# final_pose_des = np.hstack([np.repeat(push_to_xy, final_pose_samples, axis=0), obj_yaw_stack])
+				final_pose_pred = final_pose_net.decode(final_pose_z_torch, final_pose_c_torch).cpu().numpy()
+				for i in range(final_pose_pred.shape[0]):
+					obj = copy.deepcopy(obj_props[None, :])
+					obj[0, 0] = final_pose_pred[i, 0]
+					obj[0, 1] = final_pose_pred[i, 1]
+					obj[0, 3] = final_pose_pred[i, 2]
+					draw_object(ax, obj, alpha=0.8 * (ik_scores[i//final_pose_samples, 0]), zorder=2, colour='magenta')
 
-			# residuals = (final_pose_des - final_pose_mu)
-			# residuals[:, 2] = shortest_angle_diff(final_pose_des[:, 2], final_pose_mu[:, 2])
-			# loglikelihood = -0.5 * residuals * final_pose_var_inv * residuals
-			# loglikelihood = loglikelihood.sum(axis=1)[:, None] + final_pose_half_logdet + logpi
-			# loglikelihood = loglikelihood.reshape(-1, final_pose_samples).sum(axis=1)[:, None]
-			# # action_scores = np.exp(loglikelihood) * ik_scores
-			action_scores = ik_scores
-			action_scores = action_scores.reshape(xx.shape)
-			cb = ax.contourf(xx, yy, action_scores, cmap=plt.cm.Greens, alpha=.8)
+				final_pose_mu, final_pose_logvar = final_pose_net.output_dist(final_pose_z_torch, final_pose_c_torch)
+				final_pose_mu = final_pose_mu.cpu().numpy()
+				final_pose_logvar = final_pose_logvar.cpu().numpy()
+				final_pose_half_logdet = -0.5 * final_pose_logvar.sum(axis=1, keepdims=True)
+				final_pose_var_inv = 1.0/np.exp(final_pose_logvar)
+				logpi = -0.5 * final_pose_mu.shape[1] * np.log(2 * np.pi)
 
-			ax.set_xlim(-TABLE_SIZE[0] - 0.01, TABLE_SIZE[0] + 0.01)
-			ax.set_ylim(-TABLE_SIZE[1] - 0.01, TABLE_SIZE[1] + 0.01)
-			ax.set_xticks(())
-			ax.set_yticks(())
-			ax.set_aspect('equal')
-			divider = make_axes_locatable(ax)
-			cax = divider.append_axes('right', size='5%', pad=0.05)
-			figure.colorbar(cb, cax=cax, orientation='vertical')
+				obj_yaw_stack = np.repeat(normalize_angle(obj_props[3]), start_pose_samples * final_pose_samples)[:, None]
+				final_pose_des = np.hstack([np.repeat(desired_final[None, :], start_pose_samples * final_pose_samples, axis=0), obj_yaw_stack])
 
-		plt.tight_layout()
-		plt.show()
-		# plt.savefig('posterior-[{}].png'.format(o+1), bbox_inches='tight')
-		[ax.cla() for ax in axes]
+				residuals = (final_pose_des - final_pose_mu)
+				residuals[:, 2] = shortest_angle_diff(final_pose_des[:, 2], final_pose_mu[:, 2])
+				loglikelihood = -0.5 * residuals * final_pose_var_inv * residuals
+				loglikelihood = loglikelihood.sum(axis=1)[:, None] + final_pose_half_logdet + logpi
+				loglikelihood = loglikelihood.reshape(-1, final_pose_samples).sum(axis=1)[:, None]
+
+				ax.set_title("IK? = " + ', '.join('{:.3f}'.format(i) for i in ik_scores[:, 0]) + " | logprob = " + ', '.join('{:.3f}'.format(l) for l in loglikelihood[:, 0]))
+				ax.set_xlim(-TABLE_SIZE[0] - 0.01, TABLE_SIZE[0] + 0.01)
+				ax.set_ylim(-TABLE_SIZE[1] - 0.01, TABLE_SIZE[1] + 0.01)
+				ax.set_xticks(())
+				ax.set_yticks(())
+				ax.set_aspect('equal')
+
+			plt.tight_layout()
+			# plt.show()
+			plt.savefig('posterior-[{}].png'.format(o+1), bbox_inches='tight')
+			[ax.cla() for ax in axes]
