@@ -39,8 +39,7 @@ def robot_ik_model():
 	P = P[P.x1 != -1]
 
 	# we do not want to use these yaw columns for training
-	P = P.drop('yaw0', axis=1)
-	P = P.drop('yaw1', axis=1)
+	P = P.drop(['yaw0', 'yaw1'], axis=1)
 
 	# scale data to be centered around (0, 0) being the shelf center
 	P.loc[:, 'x0'] -= TABLE[0]
@@ -161,18 +160,7 @@ def object_push_model():
 	P = pd.read_csv("../dat/push_data/PUSH_DATA_SIM.csv")
 
 	# we do not want to use these yaw columns for training
-	P = P.drop('p_x', axis=1)
-	P = P.drop('p_y', axis=1)
-	P = P.drop('p_z', axis=1)
-	P = P.drop('p_r11', axis=1)
-	P = P.drop('p_r21', axis=1)
-	P = P.drop('p_r31', axis=1)
-	P = P.drop('p_r12', axis=1)
-	P = P.drop('p_r22', axis=1)
-	P = P.drop('p_r32', axis=1)
-	P = P.drop('p_r13', axis=1)
-	P = P.drop('p_r23', axis=1)
-	P = P.drop('p_r33', axis=1)
+	P = P.drop(['p_x','p_y','p_z','p_r11','p_r21','p_r31','p_r12','p_r22','p_r32','p_r13','p_r23','p_r33'], axis=1)
 
 	# scale data to be centered around (0, 0) being the shelf center
 	P.loc[:, 'o_ox'] -= TABLE[0]
@@ -276,18 +264,7 @@ def read_push_db(filename, robot=False):
 	P = pd.read_csv(filename)
 
 	# # we do not want to use these push pose columns for training
-	# P = P.drop('p_x', axis=1)
-	# P = P.drop('p_y', axis=1)
-	# P = P.drop('p_z', axis=1)
-	# P = P.drop('p_r11', axis=1)
-	# P = P.drop('p_r21', axis=1)
-	# P = P.drop('p_r31', axis=1)
-	# P = P.drop('p_r12', axis=1)
-	# P = P.drop('p_r22', axis=1)
-	# P = P.drop('p_r32', axis=1)
-	# P = P.drop('p_r13', axis=1)
-	# P = P.drop('p_r23', axis=1)
-	# P = P.drop('p_r33', axis=1)
+	# P = P.drop(['p_x','p_y','p_z','p_r11','p_r21','p_r31','p_r12','p_r22','p_r32','p_r13','p_r23','p_r33'], axis=1)
 
 	# normalise angles
 	sin = np.sin(P.loc[:, 'o_oyaw'])
@@ -308,8 +285,7 @@ def read_push_db(filename, robot=False):
 	P.loc[P.o_shape == 2, 'o_shape'] = 1
 
 	# # drop some additional columns
-	# P = P.drop('o_oz', axis=1)
-	# P = P.drop('o_shape', axis=1)
+	# P = P.drop(['o_oz', 'o_shape'], axis=1)
 
 	# add some new columns
 	P['delta_x'] = P['o_ox'] + (P['m_dist_des'].values * np.cos(P['m_dir_des'].values))

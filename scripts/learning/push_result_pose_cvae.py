@@ -28,8 +28,7 @@ def process_data():
 	data = data.drop('r', axis=1)
 
 	# we will use achieved push columns, not desired
-	data = data.drop('m_dir_des', axis=1)
-	data = data.drop('m_dist_des', axis=1)
+	data = data.drop(['m_dir_des', 'm_dist_des'], axis=1)
 
 	# center object coordinates at origin
 	data.loc[:, 'o_ox'] -= TABLE[0]
@@ -52,17 +51,14 @@ def process_data():
 	data.loc[:, 'e_z'] -= TABLE[2] + TABLE_SIZE[2]
 
 	# # predicting first two columns of rotation matrix, so we drop the third
-	# data = data.drop('e_r13', axis=1)
-	# data = data.drop('e_r23', axis=1)
-	# data = data.drop('e_r33', axis=1)
+	# data = data.drop(['e_r13', 'e_r23', 'e_r33'], axis=1)
 
 	# normalise push direction angle
 	sin = np.sin(data.loc[:, 'm_dir_ach'])
 	cos = np.cos(data.loc[:, 'm_dir_ach'])
 	data.loc[:, 'm_dir_ach'] = np.arctan2(sin, cos)
 	# # try to predict without any push parameters
-	# data = data.drop('m_dir_ach', axis=1)
-	# data = data.drop('m_dist_ach', axis=1)
+	# data = data.drop(['m_dir_ach', 'm_dist_ach'], axis=1)
 
 	return data
 

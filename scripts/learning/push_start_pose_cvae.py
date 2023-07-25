@@ -28,22 +28,10 @@ def process_data():
 	data = data.drop('r', axis=1)
 
 	# we will use achieved push columns, not desired
-	data = data.drop('m_dir_des', axis=1)
-	data = data.drop('m_dist_des', axis=1)
+	data = data.drop(['m_dir_des', 'm_dist_des'], axis=1)
 
 	# do not care about final object pose to predict ee start pose
-	data = data.drop('e_x', axis=1)
-	data = data.drop('e_y', axis=1)
-	data = data.drop('e_z', axis=1)
-	data = data.drop('e_r11', axis=1)
-	data = data.drop('e_r21', axis=1)
-	data = data.drop('e_r31', axis=1)
-	data = data.drop('e_r12', axis=1)
-	data = data.drop('e_r22', axis=1)
-	data = data.drop('e_r32', axis=1)
-	data = data.drop('e_r13', axis=1)
-	data = data.drop('e_r23', axis=1)
-	data = data.drop('e_r33', axis=1)
+	data = data.drop(['e_x','e_y','e_z','e_r11','e_r21','e_r31','e_r12','e_r22','e_r32','e_r13','e_r23','e_r33'], axis=1)
 
 	# center object coordinates at origin
 	data.loc[:, 'o_ox'] -= TABLE[0]
@@ -61,9 +49,7 @@ def process_data():
 	data.loc[:, 's_z'] -= TABLE[2] + TABLE_SIZE[2]
 
 	# # predicting first two columns of rotation matrix, so we drop the third
-	# data = data.drop('s_r13', axis=1)
-	# data = data.drop('s_r23', axis=1)
-	# data = data.drop('s_r33', axis=1)
+	# data = data.drop(['s_r13', 's_r23', 's_r33'], axis=1)
 
 	# normalise push direction angle
 	sin = np.sin(data.loc[:, 'm_dir_ach'])
