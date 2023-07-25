@@ -914,13 +914,13 @@ void Object::initPregrasps()
 				bool add = false;
 				if (d.first != 0 && half_ys < GRIPPER_WIDTH_2)
 				{
-					x += d.first * (half_xs + 0.025);
+					x += d.first * (half_xs + 0.05);
 					yaw -= M_PI * (d.first > 0);
 					add = true;
 				}
 				else if (d.second != 0 && half_xs < GRIPPER_WIDTH_2)
 				{
-					y += d.second * (half_ys + 0.025);
+					y += d.second * (half_ys + 0.05);
 					yaw += M_PI_2 * d.second * -1;
 					add = true;
 				}
@@ -937,7 +937,7 @@ void Object::initPregrasps()
 		}
 		else
 		{
-			double r = 0.025 + half_xs;
+			double r = 0.05 + half_xs;
 			for (int i = 0; i < 8; ++i)
 			{
 				double yaw = 0.0 + i * M_PI_4;
