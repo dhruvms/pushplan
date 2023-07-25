@@ -1272,6 +1272,7 @@ bool Robot::PlanRetrieval(const std::vector<Object*>& movable_obstacles, bool fi
 		wp.time_from_start += extract_start_time;
 		m_traj.points.push_back(wp);
 	}
+	profileTrajectoryMoveIt(m_traj);
 
 	return true;
 }
