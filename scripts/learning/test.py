@@ -13,8 +13,8 @@ from sklearn.metrics import roc_curve
 from sklearn.model_selection import train_test_split
 from sklearn.mixture import GaussianMixture
 
-from models import BCNet, PoseCVAE
-from helpers import draw_object, draw_base_rect
+from models import BCNet, CVAE, PoseCVAE
+from helpers import draw_object, draw_base_rect, normalize_angle, shortest_angle_dist, shortest_angle_diff
 from constants import *
 
 def process_data():
@@ -133,7 +133,32 @@ def model_train_ik(model, X_train, y_train, X_val, y_val):
 	return best_acc
 
 # Reconstruction + KL divergence losses summed over all elements and batch
-def loss_fn_cvae(recon_x, x, mu, logvar):
+def loss_fn_final_cvae(recon_x, x, mu, logvar):
+	mse = nn.MSELoss()
+	recon = mse(recon_x[:, :2], x[:, :2])
+
+	# torch version of shortest_angle_dist
+	ang_diff = recon_x[:, 2] - x[:, 2]
+	test = torch.abs(ang_diff) > 2*np.pi
+	if (torch.any(test)):
+		ang_diff[test] = torch.fmod(ang_diff[test], 2*np.pi)
+	while (torch.any(ang_diff < -np.pi)):
+		test = ang_diff < -np.pi
+		ang_diff[test] += 2*np.pi
+	while (torch.any(ang_diff > np.pi)):
+		test = ang_diff > np.pi
+		ang_diff[test] -= 2*np.pi
+	recon += torch.mean(torch.abs(ang_diff))
+
+	# see Appendix B from VAE paper:
+	# Kingma and Welling. Auto-Encoding Variational Bayes. ICLR, 2014
+	# https://arxiv.org/abs/1312.6114
+	# 0.5 * sum(1 + log(sigma^2) - mu^2 - sigma^2)
+	kld = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
+	return recon + kld
+
+# Reconstruction + KL divergence losses summed over all elements and batch
+def loss_fn_pose_cvae(recon_x, x, mu, logvar):
 	mae = nn.L1Loss()
 	mse = nn.MSELoss()
 
@@ -145,7 +170,25 @@ def loss_fn_cvae(recon_x, x, mu, logvar):
 	kld = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
 	return recon + kld
 
-def eval_fn_cvae(model, latent_dim, C_eval, X_eval, num_eval=50):
+def eval_fn_final_cvae(model, latent_dim, C_eval, X_eval, num_eval=5):
+	with torch.no_grad():
+		C_eval = torch.repeat_interleave(C_eval, num_eval, dim=0)
+		Z_eval = torch.randn(C_eval.shape[0], latent_dim).to(DEVICE)
+
+		# num_eval sample prediction per validation point
+		X_eval_pred = model.decode(Z_eval, C_eval).data.cpu().numpy()
+		# average every num_eval rows
+		X_eval_pred = X_eval_pred.transpose().reshape(-1, num_eval).mean(axis=1).reshape(X_eval.shape[1], -1).transpose()
+
+		ang_diff = shortest_angle_dist(X_eval_pred[:, 2], X_eval[:, 2].cpu().numpy())
+		ang_loss = np.fabs(ang_diff)[:, None]
+
+		mse = np.sum((X_eval_pred[:, :2] - X_eval[:, :2].cpu().numpy())**2, axis=1, keepdims=True)
+		recon = np.mean(ang_loss + mse)
+
+	return recon
+
+def eval_fn_pose_cvae(model, latent_dim, C_eval, X_eval, num_eval=50):
 	with torch.no_grad():
 		C_eval = torch.repeat_interleave(C_eval, num_eval, dim=0)
 		Z_eval = torch.randn(C_eval.shape[0], latent_dim).to(DEVICE)
@@ -162,7 +205,7 @@ def eval_fn_cvae(model, latent_dim, C_eval, X_eval, num_eval=50):
 	return recon
 
 # Helper function to train one model
-def model_train_cvae(model, C_train, X_train, latent_dim, C_eval, X_eval):
+def model_train_cvae(model, C_train, X_train, latent_dim, C_eval, X_eval, loss_fn, eval_fn):
 	model = model.to(DEVICE)
 	# loss function and optimizer
 	optimizer = optim.Adam(model.parameters(), lr=0.0001)
@@ -190,7 +233,7 @@ def model_train_cvae(model, C_train, X_train, latent_dim, C_eval, X_eval):
 
 				# forward pass
 				recon_batch, mu, logvar = model(X_batch, C_batch)
-				loss = loss_fn_cvae(recon_batch, X_batch, mu, logvar)
+				loss = loss_fn(recon_batch, X_batch, mu, logvar)
 
 				# backward pass
 				optimizer.zero_grad()
@@ -207,7 +250,7 @@ def model_train_cvae(model, C_train, X_train, latent_dim, C_eval, X_eval):
 				# )
 
 		# evaluate model at end of each epoch
-		recon = eval_fn_cvae(model, latent_dim, C_eval, X_eval)
+		recon = eval_fn(model, latent_dim, C_eval, X_eval)
 		if recon < best_recon:
 			best_recon = recon
 			best_weights = copy.deepcopy(model.state_dict())
@@ -236,6 +279,31 @@ def get_euler_from_R(R, deg=False):
 		roll = np.arctan2(-R[1,2], R[1,1])
 		pitch = np.arctan2(-R[2,0], sy)
 		yaw = 0
+
+	if deg:
+		return np.rad2deg(roll), np.rad2deg(pitch), np.rad2deg(yaw)
+	else:
+		return roll, pitch, yaw
+
+def get_euler_from_R_tensor(R, deg=False):
+	if (len(R.shape) < 3):
+		R = R[None, :, :]
+
+	sy = (R[:,0,0]**2 + R[:,1,0]**2)**0.5
+	singular = sy < 1e-6
+	singular = singular.astype(np.int)
+
+	roll = np.ones(singular.shape[0]) * np.nan
+	pitch = np.ones(singular.shape[0]) * np.nan
+	yaw = np.ones(singular.shape[0]) * np.nan
+
+	roll[singular == 0] = np.arctan2(R[singular == 0, 2, 1] , R[singular == 0, 2, 2])
+	pitch[singular == 0] = np.arctan2(-R[singular == 0, 2, 0], sy[singular == 0])
+	yaw[singular == 0] = np.arctan2(R[singular == 0, 1, 0], R[singular == 0, 0, 0])
+
+	roll[singular == 1] = np.arctan2(-R[singular == 1, 1, 2], R[singular == 1, 1, 1])
+	pitch[singular == 1] = np.arctan2(-R[singular == 1, 2, 0], sy[singular == 1])
+	yaw[singular == 1] = 0
 
 	if deg:
 		return np.rad2deg(roll), np.rad2deg(pitch), np.rad2deg(yaw)
@@ -292,12 +360,15 @@ if __name__ == '__main__':
 	# get training data - final pose
 	C_final = copy.deepcopy(all_data.loc[all_data.r == 0, [all_data.columns.tolist()[i] for i in list(range(0, 22)) + list(range(24, 26))]])
 	X_final = copy.deepcopy(all_data.loc[all_data.r == 0, [all_data.columns.tolist()[i] for i in list(range(-13, -1))]])
+	X_final_rot = X_final.iloc[:, 3:].values.reshape(X_final.shape[0], 3, 3).transpose(0, 2, 1)
+	_, _, yaws = get_euler_from_R_tensor(X_final_rot)
+	X_final = X_final.drop(['e_z', 'e_r11', 'e_r21', 'e_r31', 'e_r12', 'e_r22', 'e_r32', 'e_r13', 'e_r23', 'e_r33'], axis=1)
+	X_final['e_yaw'] = yaws
 	# Convert to 2D PyTorch tensors
 	C_final = torch.tensor(C_final.values, dtype=torch.float32).to(DEVICE)
 	X_final = torch.tensor(X_final.values, dtype=torch.float32).to(DEVICE)
 	# train-test split: Hold out the test set for final model evaluation
 	C_final_train, C_final_test, X_final_train, X_final_test = train_test_split(C_final, X_final, train_size=0.85, shuffle=True)
-	X_final_train = X_final_train[:, :-3] # drop final column of rotation matrix to be predicted
 
 	# get training data - start pose
 	C_start = copy.deepcopy(all_data.loc[all_data.r == 0, [all_data.columns.tolist()[i] for i in list(range(0, 10)) + list(range(24, 26))]])
@@ -316,7 +387,7 @@ if __name__ == '__main__':
 	ik_net.initialise(X_ik.shape[1], 1, activation='relu', layers=layers, h_sizes=h_sizes)
 	latent_dim = 6
 
-	final_pose_net = PoseCVAE()
+	final_pose_net = CVAE()
 	final_pose_net.initialise(X_final_train.shape[1], C_final_train.shape[1], latent_dim, activation='relu', layers=layers, h_sizes=h_sizes)
 
 	start_pose_net = PoseCVAE()
