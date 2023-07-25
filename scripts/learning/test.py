@@ -1,6 +1,7 @@
 import copy
 import sys
 import matplotlib.pyplot as plt
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 
 import numpy as np
 import pandas as pd
@@ -77,7 +78,7 @@ def model_train_ik(model, X_train, y_train, X_val, y_val):
 	optimizer = optim.Adam(model.parameters(), lr=0.0001)
 
 	N = X_train.shape[0]
-	n_epochs = 1000   # number of epochs to run
+	n_epochs = 250   # number of epochs to run
 	batch_size = 1<<(int(np.sqrt(N))-1).bit_length()  # size of each batch
 	batch_start = torch.arange(0, len(X_train), batch_size)
 
@@ -211,7 +212,7 @@ def model_train_cvae(model, C_train, X_train, latent_dim, C_eval, X_eval, loss_f
 	optimizer = optim.Adam(model.parameters(), lr=0.0001)
 
 	N = X_train.shape[0]
-	n_epochs = 1000   # number of epochs to run
+	n_epochs = 250   # number of epochs to run
 	batch_size = 1<<(int(np.sqrt(N))-1).bit_length()  # size of each batch
 	batch_start = torch.arange(0, len(X_train), batch_size)
 
@@ -395,124 +396,95 @@ if __name__ == '__main__':
 
 	# train networks
 	ik_acc = model_train_ik(ik_net, X_ik_train, y_ik_train, X_ik_test, y_ik_test)
-	model_train_cvae(final_pose_net, C_final_train, X_final_train, latent_dim, C_final_test, X_final_test)
-	model_train_cvae(start_pose_net, C_start_train, X_start_train, latent_dim, C_start_test, X_start_test)
+	model_train_cvae(final_pose_net, C_final_train, X_final_train, latent_dim, C_final_test, X_final_test, loss_fn_final_cvae, eval_fn_final_cvae)
+	model_train_cvae(start_pose_net, C_start_train, X_start_train, latent_dim, C_start_test, X_start_test, loss_fn_pose_cvae, eval_fn_pose_cvae)
 
 	# eval networks
 	ik_net.eval()
 	final_pose_net.eval()
 	start_pose_net.eval()
 
-	test_objs = 25
+	test_obj_grid_size = 5
+	test_objs = test_obj_grid_size**2
 	start_pose_samples = 3
 	final_pose_samples = 10
 	with torch.no_grad():
-		figure = plt.figure(figsize=(10,10))
+		figure = plt.figure(figsize=(test_objs,test_objs))
+		axes = []
+
+		h = 0.01
+		xx, yy = np.meshgrid(np.arange(-TABLE_SIZE[0], TABLE_SIZE[0], h),
+							 np.arange(-TABLE_SIZE[1], TABLE_SIZE[1], h))
+		push_to_xy = np.c_[xx.ravel(), yy.ravel()]
+		num_test_pts = push_to_xy.shape[0]
 		for o in range(test_objs):
 			pidx = np.random.randint(all_data.shape[0])
 			obj_props = all_data.iloc[pidx, :10].values
 			start_pose = all_data.iloc[pidx, 10:22].values
 
-			axes = []
-			for loc in range(9):
-				dx = (loc % 3) - 1
-				dy = 1 - (loc//3)
-				desired_final = np.array([TABLE_SIZE[0] * 0.8 * dx, TABLE_SIZE[1] * 0.8 * dy])
-				desired_dir = np.arctan2(desired_final[1] - obj_props[1], desired_final[0] - obj_props[0])
-				desired_dist = np.linalg.norm(obj_props[:2] - desired_final)
-				desired_push_stack = np.repeat(np.array([desired_dir, desired_dist])[None, :], start_pose_samples, axis=0)
+			desired_dirs = np.arctan2(push_to_xy[:, 1] - obj_props[1], push_to_xy[:, 0] - obj_props[0])[:, None]
+			desired_dists = np.linalg.norm(obj_props[:2] - push_to_xy, axis=1)[:, None]
+			# desired_push_stack = np.hstack([desired_dirs, desired_dists])
 
-				ax = plt.subplot(3, 3, loc+1)
-				axes.append(ax)
-				draw_base_rect(ax)
-				draw_object(ax, obj_props[None, :], zorder=3)
-				desired_obj = copy.deepcopy(obj_props)
-				desired_obj[0] = desired_final[0]
-				desired_obj[1] = desired_final[1]
-				draw_object(ax, desired_obj[None, :], colour='cyan', zorder=3)
+			ax = plt.subplot(test_obj_grid_size, test_obj_grid_size, o+1)
+			axes.append(ax)
+			draw_base_rect(ax)
+			draw_object(ax, obj_props[None, :], zorder=3)
 
-				start_pose_c = np.hstack([obj_props, [desired_dir, desired_dist]])[None, :]
-				start_pose_c = np.repeat(start_pose_c, start_pose_samples, axis=0)
-				start_pose_c_torch = torch.tensor(start_pose_c, dtype=torch.float32).to(DEVICE)
-				start_pose_z_torch = torch.randn(start_pose_samples, latent_dim).to(DEVICE)
+			start_pose_c = np.hstack([np.repeat(obj_props[None, :], num_test_pts, axis=0), desired_dirs, desired_dists])
+			# start_pose_c = np.repeat(start_pose_c, start_pose_samples, axis=0)
+			start_pose_c_torch = torch.tensor(start_pose_c, dtype=torch.float32).to(DEVICE)
+			start_pose_z_torch = torch.randn(num_test_pts, latent_dim).to(DEVICE)
 
-				start_pose_pred = start_pose_net.decode(start_pose_z_torch, start_pose_c_torch)
-				start_pose_pred_rot = start_pose_net.get_rotation_matrix(start_pose_pred[:, -6:])
-				start_pose_pred = start_pose_pred[:, :3].cpu().numpy()
-				start_pose_pred_rot = start_pose_pred_rot.cpu().numpy()
+			start_pose_pred = start_pose_net.decode(start_pose_z_torch, start_pose_c_torch)
+			start_pose_pred_rot = start_pose_net.get_rotation_matrix(start_pose_pred[:, -6:])
+			start_pose_pred = start_pose_pred[:, :3].cpu().numpy()
+			start_pose_pred_rot = start_pose_pred_rot.cpu().numpy()
 
-				# print()
-				# print("Generated samples of start poses:")
-				# for i, R in enumerate(start_pose_pred_rot):
-				# 	roll, pitch, yaw = get_euler_from_R(R, deg=True)
-				# 	print("\tx = {x:.3f}, y = {y:.3f}, z = {z:.3f}, roll = {roll:.3f}, pitch = {pitch:.3f}, yaw = {yaw:.3f}".format(
-				# 		x=start_pose_pred[i, 0], y=start_pose_pred[i, 1], z=start_pose_pred[i, 2],
-				# 		roll=roll, pitch=pitch, yaw=yaw))
+			start_pose_pred_rot = np.transpose(start_pose_pred_rot, axes=[0, 2, 1]).reshape(start_pose_pred_rot.shape[0], -1)
+			start_pose_pred = np.hstack([start_pose_pred, start_pose_pred_rot])
 
-				asize = 0.08
-				for i in range(start_pose_pred.shape[0]):
-					ayaw = get_yaw_from_R(start_pose_pred_rot[i])
-					ax.arrow(start_pose_pred[i, 0], start_pose_pred[i, 1], asize * np.cos(ayaw), asize * np.sin(ayaw),
-								length_includes_head=True, head_width=0.02, head_length=0.02,
-								ec='gold', fc='gold', alpha=0.8, zorder=4)
+			obj_props_stack_ik = np.repeat(obj_props[None, :8], num_test_pts, axis=0)
+			ik_score_input = np.hstack([obj_props_stack_ik, start_pose_pred, desired_dirs, desired_dists])
+			ik_score_input_torch = torch.tensor(ik_score_input, dtype=torch.float32).to(DEVICE)
+			ik_scores = ik_net(ik_score_input_torch).cpu().numpy() # num_test_pts x 1
 
-				start_pose_pred_rot = np.transpose(start_pose_pred_rot, axes=[0, 2, 1]).reshape(start_pose_pred_rot.shape[0], -1)
-				start_pose_pred = np.hstack([start_pose_pred, start_pose_pred_rot])
+			# obj_props_stack = np.repeat(obj_props[None, :], num_test_pts, axis=0)
+			# final_pose_c = np.hstack([obj_props_stack, ik_score_input[:, 8:]])
+			# final_pose_c = np.repeat(final_pose_c, repeats=final_pose_samples, axis=0)
+			# final_pose_c_torch = torch.tensor(final_pose_c, dtype=torch.float32).to(DEVICE)
+			# final_pose_z_torch = torch.randn(num_test_pts * final_pose_samples, latent_dim).to(DEVICE)
 
-				obj_props_stack_ik = np.repeat(obj_props[None, :8], start_pose_samples, axis=0)
-				ik_score_input = np.hstack([obj_props_stack_ik, start_pose_pred, desired_push_stack])
-				ik_score_input_torch = torch.tensor(ik_score_input, dtype=torch.float32).to(DEVICE)
-				ik_scores = ik_net(ik_score_input_torch).cpu().numpy() # start_pose_samples x 1
-				# print("IK success probabilities for generated start poses:")
-				# print("\t{}".format(ik_scores[:, 0]))
-				# # GMM mixing coefficients
-				# ik_scores /= np.sum(ik_scores) # normalise probabilities to sum to 1
+			# final_pose_mu, final_pose_logvar = final_pose_net.output_dist(final_pose_z_torch, final_pose_c_torch)
+			# final_pose_mu = final_pose_mu.cpu().numpy()
+			# final_pose_logvar = final_pose_logvar.cpu().numpy()
+			# final_pose_half_logdet = -0.5 * final_pose_logvar.sum(axis=1, keepdims=True)
+			# final_pose_var_inv = 1.0/np.exp(final_pose_logvar)
+			# logpi = -0.5 * final_pose_mu.shape[1] * np.log(2 * np.pi)
 
-				obj_props_stack = np.repeat(obj_props[None, :], start_pose_samples, axis=0)
-				final_pose_c = np.hstack([obj_props_stack, ik_score_input[:, 8:]])
-				final_pose_c = np.repeat(final_pose_c, repeats=final_pose_samples, axis=0)
-				final_pose_c_torch = torch.tensor(final_pose_c, dtype=torch.float32).to(DEVICE)
-				final_pose_z_torch = torch.randn(start_pose_samples * final_pose_samples, latent_dim).to(DEVICE)
+			# obj_yaw_stack = np.repeat(normalize_angle(obj_props[3]), num_test_pts * final_pose_samples)[:, None]
+			# final_pose_des = np.hstack([np.repeat(push_to_xy, final_pose_samples, axis=0), obj_yaw_stack])
 
-				final_pose_pred = final_pose_net.decode(final_pose_z_torch, final_pose_c_torch)
-				final_pose_pred_rot = final_pose_net.get_rotation_matrix(final_pose_pred[:, -6:])
-				final_pose_pred = final_pose_pred[:, :3].cpu().numpy()
-				final_pose_pred_rot = final_pose_pred_rot.cpu().numpy()
+			# residuals = (final_pose_des - final_pose_mu)
+			# residuals[:, 2] = shortest_angle_diff(final_pose_des[:, 2], final_pose_mu[:, 2])
+			# loglikelihood = -0.5 * residuals * final_pose_var_inv * residuals
+			# loglikelihood = loglikelihood.sum(axis=1)[:, None] + final_pose_half_logdet + logpi
+			# loglikelihood = loglikelihood.reshape(-1, final_pose_samples).sum(axis=1)[:, None]
+			# # action_scores = np.exp(loglikelihood) * ik_scores
+			action_scores = ik_scores
+			action_scores = action_scores.reshape(xx.shape)
+			cb = ax.contourf(xx, yy, action_scores, cmap=plt.cm.Greens, alpha=.8)
 
-				for i in range(final_pose_pred.shape[0]):
-					obj = copy.deepcopy(obj_props[None, :])
-					obj[0, 0] = final_pose_pred[i, 0]
-					obj[0, 1] = final_pose_pred[i, 1]
-					obj[0, 2] = final_pose_pred[i, 2]
-					oyaw = get_yaw_from_R(final_pose_pred_rot[i])
-					obj[0, 3] = oyaw
-					draw_object(ax, obj, alpha=0.8 * (ik_scores[i//final_pose_samples, 0]), zorder=2, colour='magenta')
+			ax.set_xlim(-TABLE_SIZE[0] - 0.01, TABLE_SIZE[0] + 0.01)
+			ax.set_ylim(-TABLE_SIZE[1] - 0.01, TABLE_SIZE[1] + 0.01)
+			ax.set_xticks(())
+			ax.set_yticks(())
+			ax.set_aspect('equal')
+			divider = make_axes_locatable(ax)
+			cax = divider.append_axes('right', size='5%', pad=0.05)
+			figure.colorbar(cb, cax=cax, orientation='vertical')
 
-				# # GMM components
-				# final_pose_pred_means = final_pose_pred.transpose().reshape(-1, final_pose_samples).mean(axis=1).reshape(start_pose.shape[0] - 3, -1).transpose()
-				# final_pose_pred_vars = final_pose_pred.transpose().reshape(-1, final_pose_samples).var(axis=1).reshape(start_pose.shape[0] - 3, -1).transpose()
-
-				# # create GMM
-				# # weights_init=ik_scores[:, 0]
-				# # means_init=final_pose_pred_means
-				# # precisions_init=1.0/(final_pose_pred_vars + 1e-6)
-				# gmm = GaussianMixture(n_components=start_pose_samples, covariance_type='diag')
-				# # gmm.fit(np.random.randn(*final_pose_pred.shape))
-				# gmm.fit(np.random.randn(10, 2)) # in (x, y) only
-				# gmm.weights_ = ik_scores[:, 0]
-				# gmm.means_ = final_pose_pred_means[:, :2]
-				# gmm.precisions_cholesky_ = 1.0/(final_pose_pred_vars[:, :2] + 1e-6)
-
-				# desired_final_score = vis_gmm(ax, gmm, obj_props, desired_final)
-
-				ax.set_title("IK scores = " + ', '.join('{:.3f}'.format(i) for i in ik_scores[:, 0]))
-				ax.set_xlim(-TABLE_SIZE[0] - 0.01, TABLE_SIZE[0] + 0.01)
-				ax.set_ylim(-TABLE_SIZE[1] - 0.01, TABLE_SIZE[1] + 0.01)
-				ax.set_xticks(())
-				ax.set_yticks(())
-				ax.set_aspect('equal')
-
-			plt.tight_layout()
-			# plt.show()
-			plt.savefig('posterior-[{}].png'.format(o+1), bbox_inches='tight')
-			[ax.cla() for ax in axes]
+		plt.tight_layout()
+		plt.show()
+		# plt.savefig('posterior-[{}].png'.format(o+1), bbox_inches='tight')
+		[ax.cla() for ax in axes]
