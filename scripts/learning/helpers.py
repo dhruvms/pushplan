@@ -53,3 +53,30 @@ def draw_base_rect(axis, alpha=1, zorder=1):
 								linewidth=2, edgecolor='k', facecolor='none',
 								alpha=alpha, zorder=zorder)
 	axis.add_artist(base_rect)
+
+def normalize_angle(a):
+	if (np.any(np.fabs(a) > 2*np.pi)):
+		if (type(a) in FLOATS):
+			a = np.fmod(a, 2*np.pi)
+		else:
+			r = np.where(np.fabs(a) > 2*np.pi)
+			a[r[0]] = np.fmod(a[r[0]], 2*np.pi)
+	while (np.any(a < -np.pi)):
+		if (type(a) in FLOATS):
+			a += 2*np.pi
+		else:
+			r = np.where(a < -np.pi)
+			a[r[0]] += 2*np.pi
+	while (np.any(a > np.pi)):
+		if (type(a) in FLOATS):
+			a -= 2*np.pi
+		else:
+			r = np.where(a > np.pi)
+			a[r[0]] -= 2*np.pi
+	return a
+
+def shortest_angle_diff(af, ai):
+	return normalize_angle(af - ai)
+
+def shortest_angle_dist(af, ai):
+	return np.fabs(shortest_angle_diff(af, ai))

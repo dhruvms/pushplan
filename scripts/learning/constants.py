@@ -13,3 +13,4 @@ CODES = [
 		Path.LINETO,
 		Path.CLOSEPOLY,
 	]
+FLOATS = [float, np.float128, np.float64, np.float32]
