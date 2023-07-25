@@ -1873,6 +1873,272 @@ void Robot::IdentifyReachableMovables(
 	ProcessObstacles(movables, true);
 }
 
+bool Robot::PlanPickPlace(
+	std::vector<double> *start_state,
+	Agent* object,
+	const std::vector<Object*>& other_movables,	const comms::ObjectsPoses& curr_scene,
+	comms::ObjectsPoses& result,
+	int& pick_at, int& place_at,
+	double &plan_time, double &sim_time)
+{
+	plan_time = 0.0;
+	sim_time = 0.0;
+
+	moveit_msgs::RobotState pick_start_state = m_start_state;
+	if (start_state != nullptr)
+	{
+		assert(start_state->size() == m_rm->jointVariableCount());
+
+		pick_start_state.joint_state.position.erase(
+			pick_start_state.joint_state.position.begin() + 1,
+			pick_start_state.joint_state.position.begin() + 1 + start_state->size());
+		pick_start_state.joint_state.position.insert(
+			pick_start_state.joint_state.position.begin() + 1,
+			start_state->begin(), start_state->end());
+	}
+
+	// required info about object being pushed
+	const Trajectory* obj_traj = object->SolveTraj();
+	// visMAPFPath(obj_traj);
+	std::vector<Object*> rearranged_obj = { object->GetObject() };
+
+	double start_time = GetTime();
+	// 1. add all objects as obstacles
+	// add all movable objects as obstacles into immovable collision checker
+	// they should be at their latest positions
+	ProcessObstacles(rearranged_obj);
+	ProcessObstacles(other_movables);
+
+	// 2. get pregrasps of object to be grasped
+	std::vector<Eigen::Affine3d> pregrasps;
+	object->GetObject()->GetPregrasps(pregrasps);
+
+	// if (!pregrasps.empty())
+	// {
+	// 	for (int i = 0; i < pregrasps.size(); ++i)
+	// 	{
+	// 		visualization_msgs::Marker marker;
+	// 		marker.header.frame_id = "base_footprint";
+	// 		marker.header.stamp = ros::Time();
+	// 		marker.ns = "object_pregrasp_poses";
+	// 		marker.id = i;
+	// 		marker.action = visualization_msgs::Marker::ADD;
+	// 		marker.type = visualization_msgs::Marker::ARROW;
+
+	// 		geometry_msgs::Pose pose;
+	// 		tf::poseEigenToMsg(pregrasps[i], pose);
+	// 		marker.pose = pose;
+
+	// 		marker.scale.x = 0.1;
+	// 		marker.scale.y = 0.015;
+	// 		marker.scale.z = 0.015;
+
+	// 		marker.color.a = 0.7; // Don't forget to set the alpha!
+	// 		marker.color.r = 0.0;
+	// 		marker.color.g = 0.7;
+	// 		marker.color.b = 0.6;
+
+	// 		m_vis_pub.publish(marker);
+
+	// 		// marker.id = i + pregrasps.size();
+	// 		// marker.type = visualization_msgs::Marker::SPHERE;
+
+	// 		// marker.scale.x = 2.0 * 0.07;
+	// 		// marker.scale.y = 2.0 * 0.07;
+	// 		// marker.scale.z = 2.0 * 0.1;
+
+	// 		// m_vis_pub.publish(marker);
+	// 	}
+	// }
+
+	// 3. create multi pose goal
+	// 4. call planner to plan approach trajectory
+	trajectory_msgs::JointTrajectory pick_traj;
+	if (!planToPoseGoal(pick_start_state, pregrasps, pick_traj, 20.0))
+	{
+		// push_result = 5;
+		// ++m_debug_push_info["start_unreachable"];
+		// debug_push_end = { -99.0, -99.0 };
+		// debug_push = std::make_tuple(debug_push_start, debug_push_end, push_result);
+
+		// remove all movable objects from immovable collision space
+		ProcessObstacles(rearranged_obj, true);
+		ProcessObstacles(other_movables, true);
+		// m_stats["push_plan_time"] += GetTime() - start_time;
+		return false;
+	}
+	ProcessObstacles(rearranged_obj, true);
+
+	// 5. append hardcoded grasping maneuver
+	pick_at = pick_traj.points.size(); // TODO: use somewhere
+
+	Eigen::Affine3d pregrasp_pose, grasp_pose, postgrasp_pose, place_pose, retract_pose;
+	smpl::RobotState pregrasp_state, grasp_state, postgrasp_state, place_state, retract_state;
+
+	pregrasp_state = pick_traj.points.back().positions;
+	pregrasp_pose = m_rm->computeFK(pregrasp_state);
+
+	// compute EE pose at grasp
+	Eigen::Affine3d ee_pose = pregrasp_pose;
+	double yaw, pitch, roll;
+	smpl::angles::get_euler_zyx(ee_pose.rotation(), yaw, pitch, roll);
+	ee_pose.translation().x() = object->GetObject()->desc.o_x;
+	ee_pose.translation().y() = object->GetObject()->desc.o_y;
+	// ee_pose = Eigen::Translation3d(object->GetObject()->desc.o_x, object->GetObject()->desc.o_y, ee_pose.translation().z()) *
+	// 							Eigen::AngleAxisd(yaw, Eigen::Vector3d::UnitZ()) *
+	// 							Eigen::AngleAxisd(0.0, Eigen::Vector3d::UnitY()) *
+	// 							Eigen::AngleAxisd(0.0, Eigen::Vector3d::UnitX());
+	if (!getStateNearPose(ee_pose, pregrasp_state, grasp_state, 1))
+	{
+		// remove all movable objects from immovable collision space
+		ProcessObstacles(other_movables, true);
+		return false;
+	}
+	grasp_pose = m_rm->computeFK(grasp_state);
+
+	// compute EE pose at postgrasp
+	ee_pose = grasp_pose;
+	ee_pose.translation().z() += m_grasp_lift;
+	if (!getStateNearPose(ee_pose, grasp_state, postgrasp_state, 1))
+	{
+		// remove all movable objects from immovable collision space
+		ProcessObstacles(other_movables, true);
+		return false;
+	}
+	postgrasp_pose = m_rm->computeFK(postgrasp_state);
+
+	double grasp_time = profileAction(pregrasp_state, grasp_state);
+	double postgrasp_time = profileAction(grasp_state, postgrasp_state);
+
+	trajectory_msgs::JointTrajectoryPoint p;
+	p.positions = grasp_state;
+	p.time_from_start = ros::Duration(grasp_time) + pick_traj.points.back().time_from_start;
+	pick_traj.points.push_back(p);
+
+	p.positions = postgrasp_state;
+	p.time_from_start = ros::Duration(postgrasp_time) + pick_traj.points.back().time_from_start;
+	pick_traj.points.push_back(p);
+
+	// 6. attach object to kinematic chain
+	const smpl::urdf::Link* link = smpl::urdf::GetLink(&(m_rm->m_robot_model), "r_gripper_palm_link");
+	auto palm_postgrasp_pose = m_rm->computeFKLink(postgrasp_state, link);
+
+	if (!attachObject(object->GetObject(), palm_postgrasp_pose))
+	{
+		ROS_ERROR("Failed to attach object.");
+		// remove all movable objects from immovable collision space
+		ProcessObstacles(other_movables, true);
+		return false;
+	}
+	else
+	{
+		auto markers = m_cc_i->getCollisionRobotVisualization(postgrasp_state);
+		SV_SHOW_INFO(markers);
+
+		// object attached, but are we collision free with it grasped?
+		ProcessObstacles(other_movables, true);
+		if (!m_cc_i->isStateValid(postgrasp_state))
+		{
+			ROS_ERROR("Robot state is in collision with attached object.");
+			detachObject();
+			return false;
+		}
+		ProcessObstacles(other_movables);
+	}
+
+	// 7. call planner to plan place trajectory
+	trajectory_msgs::JointTrajectory place_traj;
+
+	// set start state for place plan to postgrasp state
+	moveit_msgs::RobotState place_start_state = m_start_state;
+	place_start_state.joint_state.position.erase(
+		place_start_state.joint_state.position.begin() + 1,
+		place_start_state.joint_state.position.begin() + 1 + postgrasp_state.size());
+	place_start_state.joint_state.position.insert(
+		place_start_state.joint_state.position.begin() + 1,
+		postgrasp_state.begin(), postgrasp_state.end());
+	// set place goal pose
+	ee_pose = Eigen::Translation3d(obj_traj->back().state.at(0), obj_traj->back().state.at(1), ee_pose.translation().z()) *
+								Eigen::AngleAxisd(0.0, Eigen::Vector3d::UnitZ()) * // tolerance is 2*pi anyway
+								Eigen::AngleAxisd(0.0, Eigen::Vector3d::UnitY()) *
+								Eigen::AngleAxisd(0.0, Eigen::Vector3d::UnitX());
+
+	if (!planToPoseGoal(place_start_state, { ee_pose }, place_traj, 0.1, true))
+	{
+		// push_result = 5;
+		// ++m_debug_push_info["start_unreachable"];
+		// debug_push_end = { -99.0, -99.0 };
+		// debug_push = std::make_tuple(debug_push_start, debug_push_end, push_result);
+
+		// remove all movable objects from immovable collision space
+		ProcessObstacles(other_movables, true);
+		detachObject();
+		// m_stats["push_plan_time"] += GetTime() - start_time;
+		return false;
+	}
+	detachObject();
+
+	// 8. append hardcoded retract action
+	ee_pose = m_rm->computeFK(place_traj.points.back().positions);
+	ee_pose.translation().z() -= m_grasp_lift/2.0;
+	if (!getStateNearPose(ee_pose, place_traj.points.back().positions, place_state, 1))
+	{
+		// remove all movable objects from immovable collision space
+		ProcessObstacles(other_movables, true);
+		return false;
+	}
+	place_pose = m_rm->computeFK(place_state);
+
+	smpl::angles::get_euler_zyx(place_pose.rotation(), yaw, pitch, roll);
+	ee_pose = place_pose;
+	ee_pose.translation().x() += 0.1 * std::cos(yaw + M_PI);
+	ee_pose.translation().y() += 0.1 * std::sin(yaw + M_PI);
+	if (!getStateNearPose(ee_pose, place_state, retract_state, 1))
+	{
+		// remove all movable objects from immovable collision space
+		ProcessObstacles(other_movables, true);
+		return false;
+	}
+	retract_pose = m_rm->computeFK(retract_state);
+
+	double place_time = profileAction(place_traj.points.back().positions, place_state);
+	double retract_time = profileAction(place_state, retract_state);
+
+	p.positions = place_state;
+	p.time_from_start = ros::Duration(place_time) + place_traj.points.back().time_from_start;
+	place_traj.points.push_back(p);
+
+	p.positions = retract_state;
+	p.time_from_start = ros::Duration(retract_time) + place_traj.points.back().time_from_start;
+	place_traj.points.push_back(p);
+
+	// combine pick and place trajs
+	m_traj = pick_traj;
+	auto pick_end_time = m_traj.points.back().time_from_start;
+	for (size_t i = 1; i < place_traj.points.size(); ++i)
+	{
+		auto& wp = place_traj.points[i];
+		wp.time_from_start += pick_end_time;
+		m_traj.points.push_back(wp);
+	}
+	place_at = pick_at + place_traj.points.size(); // TODO: use somewhere
+	profileTrajectoryMoveIt(m_traj);
+	plan_time = GetTime() - start_time;
+
+	// 9. simulate placing action
+	start_time = GetTime();
+	bool success = m_sim->SimPickPlace(m_traj, curr_scene, pick_at, place_at, object->GetID());
+	sim_time = GetTime() - start_time;
+	return success;
+}
+
+// bool Robot::CheckPush(
+// 	Agent* object, const State &goal, const std::vector<double>& push,
+// 	trajectory_msgs::JointTrajectory &action, trajectory_msgs::JointTrajectory &traj)
+// {
+// 	PlanPush(nullptr, object, push)
+// }
+
 bool Robot::PlanPush(
 	std::vector<double> *start_state,
 	Agent* object, const std::vector<double>& push,

@@ -93,6 +93,13 @@ public:
 
 	bool UpdateKDLRobot(int mode);
 	bool InitArmPlanner(bool interp=false);
+	bool PlanPickPlace(
+		std::vector<double> *start_state,
+		Agent* object,
+		const std::vector<Object*>& other_movables,	const comms::ObjectsPoses& curr_scene,
+		comms::ObjectsPoses& result,
+		int& pick_at, int& place_at,
+		double &plan_time, double &sim_time);
 	bool PlanPush(
 		std::vector<double> *start_state,
 		Agent* object, const std::vector<double>& push,
