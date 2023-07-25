@@ -811,46 +811,45 @@ bool Robot::detachObject()
 	return detach_result;
 }
 
-bool Robot::attachObject(const Object& obj)
+bool Robot::attachObject(Object *obj, const Eigen::Affine3d &pose)
 {
-	double y, p, r;
-	auto inv_rot = m_postgrasp_pose.inverse().rotation();
-	smpl::angles::get_euler_zyx(inv_rot, y, p, r);
-	smpl::collision::CollisionObject* obj_co = obj.smpl_co;
+	Eigen::Affine3d obj_pose = Eigen::Translation3d(obj->desc.o_x, obj->desc.o_y, pose.translation().z()) *
+						Eigen::AngleAxisd(obj->desc.o_yaw, Eigen::Vector3d::UnitZ()) *
+						Eigen::AngleAxisd(0.0, Eigen::Vector3d::UnitY()) *
+						Eigen::AngleAxisd(0.0, Eigen::Vector3d::UnitX());
+	smpl::collision::CollisionObject* obj_co = obj->smpl_co;
 
 	std::vector<shapes::ShapeConstPtr> shapes;
 	smpl::collision::Affine3dVector transforms;
-	if (obj.smpl_co)
+	if (obj->smpl_co)
 	{
-		for (size_t sidx = 0; sidx < obj.smpl_co->shapes.size(); ++sidx)
+		for (size_t sidx = 0; sidx < obj->smpl_co->shapes.size(); ++sidx)
 		{
-			auto transform = Eigen::Translation3d(0.2, 0.0, 0.0) *
-						Eigen::AngleAxisd(y + obj.desc.o_yaw, Eigen::Vector3d::UnitZ()) *
-						Eigen::AngleAxisd(0.0, Eigen::Vector3d::UnitY()) *
-						Eigen::AngleAxisd(0.0, Eigen::Vector3d::UnitX());
+			auto transform = pose.inverse() * obj_pose;
+			// transform.translation().x() += 0.2;
 
-			switch (obj.smpl_co->shapes.at(sidx)->type)
+			switch (obj->smpl_co->shapes.at(sidx)->type)
 			{
 				case smpl::collision::ShapeType::Box:
 				{
-					auto box = static_cast<smpl::collision::BoxShape*>(obj.smpl_co->shapes.at(sidx));
+					auto box = static_cast<smpl::collision::BoxShape*>(obj->smpl_co->shapes.at(sidx));
 					shapes::ShapeConstPtr ao_shape(new shapes::Box(box->size[0], box->size[1], box->size[2]));
 					shapes.push_back(std::move(ao_shape));
 					break;
 				}
 				case smpl::collision::ShapeType::Cylinder:
 				{
-					auto cylinder = static_cast<smpl::collision::CylinderShape*>(obj.smpl_co->shapes.at(sidx));
+					auto cylinder = static_cast<smpl::collision::CylinderShape*>(obj->smpl_co->shapes.at(sidx));
 					shapes::ShapeConstPtr ao_shape(new shapes::Cylinder(cylinder->radius, cylinder->height));
 					shapes.push_back(std::move(ao_shape));
 					break;
 				}
 				case smpl::collision::ShapeType::Mesh:
 				{
-					shapes::ShapeConstPtr ao_shape = MakeROSShape(obj.smpl_co->shapes.at(sidx));
+					shapes::ShapeConstPtr ao_shape = MakeROSShape(obj->smpl_co->shapes.at(sidx));
 					shapes.push_back(std::move(ao_shape));
 
-					auto itr = YCB_OBJECT_DIMS.find(obj.desc.shape);
+					auto itr = YCB_OBJECT_DIMS.find(obj->desc.shape);
 					if (itr != YCB_OBJECT_DIMS.end()) {
 						transform.translation().z() -= (m_grasp_z - m_table_z);
 					}
@@ -891,9 +890,12 @@ bool Robot::attachObject(const Object& obj)
 	return attach_result;
 }
 
-bool Robot::attachAndCheckObject(const Object& object, const smpl::RobotState& state)
+bool Robot::attachAndCheckOOI(const smpl::RobotState& state)
 {
-	if (!attachObject(object))
+	const smpl::urdf::Link* link = smpl::urdf::GetLink(&(m_rm->m_robot_model), "r_gripper_palm_link");
+	auto palm_postgrasp_pose = m_rm->computeFKLink(m_postgrasp_state, link);
+
+	if (!attachObject(&m_ooi, palm_postgrasp_pose))
 	{
 		ROS_ERROR("Failed to attach object.");
 		return false;
@@ -1016,7 +1018,7 @@ bool Robot::planRetract(
 	bool have_obs = !movable_obstacles.empty();
 
 	// setGripper(true); // open
-	if (!attachAndCheckObject(m_ooi, m_postgrasp_state)) {
+	if (!attachAndCheckOOI(m_postgrasp_state)) {
 		detachObject();
 		return false;
 	}
@@ -1549,7 +1551,7 @@ bool Robot::ComputeGrasps(
 
 			// SMPL_INFO("Found postgrasp state!!!");
 
-			if (!attachAndCheckObject(m_ooi, m_postgrasp_state)) {
+			if (!attachAndCheckOOI(m_postgrasp_state)) {
 				detachObject();
 				return false;
 			}

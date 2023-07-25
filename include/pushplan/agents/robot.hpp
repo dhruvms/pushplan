@@ -380,9 +380,8 @@ private:
 		int N=2,
 		const std::string& ns="");
 
-	bool attachAndCheckObject(
-		const Object& object, const smpl::RobotState& state);
-	bool attachObject(const Object& obj);
+	bool attachAndCheckOOI(const smpl::RobotState& state);
+	bool attachObject(Object *obj, const Eigen::Affine3d &pose);
 	bool detachObject();
 	void displayObjectMarker(const Object& object);
 
