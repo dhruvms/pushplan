@@ -74,13 +74,21 @@ Visualization Manager:
       Name: MarkerArray
       Namespaces:
         collision_object_voxels: true
-        collision_space_bounds: false
-        goal_config: true
-        push_end: true
-        push_start: true
-        start_config: true
-        target_config: false
+        expansion: false
+        goal_config: false
+        grasp_pose: false
+        pregrasp_pose: false
+        start_config: false
         trajectory: false
+      Queue Size: 100
+      Value: true
+    - Class: rviz/Marker
+      Enabled: true
+      Marker Topic: visualization_marker
+      Name: Marker
+      Namespaces:
+        mapf_path: true
+        object_pregrasp_poses: true
       Queue Size: 100
       Value: true
   Enabled: true
@@ -123,10 +131,10 @@ Visualization Manager:
       Invert Z Axis: false
       Name: Current View
       Near Clip Distance: 0.00999999978
-      Pitch: 0.215403348
+      Pitch: 0.230403289
       Target Frame: <Fixed Frame>
       Value: Orbit (rviz)
-      Yaw: 3.43849087
+      Yaw: 3.28348517
     Saved: ~
 Window Geometry:
   Displays:
@@ -144,5 +152,5 @@ Window Geometry:
   Views:
     collapsed: true
   Width: 960
-  X: 2880
+  X: 960
   Y: 24
