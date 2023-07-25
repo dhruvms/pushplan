@@ -40,6 +40,10 @@ public:
 		int& pidx, int& successes,
 		comms::ObjectsPoses& result,
 		std::vector<int> &relevant_objs);
+	bool SimPickPlace(
+		const trajectory_msgs::JointTrajectory& traj,
+		const comms::ObjectsPoses& rearranged,
+		int pick_at, int place_at, int oid);
 	bool RemoveConstraint();
 
 	const std::vector<std::vector<double>>* GetImmovableObjs() const {
