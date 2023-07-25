@@ -301,9 +301,10 @@ private:
 		Eigen::Affine3d& start_pose);
 	bool planToPoseGoal(
 		const moveit_msgs::RobotState& start_state,
-		const Eigen::Affine3d& pose_goal,
+		const std::vector<Eigen::Affine3d> &poses,
 		trajectory_msgs::JointTrajectory& push_traj,
-		double t=0.1);
+		double t=0.1,
+		bool path_constraints=false);
 
 	int computePushStateIK(
 		const Eigen::Affine3d &ee_pose,
@@ -365,10 +366,11 @@ private:
 	bool initPlanner();
 	bool readPlannerConfig(const ros::NodeHandle &nh);
 	bool createPlanner(bool interp);
-	void createMultiPoseGoalConstraint(moveit_msgs::MotionPlanRequest& req);
-	void createPoseGoalConstraint(
-		const Eigen::Affine3d& pose,
+	void createMultiPoseGoalConstraint(
+		const std::vector<Eigen::Affine3d> &poses,
 		moveit_msgs::MotionPlanRequest& req);
+	void createPoseGoalConstraint(
+		const Eigen::Affine3d& pose);
 	void createJointSpaceGoal(
 		const smpl::RobotState& pose,
 		moveit_msgs::MotionPlanRequest& req);

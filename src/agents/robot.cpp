@@ -1605,9 +1605,10 @@ bool Robot::InitArmPlanner(bool interp)
 
 bool Robot::planToPoseGoal(
 	const moveit_msgs::RobotState& start_state,
-	const Eigen::Affine3d& pose_goal,
+	const std::vector<Eigen::Affine3d> &poses,
 	trajectory_msgs::JointTrajectory& push_traj,
-	double t)
+	double t,
+	bool path_constraints)
 {
 	// create planning problem to push start pose
 	InitArmPlanner(false);
@@ -1615,13 +1616,38 @@ bool Robot::planToPoseGoal(
 	moveit_msgs::MotionPlanRequest req;
 	moveit_msgs::MotionPlanResponse res;
 
-	createPoseGoalConstraint(pose_goal, req);
+	if (poses.size() == 1)
+	{
+		createPoseGoalConstraint(poses[0]);
+		req.goal_constraints.clear();
+		req.goal_constraints.resize(1);
+		req.goal_constraints[0] = m_goal;
+		req.planner_id = "arastar.manip.bfs";
+	}
+	else
+	{
+		createMultiPoseGoalConstraint(poses, req);
+		req.planner_id = "mhastar.manip";
+		for (size_t g = 0; g < poses.size(); ++g) {
+			req.planner_id += ".bfs" + std::to_string(g);
+		}
+	}
+
 	req.allowed_planning_time = t;
 	req.max_acceleration_scaling_factor = 1.0;
 	req.max_velocity_scaling_factor = 1.0;
 	req.num_planning_attempts = 1;
-	req.planner_id = "arastar.manip.bfs";
 	req.start_state = start_state;
+	if (path_constraints)
+	{
+		addPathConstraint(req.path_constraints);
+		req.goal_constraints[0].position_constraints[0].constraint_region.primitives[0].dimensions[0] = 0.01;
+		req.goal_constraints[0].position_constraints[0].constraint_region.primitives[0].dimensions[1] = 0.01;
+		req.goal_constraints[0].position_constraints[0].constraint_region.primitives[0].dimensions[2] = 0.01;
+		req.goal_constraints[0].orientation_constraints[0].absolute_x_axis_tolerance = 2.0 * M_PI;
+		req.goal_constraints[0].orientation_constraints[0].absolute_y_axis_tolerance = 2.0 * M_PI; // these do not make a difference inside smpl
+		req.goal_constraints[0].orientation_constraints[0].absolute_z_axis_tolerance = 2.0 * M_PI; //
+	}
 
 	moveit_msgs::PlanningScene planning_scene; // completely unnecessary variable
 	planning_scene.robot_state = start_state;
@@ -1836,7 +1862,7 @@ void Robot::IdentifyReachableMovables(
 				Eigen::AngleAxisd(movables[i]->desc.o_yaw, Eigen::Vector3d::UnitZ()) *
 				Eigen::AngleAxisd(movables[i]->desc.o_pitch, Eigen::Vector3d::UnitY()) *
 				Eigen::AngleAxisd(movables[i]->desc.o_roll, Eigen::Vector3d::UnitX());
-		if (planToPoseGoal(m_start_state, obj_pose, traj))
+		if (planToPoseGoal(m_start_state, { obj_pose }, traj))
 		{
 			// object i is reachable
 			reachable_ids.push_back(movables[i]->desc.id);
@@ -1915,7 +1941,7 @@ bool Robot::PlanPush(
 		}
 
 		trajectory_msgs::JointTrajectory push_traj;
-		if (success && !planToPoseGoal(push_start_state, push_start_pose, push_traj))
+		if (success && !planToPoseGoal(push_start_state, { push_start_pose }, push_traj))
 		{
 			push_result = 5;
 			++m_debug_push_info["start_unreachable"];
@@ -1981,7 +2007,7 @@ bool Robot::PlanPush(
 
 	// plan path to push start pose with all other objects as obstacles
 	trajectory_msgs::JointTrajectory push_traj;
-	if (!failure && !planToPoseGoal(push_start_state, push_start_pose, push_traj))
+	if (!failure && !planToPoseGoal(push_start_state, { push_start_pose }, push_traj))
 	{
 		push_result = 5;
 		++m_debug_push_info["start_unreachable"];
@@ -2182,7 +2208,7 @@ bool Robot::GenMovablePush(
 
 	// plan path to push start pose
 	trajectory_msgs::JointTrajectory push_traj;
-	if (!planToPoseGoal(m_start_state, push_start_pose, push_traj, 0.5)) {
+	if (!planToPoseGoal(m_start_state, { push_start_pose }, push_traj, 0.5)) {
 		push_result = 5;
 	}
 
@@ -3396,26 +3422,23 @@ bool Robot::createPlanner(bool interp)
 	return true;
 }
 
-void Robot::createMultiPoseGoalConstraint(moveit_msgs::MotionPlanRequest& req)
+void Robot::createMultiPoseGoalConstraint(
+	const std::vector<Eigen::Affine3d> &poses,
+	moveit_msgs::MotionPlanRequest& req)
 {
 	req.goal_constraints.clear();
-	req.goal_constraints.resize(3);
-	req.goal_constraints[0] = m_goal;
-
-	Eigen::Quaterniond q;
-	req.goal_constraints[1] = m_goal;
-	smpl::angles::from_euler_zyx(m_goal_vec[5] + M_PI_2, m_goal_vec[4], m_goal_vec[3], q);
-	tf::quaternionEigenToMsg(q, req.goal_constraints[1].orientation_constraints[0].orientation);
-
-	req.goal_constraints[2] = m_goal;
-	smpl::angles::from_euler_zyx(m_goal_vec[5] - M_PI_2, m_goal_vec[4], m_goal_vec[3], q);
-	tf::quaternionEigenToMsg(q, req.goal_constraints[2].orientation_constraints[0].orientation);
+	req.goal_constraints.resize(poses.size());
+	for (size_t g = 0; g < poses.size(); ++g)
+	{
+		createPoseGoalConstraint(poses[g]);
+		m_goal.orientation_constraints[0].absolute_x_axis_tolerance = DEG5;
+		req.goal_constraints[g] = m_goal;
+	}
 }
 
 void Robot::createPoseGoalConstraint(
-	const Eigen::Affine3d& pose, moveit_msgs::MotionPlanRequest& req)
+	const Eigen::Affine3d& pose)
 {
-
 	m_goal.position_constraints.resize(1);
 	m_goal.orientation_constraints.resize(1);
 	m_goal.position_constraints[0].header.frame_id = m_planning_frame;
@@ -3435,10 +3458,6 @@ void Robot::createPoseGoalConstraint(
 	m_goal.orientation_constraints[0].absolute_x_axis_tolerance = 2.0 * M_PI;
 	m_goal.orientation_constraints[0].absolute_y_axis_tolerance = 2.0 * M_PI; // these do not make a difference inside smpl
 	m_goal.orientation_constraints[0].absolute_z_axis_tolerance = 2.0 * M_PI; // these do not make a difference inside smpl
-
-	req.goal_constraints.clear();
-	req.goal_constraints.resize(1);
-	req.goal_constraints[0] = m_goal;
 }
 
 void Robot::createJointSpaceGoal(
@@ -3477,8 +3496,8 @@ void Robot::addPathConstraint(moveit_msgs::Constraints& path_constraints)
 	// set tolerances
 	path_constraints.position_constraints[0].constraint_region.primitives[0].dimensions.resize(3, 0.0);
 	path_constraints.orientation_constraints[0].absolute_x_axis_tolerance = DEG5;
-	path_constraints.orientation_constraints[0].absolute_y_axis_tolerance = DEG5; // these do not make a difference inside smpl
-	path_constraints.orientation_constraints[0].absolute_z_axis_tolerance = DEG5; // these do not make a difference inside smpl
+	path_constraints.orientation_constraints[0].absolute_y_axis_tolerance = DEG5;
+	path_constraints.orientation_constraints[0].absolute_z_axis_tolerance = 2.0 * M_PI;
 }
 
 bool Robot::getStateNearPose(
@@ -3573,7 +3592,7 @@ void Robot::RunManipulabilityStudy(int N)
 				SV_SHOW_INFO_NAMED("study_goal_pose", smpl::visual::MakePoseMarkers(
 					goal_pose, m_grid_i->getReferenceFrame(), "study_goal_pose"));
 
-				if (planToPoseGoal(start, goal_pose, path, 0.5))
+				if (planToPoseGoal(start, { goal_pose }, path, 0.5))
 				{
 					++plans;
 
@@ -3643,7 +3662,7 @@ void Robot::RunPushIKStudy(int N)
 
 			// 3. verify push start pose
 			if ((m_grid_i->getDistanceFromPoint(x0, y0, m_table_z + 0.03) <= m_grid_i->resolution())
-					|| (!planToPoseGoal(start, push_start_pose, path, 2.0)))
+					|| (!planToPoseGoal(start, { push_start_pose }, path, 2.0)))
 			{
 				DATA << x0 << ',' << y0 << ',' << yaw0 << ','
 						<< -1 << ',' << -1 << ',' << -1 << ',' << 5 << '\n';
