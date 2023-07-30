@@ -545,6 +545,7 @@ void Planner::init_agents(
 		o.desc.o_pitch = immov_objs->at(i).at(4);
 		o.desc.o_yaw = immov_objs->at(i).at(5);
 		o.desc.ycb = (bool)immov_objs->at(i).back();
+		o.desc.yaw_offset = 0.0;
 
 		if (o.desc.ycb)
 		{
@@ -604,6 +605,7 @@ void Planner::init_agents(
 		o.desc.o_pitch = mov_objs->at(i).at(4);
 		o.desc.o_yaw = mov_objs->at(i).at(5);
 		o.desc.ycb = (bool)mov_objs->at(i).back();
+		o.desc.yaw_offset = 0.0;
 
 		if (o.desc.ycb)
 		{
@@ -691,6 +693,7 @@ void Planner::parse_scene(std::vector<Object>& obstacles)
 							case 14: o.desc.movable = (split.compare("True") == 0); break;
 						}
 						o.desc.ycb = false;
+						o.desc.yaw_offset = 0.0;
 						count++;
 					}
 
