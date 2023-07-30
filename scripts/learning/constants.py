@@ -14,3 +14,6 @@ CODES = [
 		Path.CLOSEPOLY,
 	]
 FLOATS = [float, np.float128, np.float64, np.float32]
+
+RES_XY = 0.01
+RES_YAW = np.deg2rad(5)

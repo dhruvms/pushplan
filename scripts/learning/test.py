@@ -490,7 +490,11 @@ if __name__ == '__main__':
 				final_pose_c_torch = torch.tensor(final_pose_c, dtype=torch.float32).to(DEVICE)
 				final_pose_z_torch = torch.randn(start_pose_samples * final_pose_samples, latent_dim).to(DEVICE)
 
+				obj_yaw_stack = np.repeat(normalize_angle(obj_props[3]), start_pose_samples * final_pose_samples)[:, None]
+				final_pose_des = np.hstack([np.repeat(desired_final[None, :], start_pose_samples * final_pose_samples, axis=0), obj_yaw_stack])
 				final_pose_pred = final_pose_net.decode(final_pose_z_torch, final_pose_c_torch).cpu().numpy()
+				final_pose_dist = (np.linalg.norm(final_pose_des[:, :2] - final_pose_pred[:, :2], axis=1, keepdims=True)/RES_XY) + (shortest_angle_dist(final_pose_pred[:, 2], final_pose_des[:, 2])[:, None]/RES_YAW)
+				final_pose_dist = np.mean(final_pose_dist)
 				for i in range(final_pose_pred.shape[0]):
 					obj = copy.deepcopy(obj_props[None, :])
 					obj[0, 0] = final_pose_pred[i, 0]
@@ -498,22 +502,7 @@ if __name__ == '__main__':
 					obj[0, 3] = final_pose_pred[i, 2]
 					draw_object(ax, obj, alpha=0.8 * (ik_scores[i//final_pose_samples, 0]), zorder=2, colour='magenta')
 
-				def log_normal_pdf(sample, mean, logvar, raxis=1):
-					log2pi = sample.shape[1] * np.log(2 * np.pi)
-					logdet = np.sum(logvar, axis=raxis, keepdims=True)
-					mahalanobis = np.sum(((sample - mean) ** 2.) * np.exp(-logvar), axis=raxis, keepdims=True)
-					return -0.5 * (log2pi + logdet + mahalanobis)
-
-				obj_yaw_stack = np.repeat(normalize_angle(obj_props[3]), start_pose_samples * final_pose_samples)[:, None]
-				final_pose_des = np.hstack([np.repeat(desired_final[None, :], start_pose_samples * final_pose_samples, axis=0), obj_yaw_stack])
-
-				final_pose_mu, final_pose_logvar = final_pose_net.output_dist(final_pose_z_torch, final_pose_c_torch)
-				final_pose_mu = final_pose_mu.cpu().numpy()
-				final_pose_logvar = final_pose_logvar.cpu().numpy()
-				loglikelihood = log_normal_pdf(final_pose_des, final_pose_mu, final_pose_logvar)
-				loglikelihood = loglikelihood.reshape(-1, final_pose_samples).mean(axis=1)[:, None]
-
-				ax.set_title("IK? = " + ', '.join('{:.3f}'.format(i) for i in ik_scores[:, 0]) + " | logprob = " + ', '.join('{:.3f}'.format(l) for l in loglikelihood[:, 0]))
+				ax.set_title("IK? = " + ', '.join('{:.3f}'.format(i) for i in ik_scores[:, 0]) + " | des_dist = {:.3f}".format(final_pose_dist))
 				ax.set_xlim(-TABLE_SIZE[0] - 0.01, TABLE_SIZE[0] + 0.01)
 				ax.set_ylim(-TABLE_SIZE[1] - 0.01, TABLE_SIZE[1] + 0.01)
 				ax.set_xticks(())
