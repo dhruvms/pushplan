@@ -429,6 +429,18 @@ private:
 		comms::ObjectsPoses &new_scene,
 		trajectory_msgs::JointTrajectory &new_action);
 
+	// void addPickPlaceToDB(
+	// 	Object* o, const Coord &goal,
+	// 	const comms::ObjectsPoses &init_scene,
+	// 	const comms::ObjectsPoses &result_scene,
+	// 	const trajectory_msgs::JointTrajectory &trajectory,
+	// 	int pick_at, int place_at);
+	// bool lookupPickPlaceInDB(
+	// 	Object* o, const Coord &goal, const comms::ObjectsPoses &curr_scene,
+	// 	comms::ObjectsPoses &new_scene,
+	// 	trajectory_msgs::JointTrajectory &new_traj,
+	// 	int &new_pick_at, int &new_place_at);
+
 	// for moveit profiling
 	moveit::core::RobotModelPtr m_moveit_robot_model;
 	moveit::core::RobotStatePtr m_moveit_robot_state;

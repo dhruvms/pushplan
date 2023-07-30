@@ -1902,6 +1902,24 @@ bool Robot::PlanPickPlace(
 	std::vector<Object*> rearranged_obj = { object->GetObject() };
 
 	double start_time = GetTime();
+	// comms::ObjectsPoses new_scene;
+	// trajectory_msgs::JointTrajectory new_action;
+	// int new_pick_at, new_place_at;
+	// bool pickplace_in_db = lookupPickPlaceInDB(
+	// 					object->GetObject(), obj_traj->back().coord, curr_scene,
+	// 					new_scene, new_action, new_pick_at, new_place_at);
+	// if (pickplace_in_db)
+	// {
+	// 	result = new_scene;
+	// 	m_traj = new_action;
+	// 	pick_at = new_pick_at;
+	// 	place_at = new_place_at;
+	// 	plan_time = GetTime() - start_time;
+	// 	debug_action = std::make_tuple(debug_action_start, debug_action_end, -3);
+	// 	return true;
+	// }
+
+	start_time = GetTime();
 	// 1. add all objects as obstacles
 	// add all movable objects as obstacles into immovable collision checker
 	// they should be at their latest positions
@@ -2133,8 +2151,14 @@ bool Robot::PlanPickPlace(
 
 	// 9. simulate placing action
 	start_time = GetTime();
-	bool success = m_sim->SimPickPlace(m_traj, curr_scene, pick_at, place_at, object->GetID());
+	bool success = m_sim->SimPickPlace(m_traj, curr_scene, pick_at, place_at, object->GetID(), result);
 	sim_time = GetTime() - start_time;
+
+	// addPickPlaceToDB(
+	// 	object->GetObject(), obj_traj->back().coord,
+	// 	curr_scene, result, m_traj, pick_at, place_at);
+
+	debug_action = std::make_tuple(debug_action_start, debug_action_end, -3);
 	return success;
 }
 
@@ -4158,6 +4182,81 @@ bool Robot::lookupPushInDB(
 	}
 	return false;
 }
+
+// void Robot::addPickPlaceToDB(
+// 	Object* o, const Coord &goal,
+// 	const comms::ObjectsPoses &init_scene,
+// 	const comms::ObjectsPoses &result_scene,
+// 	const trajectory_msgs::JointTrajectory &trajectory,
+// 	int pick_at, int place_at)
+// {
+// 	ContPose pose(o->desc.o_x, o->desc.o_y, o->desc.o_z, o->desc.o_roll, o->desc.o_pitch, o->desc.o_yaw);
+// 	ObjectState ooi_state(o->desc.id, o->Symmetric(), pose);
+
+// 	auto db_key = std::make_tuple(ooi_state, goal);
+// 	auto db_value = std::make_tuple(init_scene, result_scene, trajectory, pick_at, place_at);
+
+// 	const auto it = m_valid_pickplaces.find(db_key);
+// 	if (it != m_valid_pickplaces.end()) {
+// 		it->second.push_back(db_value);
+// 	}
+
+// 	m_valid_pickplaces[db_key] = { db_value };
+// }
+
+// bool Robot::lookupPickPlaceInDB(
+// 	Object* o, const Coord &goal, const comms::ObjectsPoses &curr_scene,
+// 	comms::ObjectsPoses &new_scene,
+// 	trajectory_msgs::JointTrajectory &new_traj,
+// 	int &new_pick_at, int &new_place_at)
+// {
+// 	ContPose pose(o->desc.o_x, o->desc.o_y, o->desc.o_z, o->desc.o_roll, o->desc.o_pitch, o->desc.o_yaw);
+// 	ObjectState ooi_state(o->desc.id, o->Symmetric(), pose);
+
+// 	auto db_key = std::make_tuple(ooi_state, goal);
+// 	const auto it = m_valid_pickplaces.find(db_key);
+// 	if (it == m_valid_pickplaces.end())
+// 	{
+// 		// have not seen this pick-place before
+// 		return false;
+// 	}
+
+// 	// ALL objects should currently be in same poses as seen before
+// 	for (const auto &rearrangement : it->second)
+// 	{
+// 		const auto &init_scene = std::get<0>(rearrangement);
+// 		const auto &result_scene = std::get<1>(rearrangement);
+// 		const auto &trajectory = std::get<2>(rearrangement);
+// 		const auto &pick_at = std::get<3>(rearrangement);
+// 		const auto &place_at = std::get<4>(rearrangement);
+
+// 		bool consistent = true;
+// 		for (size_t i = 0; i < init_scene.poses.size(); ++i)
+// 		{
+// 			DiscPose seen(ContPose(init_scene.poses.at(i).xyz[0], init_scene.poses.at(i).xyz[1], init_scene.poses.at(i).xyz[2], init_scene.poses.at(i).rpy[0], init_scene.poses.at(i).rpy[1], init_scene.poses.at(i).rpy[2]));
+// 			DiscPose curr(ContPose(curr_scene.poses.at(i).xyz[0], curr_scene.poses.at(i).xyz[1], curr_scene.poses.at(i).xyz[2], curr_scene.poses.at(i).rpy[0], curr_scene.poses.at(i).rpy[1], curr_scene.poses.at(i).rpy[2]));
+// 			if (seen != curr)
+// 			{
+// 				consistent = false;
+// 				break;
+// 			}
+// 		}
+
+// 		if (consistent)
+// 		{
+// 			new_scene.poses.clear();
+// 			for (size_t i = 0; i < result_scene.poses.size(); ++i) {
+// 				new_scene.poses.push_back(result_scene.poses.at(i));
+// 			}
+
+// 			new_traj = trajectory;
+// 			new_pick_at = pick_at;
+// 			new_place_at = place_at;
+// 			return true;
+// 		}
+// 	}
+// 	return false;
+// }
 
 void Robot::visMAPFPath(const Trajectory* path)
 {
