@@ -134,7 +134,7 @@ def model_train_ik(model, X_train, y_train, X_val, y_val):
 	return best_acc
 
 # Reconstruction + KL divergence losses summed over all elements and batch
-def loss_fn_final_cvae(recon_x, x, mu, logvar):
+def loss_fn_cvae(recon_x, x, mu, logvar):
 	mse = nn.MSELoss()
 	recon = mse(recon_x[:, :2], x[:, :2])
 
@@ -171,7 +171,7 @@ def loss_fn_pose_cvae(recon_x, x, mu, logvar):
 	kld = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
 	return recon + kld
 
-def eval_fn_final_cvae(model, latent_dim, C_eval, X_eval, num_eval=5):
+def eval_fn_cvae(model, latent_dim, C_eval, X_eval, num_eval=5):
 	with torch.no_grad():
 		C_eval = torch.repeat_interleave(C_eval, num_eval, dim=0)
 		Z_eval = torch.randn(C_eval.shape[0], latent_dim).to(DEVICE)
@@ -344,11 +344,17 @@ if __name__ == '__main__':
 	all_data = process_data()
 
 	# get training data - IK
+	# ipdb> p X_ik.columns.tolist()
+	# ['o_ox', 'o_oy', 'o_oz', 'o_oyaw', 'o_shape', 'o_xs', 'o_ys', 'o_zs', 's_x', 's_y', 's_z', 's_yaw', 'm_dir_des', 'm_dist_des']
+
 	X_ik = copy.deepcopy(all_data.iloc[:, :24])
-	X_ik = X_ik.drop('o_mass', axis=1)
-	X_ik = X_ik.drop('o_mu', axis=1)
-	y_ik = copy.deepcopy(all_data.iloc[:, -1])
+	# extract only yaw angle from rotation matrices of poses
+	X_ik_rot = X_ik.iloc[:, 13:22].values.reshape(X_ik.shape[0], 3, 3).transpose(0, 2, 1)
+	_, _, yaws = get_euler_from_R_tensor(X_ik_rot)
+	X_ik = X_ik.drop(['o_mass', 'o_mu', 's_r11', 's_r21', 's_r31', 's_r12', 's_r22', 's_r32', 's_r13', 's_r23', 's_r33'], axis=1)
+	X_ik.insert(loc=11, column='s_yaw', value= yaws)
 	# make binary labels
+	y_ik = copy.deepcopy(all_data.iloc[:, -1])
 	y_ik.loc[y_ik > 0] = 2 # push IK failed => temporarily class 2
 	y_ik.loc[y_ik <= 0] = 1 # push IK succeeded => class 1
 	y_ik.loc[y_ik == 2] = 0 # push IK failed => class 0
@@ -359,12 +365,22 @@ if __name__ == '__main__':
 	X_ik_train, X_ik_test, y_ik_train, y_ik_test = train_test_split(X_ik, y_ik, train_size=0.85, shuffle=True)
 
 	# get training data - final pose
+	# ipdb> p C_final.columns.tolist()
+	# ['o_ox', 'o_oy', 'o_oz', 'o_oyaw', 'o_shape', 'o_xs', 'o_ys', 'o_zs', 'o_mass', 'o_mu', 's_x', 's_y', 's_z', 's_yaw', 'm_dir_ach', 'm_dist_ach']
+	# ipdb> p X_final.columns.tolist()
+	# ['e_x', 'e_y', 'e_yaw']
+
 	C_final = copy.deepcopy(all_data.loc[all_data.r == 0, [all_data.columns.tolist()[i] for i in list(range(0, 22)) + list(range(24, 26))]])
 	X_final = copy.deepcopy(all_data.loc[all_data.r == 0, [all_data.columns.tolist()[i] for i in list(range(-13, -1))]])
+	# extract only yaw angle from rotation matrices of poses
+	C_final_rot = C_final.iloc[:, 13:22].values.reshape(C_final.shape[0], 3, 3).transpose(0, 2, 1)
+	_, _, yaws = get_euler_from_R_tensor(C_final_rot)
+	C_final = C_final.drop(['s_r11', 's_r21', 's_r31', 's_r12', 's_r22', 's_r32', 's_r13', 's_r23', 's_r33'], axis=1)
+	C_final.insert(loc=13, column='s_yaw', value= yaws)
 	X_final_rot = X_final.iloc[:, 3:].values.reshape(X_final.shape[0], 3, 3).transpose(0, 2, 1)
 	_, _, yaws = get_euler_from_R_tensor(X_final_rot)
 	X_final = X_final.drop(['e_z', 'e_r11', 'e_r21', 'e_r31', 'e_r12', 'e_r22', 'e_r32', 'e_r13', 'e_r23', 'e_r33'], axis=1)
-	X_final['e_yaw'] = yaws
+	X_final.insert(loc=2, column='e_yaw', value= yaws)
 	# Convert to 2D PyTorch tensors
 	C_final = torch.tensor(C_final.values, dtype=torch.float32).to(DEVICE)
 	X_final = torch.tensor(X_final.values, dtype=torch.float32).to(DEVICE)
@@ -372,48 +388,57 @@ if __name__ == '__main__':
 	C_final_train, C_final_test, X_final_train, X_final_test = train_test_split(C_final, X_final, train_size=0.85, shuffle=True)
 
 	# get training data - start pose
+	# ipdb> p C_start.columns.tolist()
+	# ['o_ox', 'o_oy', 'o_oz', 'o_oyaw', 'o_shape', 'o_xs', 'o_ys', 'o_zs', 'o_mass', 'o_mu', 'm_dir_ach', 'm_dist_ach']
+	# ipdb> p X_start.columns.tolist()
+	# ['s_x', 's_y', 's_z', 's_yaw']
+
+
 	C_start = copy.deepcopy(all_data.loc[all_data.r == 0, [all_data.columns.tolist()[i] for i in list(range(0, 10)) + list(range(24, 26))]])
 	X_start = copy.deepcopy(all_data.loc[all_data.r == 0, [all_data.columns.tolist()[i] for i in list(range(10, 22))]])
+	# extract only yaw angle from rotation matrices of poses
+	X_start_rot = X_start.iloc[:, 3:].values.reshape(X_start.shape[0], 3, 3).transpose(0, 2, 1)
+	_, _, yaws = get_euler_from_R_tensor(X_start_rot)
+	X_start = X_start.drop(['s_r11', 's_r21', 's_r31', 's_r12', 's_r22', 's_r32', 's_r13', 's_r23', 's_r33'], axis=1)
+	X_start.insert(loc=3, column='s_yaw', value= yaws)
 	# Convert to 2D PyTorch tensors
 	C_start = torch.tensor(C_start.values, dtype=torch.float32).to(DEVICE)
 	X_start = torch.tensor(X_start.values, dtype=torch.float32).to(DEVICE)
 	# train-test split: Hold out the test set for start model evaluation
 	C_start_train, C_start_test, X_start_train, X_start_test = train_test_split(C_start, X_start, train_size=0.85, shuffle=True)
-	X_start_train = X_start_train[:, :-3] # drop final column of rotation matrix to be predicted
 
 	# create networks
 	layers = 4
 	h_sizes = [256] * (layers-1)
 	ik_net = BCNet()
 	ik_net.initialise(X_ik.shape[1], 1, activation='relu', layers=layers, h_sizes=h_sizes)
-	latent_dim = 6
+	latent_dim = 3
 
 	final_pose_net = CVAE()
 	final_pose_net.initialise(X_final_train.shape[1], C_final_train.shape[1], latent_dim, activation='relu', layers=layers, h_sizes=h_sizes)
 
-	start_pose_net = PoseCVAE()
+	start_pose_net = CVAE()
 	start_pose_net.initialise(X_start_train.shape[1], C_start_train.shape[1], latent_dim, activation='relu', layers=layers, h_sizes=h_sizes)
 
 	# train networks
 	ik_acc = model_train_ik(ik_net, X_ik_train, y_ik_train, X_ik_test, y_ik_test)
-	model_train_cvae(final_pose_net, C_final_train, X_final_train, latent_dim, C_final_test, X_final_test, loss_fn_final_cvae, eval_fn_final_cvae)
-	model_train_cvae(start_pose_net, C_start_train, X_start_train, latent_dim, C_start_test, X_start_test, loss_fn_pose_cvae, eval_fn_pose_cvae)
+	model_train_cvae(final_pose_net, C_final_train, X_final_train, latent_dim, C_final_test, X_final_test, loss_fn_cvae, eval_fn_cvae)
+	model_train_cvae(start_pose_net, C_start_train, X_start_train, latent_dim, C_start_test, X_start_test, loss_fn_cvae, eval_fn_cvae)
 
 	# eval networks
 	ik_net.eval()
 	final_pose_net.eval()
 	start_pose_net.eval()
 
-	test_obj_grid_num = 2
+	test_obj_grid_num = 5
 	test_objs = test_obj_grid_num**2
 	start_pose_samples = 1
 	final_pose_samples = 10
 	with torch.no_grad():
-		figure = plt.figure(figsize=(test_obj_grid_num,test_obj_grid_num))
+		figure = plt.figure(figsize=(15,15))
 		for o in range(test_objs):
 			pidx = np.random.randint(all_data.shape[0])
 			obj_props = all_data.iloc[pidx, :10].values
-			start_pose = all_data.iloc[pidx, 10:22].values
 
 			axes = []
 			for loc in range(9):
@@ -438,10 +463,13 @@ if __name__ == '__main__':
 				start_pose_c_torch = torch.tensor(start_pose_c, dtype=torch.float32).to(DEVICE)
 				start_pose_z_torch = torch.randn(start_pose_samples, latent_dim).to(DEVICE)
 
-				start_pose_pred = start_pose_net.decode(start_pose_z_torch, start_pose_c_torch)
-				start_pose_pred_rot = start_pose_net.get_rotation_matrix(start_pose_pred[:, -6:])
-				start_pose_pred = start_pose_pred[:, :3].cpu().numpy()
-				start_pose_pred_rot = start_pose_pred_rot.cpu().numpy()
+				start_pose_pred = start_pose_net.decode(start_pose_z_torch, start_pose_c_torch).cpu().numpy()
+				asize = 0.08
+				for i in range(start_pose_pred.shape[0]):
+					ayaw = start_pose_pred[i, 3]
+					ax.arrow(start_pose_pred[i, 0], start_pose_pred[i, 1], asize * np.cos(ayaw), asize * np.sin(ayaw),
+								length_includes_head=True, head_width=0.02, head_length=0.02,
+								ec='gold', fc='gold', alpha=0.8, zorder=4)
 
 				# print()
 				# print("Generated samples of start poses:")
@@ -451,15 +479,6 @@ if __name__ == '__main__':
 				# 		x=start_pose_pred[i, 0], y=start_pose_pred[i, 1], z=start_pose_pred[i, 2],
 				# 		roll=roll, pitch=pitch, yaw=yaw))
 
-				asize = 0.08
-				for i in range(start_pose_pred.shape[0]):
-					ayaw = get_yaw_from_R(start_pose_pred_rot[i])
-					ax.arrow(start_pose_pred[i, 0], start_pose_pred[i, 1], asize * np.cos(ayaw), asize * np.sin(ayaw),
-								length_includes_head=True, head_width=0.02, head_length=0.02,
-								ec='gold', fc='gold', alpha=0.8, zorder=4)
-
-				start_pose_pred_rot = np.transpose(start_pose_pred_rot, axes=[0, 2, 1]).reshape(start_pose_pred_rot.shape[0], -1)
-				start_pose_pred = np.hstack([start_pose_pred, start_pose_pred_rot])
 				obj_props_stack_ik = np.repeat(obj_props[None, :8], start_pose_samples, axis=0)
 				ik_score_input = np.hstack([obj_props_stack_ik, start_pose_pred, desired_push_stack])
 				ik_score_input_torch = torch.tensor(ik_score_input, dtype=torch.float32).to(DEVICE)
@@ -479,21 +498,20 @@ if __name__ == '__main__':
 					obj[0, 3] = final_pose_pred[i, 2]
 					draw_object(ax, obj, alpha=0.8 * (ik_scores[i//final_pose_samples, 0]), zorder=2, colour='magenta')
 
-				final_pose_mu, final_pose_logvar = final_pose_net.output_dist(final_pose_z_torch, final_pose_c_torch)
-				final_pose_mu = final_pose_mu.cpu().numpy()
-				final_pose_logvar = final_pose_logvar.cpu().numpy()
-				final_pose_half_logdet = -0.5 * final_pose_logvar.sum(axis=1, keepdims=True)
-				final_pose_var_inv = 1.0/np.exp(final_pose_logvar)
-				logpi = -0.5 * final_pose_mu.shape[1] * np.log(2 * np.pi)
+				def log_normal_pdf(sample, mean, logvar, raxis=1):
+					log2pi = sample.shape[1] * np.log(2 * np.pi)
+					logdet = np.sum(logvar, axis=raxis, keepdims=True)
+					mahalanobis = np.sum(((sample - mean) ** 2.) * np.exp(-logvar), axis=raxis, keepdims=True)
+					return -0.5 * (log2pi + logdet + mahalanobis)
 
 				obj_yaw_stack = np.repeat(normalize_angle(obj_props[3]), start_pose_samples * final_pose_samples)[:, None]
 				final_pose_des = np.hstack([np.repeat(desired_final[None, :], start_pose_samples * final_pose_samples, axis=0), obj_yaw_stack])
 
-				residuals = (final_pose_des - final_pose_mu)
-				residuals[:, 2] = shortest_angle_diff(final_pose_des[:, 2], final_pose_mu[:, 2])
-				loglikelihood = -0.5 * residuals * final_pose_var_inv * residuals
-				loglikelihood = loglikelihood.sum(axis=1)[:, None] + final_pose_half_logdet + logpi
-				loglikelihood = loglikelihood.reshape(-1, final_pose_samples).sum(axis=1)[:, None]
+				final_pose_mu, final_pose_logvar = final_pose_net.output_dist(final_pose_z_torch, final_pose_c_torch)
+				final_pose_mu = final_pose_mu.cpu().numpy()
+				final_pose_logvar = final_pose_logvar.cpu().numpy()
+				loglikelihood = log_normal_pdf(final_pose_des, final_pose_mu, final_pose_logvar)
+				loglikelihood = loglikelihood.reshape(-1, final_pose_samples).mean(axis=1)[:, None]
 
 				ax.set_title("IK? = " + ', '.join('{:.3f}'.format(i) for i in ik_scores[:, 0]) + " | logprob = " + ', '.join('{:.3f}'.format(l) for l in loglikelihood[:, 0]))
 				ax.set_xlim(-TABLE_SIZE[0] - 0.01, TABLE_SIZE[0] + 0.01)
