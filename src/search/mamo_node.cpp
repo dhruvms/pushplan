@@ -24,7 +24,7 @@ void MAMONode::InitAgents(
 
 std::vector<double>* MAMONode::GetCurrentStartState()
 {
-	if (m_oidx != -1 && m_aidx != -1)
+	if (m_action_to_me._oid != -1 && m_action_to_me._type != MAMOActionType::DUMMY)
 	{
 		// we successfully validated an action to get to this node
 		// so we just return the last state on the trajectory for that action
@@ -93,7 +93,7 @@ bool MAMONode::RunMAPF()
 }
 
 void MAMONode::GetSuccs(
-	std::vector<std::pair<int, int> > *succ_object_centric_actions,
+	std::vector<MAMOAction> *succ_object_centric_actions,
 	std::vector<comms::ObjectsPoses> *succ_objects,
 	std::vector<trajectory_msgs::JointTrajectory> *succ_trajs,
 	std::vector<std::tuple<State, State, int> > *debug_actions,
@@ -233,9 +233,11 @@ void MAMONode::GetSuccs(
 
 	if (duplicate_successor)
 	{
-		trajectory_msgs::JointTrajectory dummy_traj;
-		succ_object_centric_actions->emplace_back(-1, -1);
+		MAMOAction action(MAMOActionType::DUMMY, -1);
+		action._params.clear();
+		succ_object_centric_actions->push_back(action);
 		succ_objects->push_back(m_all_objects);
+		trajectory_msgs::JointTrajectory dummy_traj;
 		succ_trajs->push_back(dummy_traj);
 		debug_actions->insert(debug_actions->end(),
 					invalid_action_samples.begin(), invalid_action_samples.end());
@@ -431,10 +433,9 @@ void MAMONode::SetRobot(const std::shared_ptr<Robot>& robot)
 	m_robot = robot;
 }
 
-void MAMONode::SetEdgeTo(int oidx, int aidx)
+void MAMONode::SetEdgeTo(const MAMOAction &action)
 {
-	m_oidx = oidx;
-	m_aidx = aidx;
+	m_action_to_me = action;
 }
 
 void MAMONode::AddChild(MAMONode* child)
@@ -485,9 +486,9 @@ const std::vector<MAMONode*>& MAMONode::kchildren() const
 	return m_children;
 }
 
-std::pair<int, int> MAMONode::object_centric_action() const
+const MAMOAction& MAMONode::kobject_centric_action() const
 {
-	return std::make_pair(m_oidx, m_aidx);
+	return m_action_to_me;
 }
 
 const std::vector<std::pair<int, Trajectory> >& MAMONode::kmapf_soln() const

@@ -3,6 +3,7 @@
 
 #include <pushplan/agents/object.hpp>
 #include <pushplan/search/cbs.hpp>
+#include <pushplan/utils/constants.hpp>
 #include <pushplan/utils/types.hpp>
 
 #include <boost/heap/fibonacci_heap.hpp>
@@ -20,14 +21,21 @@ namespace clutter
 
 class Planner;
 
+struct MAMOAction
+{
+	MAMOActionType _type;
+	int _oid;
+	std::vector<int> _params;
+
+	MAMOAction() {};
+	MAMOAction(MAMOActionType t, int o) : _type(t), _oid(o) {};
+};
+
 class MAMONode
 {
 public:
 	MAMONode() :
-		m_parent(nullptr), m_oidx(-1), m_aidx(-1),
-		m_hash_set_l1(false), m_hash_set_l2(false) {} ;
-	MAMONode(int oidx, int aidx) :
-		m_parent(nullptr), m_oidx(oidx), m_aidx(oidx),
+		m_parent(nullptr),
 		m_hash_set_l1(false), m_hash_set_l2(false) {} ;
 
 	void InitAgents(
@@ -37,7 +45,7 @@ public:
 	std::vector<double>* GetCurrentStartState();
 	bool RunMAPF();
 	void GetSuccs(
-		std::vector<std::pair<int, int> > *succ_object_centric_actions,
+		std::vector<MAMOAction> *succ_object_centric_actions,
 		std::vector<comms::ObjectsPoses> *succ_objects,
 		std::vector<trajectory_msgs::JointTrajectory> *succ_trajs,
 		std::vector<std::tuple<State, State, int> > *debug_actions,
@@ -62,7 +70,7 @@ public:
 	void SetCBS(const std::shared_ptr<CBS>& cbs);
 	void SetCC(const std::shared_ptr<CollisionChecker>& cc);
 	void SetRobot(const std::shared_ptr<Robot>& robot);
-	void SetEdgeTo(int oidx, int aidx);
+	void SetEdgeTo(const MAMOAction &action);
 	void AddChild(MAMONode* child);
 	void RemoveChild(MAMONode* child);
 
@@ -73,7 +81,7 @@ public:
 	const MAMONode* kparent() const;
 	MAMONode* parent();
 	const std::vector<MAMONode*>& kchildren() const;
-	std::pair<int, int> object_centric_action() const;
+	const MAMOAction& kobject_centric_action() const;
 	const std::vector<std::pair<int, Trajectory> >& kmapf_soln() const;
 	bool has_traj() const;
 	bool has_mapf_soln() const;
@@ -85,7 +93,7 @@ private:
 	std::vector<std::shared_ptr<Agent> > m_agents; // pointers to relevant objects
 	std::unordered_map<int, size_t> m_agent_map;
 	std::vector<ObjectState> m_object_states; // current relevant object states
-	int m_oidx, m_aidx; // object-to-move id, action-to-use id
+	MAMOAction m_action_to_me; // used action details
 	trajectory_msgs::JointTrajectory m_robot_traj; // robot trajectory from parent to this node
 	std::vector<std::tuple<State, State, int> > m_debug_actions; // push start and end for viz purposes
 
