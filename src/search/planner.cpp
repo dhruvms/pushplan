@@ -226,7 +226,7 @@ bool Planner::Plan(bool& done)
 	m_robot->SavePushDebugData(m_scene_id);
 	if (result)
 	{
-		m_mamo_search->GetRearrangements(m_rearrangements, m_grasp_at);
+		m_mamo_search->GetRearrangements(m_rearrangements, m_actions);
 		done = true;
 	}
 
@@ -462,10 +462,19 @@ bool Planner::runSim()
 			continue;
 		}
 
+		auto &action_params = m_actions.at(i);
+		int pick_at = -1, place_at = -1, oid = -1;
 		if (i < m_rearrangements.size() - 1)
 		{
 			// if any rearrangement traj execuction failed, m_violation == 1
-			if (!m_sim->ExecTraj(m_rearrangements.at(i), dummy))
+			if (action_params._type == MAMOActionType::PICKPLACE)
+			{
+				pick_at = action_params._params[0];
+				place_at = action_params._params[1];
+				oid = action_params._oid;
+			}
+
+			if (!m_sim->ExecTraj(m_rearrangements.at(i), dummy, pick_at, place_at, oid))
 			{
 				SMPL_ERROR("Failed to exec rearrangement!");
 				m_violation |= 0x00000001;
@@ -475,7 +484,8 @@ bool Planner::runSim()
 		{
 			// if all rearrangements succeeded, but extraction failed, m_violation == 4
 			// if any rearrangement traj execuction failed, and extraction failed, m_violation == 5
-			if (!m_sim->ExecTraj(m_rearrangements.at(i), dummy, m_grasp_at, m_ooi->GetID()))
+			pick_at = action_params._params[0];
+			if (!m_sim->ExecTraj(m_rearrangements.at(i), dummy, pick_at, place_at, m_ooi->GetID()))
 			{
 				SMPL_ERROR("Failed to exec traj!");
 				m_violation |= 0x00000004;

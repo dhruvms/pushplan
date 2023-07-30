@@ -32,7 +32,7 @@ public:
 	Planner() : m_scene_id(-1),
 				m_ph("~"), m_replan(true),
 				m_plan_success(false), m_sim_success(false),
-				m_push_input(false), m_rng(m_dev()), m_grasp_at(-1) {};
+				m_push_input(false), m_rng(m_dev()) {};
 	~Planner();
 
 	bool Init(const std::string& scene_file, int scene_id, bool ycb);
@@ -133,6 +133,7 @@ private:
 
 	trajectory_msgs::JointTrajectory m_exec;
 	std::vector<trajectory_msgs::JointTrajectory> m_rearrangements;
+	std::vector<MAMOAction> m_actions;
 	comms::ObjectsPoses m_rearranged;
 
 	HighLevelNode* m_cbs_soln;
@@ -148,7 +149,7 @@ private:
 	std::uniform_real_distribution<double> m_distD;
 	std::uniform_int_distribution<> m_distI;
 
-	int m_scene_id, m_grasp_at, m_moved;
+	int m_scene_id, m_moved;
 	bool m_replan, m_plan_success, m_sim_success, m_push_input, m_first_traj_success;
 	double m_plan_budget, m_sim_budget, m_total_budget, m_timer;
 	std::uint32_t m_violation;
