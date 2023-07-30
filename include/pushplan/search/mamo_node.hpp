@@ -40,7 +40,7 @@ public:
 		std::vector<std::pair<int, int> > *succ_object_centric_actions,
 		std::vector<comms::ObjectsPoses> *succ_objects,
 		std::vector<trajectory_msgs::JointTrajectory> *succ_trajs,
-		std::vector<std::tuple<State, State, int> > *debug_pushes,
+		std::vector<std::tuple<State, State, int> > *debug_actions,
 		bool *close,
 		double *mapf_time, double *get_succs_time, double *sim_time);
 	unsigned int ComputeMAMOPriorityOrig();
@@ -56,7 +56,7 @@ public:
 
 	void SetParent(MAMONode *parent);
 	void SetRobotTrajectory(const trajectory_msgs::JointTrajectory& robot_traj);
-	void AddDebugPush(const std::tuple<State, State, int>& debug_push);
+	void AddDebugAction(const std::tuple<State, State, int>& debug_action);
 
 	void SetPlanner(Planner *planner);
 	void SetCBS(const std::shared_ptr<CBS>& cbs);
@@ -87,7 +87,7 @@ private:
 	std::vector<ObjectState> m_object_states; // current relevant object states
 	int m_oidx, m_aidx; // object-to-move id, action-to-use id
 	trajectory_msgs::JointTrajectory m_robot_traj; // robot trajectory from parent to this node
-	std::vector<std::tuple<State, State, int> > m_debug_pushes; // push start and end for viz purposes
+	std::vector<std::tuple<State, State, int> > m_debug_actions; // push start and end for viz purposes
 
 	MAMONode *m_parent; // parent node in tree
 	std::vector<MAMONode*> m_children; // children nodes in tree

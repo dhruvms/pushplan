@@ -96,7 +96,7 @@ void MAMONode::GetSuccs(
 	std::vector<std::pair<int, int> > *succ_object_centric_actions,
 	std::vector<comms::ObjectsPoses> *succ_objects,
 	std::vector<trajectory_msgs::JointTrajectory> *succ_trajs,
-	std::vector<std::tuple<State, State, int> > *debug_pushes,
+	std::vector<std::tuple<State, State, int> > *debug_actions,
 	bool *close,
 	double *mapf_time, double *get_succs_time, double *sim_time)
 {
@@ -111,9 +111,9 @@ void MAMONode::GetSuccs(
 	}
 	*mapf_time = GetTime() - *mapf_time;
 
-	bool duplicate_successor = false;
-	std::vector<std::tuple<State, State, int> > invalid_push_samples;
+	std::vector<std::tuple<State, State, int> > invalid_action_samples;
 	*get_succs_time = GetTime();
+	bool duplicate_successor = false;
 	for (size_t i = 0; i < m_mapf_solution.size(); ++i)
 	{
 		const auto& moved = m_mapf_solution.at(i);
@@ -237,8 +237,8 @@ void MAMONode::GetSuccs(
 		succ_object_centric_actions->emplace_back(-1, -1);
 		succ_objects->push_back(m_all_objects);
 		succ_trajs->push_back(dummy_traj);
-		debug_pushes->insert(debug_pushes->end(),
-					invalid_push_samples.begin(), invalid_push_samples.end());
+		debug_actions->insert(debug_actions->end(),
+					invalid_action_samples.begin(), invalid_action_samples.end());
 		m_new_constraints = true;
 	}
 	*get_succs_time = GetTime() - *get_succs_time;
@@ -406,9 +406,9 @@ void MAMONode::SetRobotTrajectory(const trajectory_msgs::JointTrajectory& robot_
 	m_robot_traj = robot_traj;
 }
 
-void MAMONode::AddDebugPush(const std::tuple<State, State, int>& debug_push)
+void MAMONode::AddDebugAction(const std::tuple<State, State, int>& debug_action)
 {
-	m_debug_pushes.push_back(debug_push);
+	m_debug_actions.push_back(debug_action);
 }
 
 void MAMONode::SetPlanner(Planner *planner)
@@ -678,16 +678,16 @@ void MAMONode::SaveNode(unsigned int my_id,	unsigned int parent_id)
 			}
 		}
 
-		if (!m_debug_pushes.empty())
+		if (!m_debug_actions.empty())
 		{
 			DATA << "PUSHES" << '\n';
-			DATA << m_debug_pushes.size() << '\n';
+			DATA << m_debug_actions.size() << '\n';
 
 			State push_start, push_end;
 			int push_result;
-			for (const auto& debug_push: m_debug_pushes)
+			for (const auto& debug_action: m_debug_actions)
 			{
-				std::tie(push_start, push_end, push_result) = debug_push;
+				std::tie(push_start, push_end, push_result) = debug_action;
 				DATA 	<< push_start.at(0) << ','
 						<< push_start.at(1) << ','
 						<< push_end.at(0) << ','
