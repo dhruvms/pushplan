@@ -28,12 +28,11 @@
 namespace clutter
 {
 
-size_t HashPush::operator()(
-	const std::tuple<ObjectState, Coord, int> &push_info) const
+size_t HashRearrangementAction::operator()(
+	const std::tuple<ObjectState, Coord> &push_info) const
 {
 	const auto &object_state = std::get<0>(push_info);
 	const auto &push_end_coord = std::get<1>(push_info);
-	const auto &aidx = std::get<2>(push_info);
 
 	size_t hash_val = 0;
 
@@ -59,15 +58,12 @@ size_t HashPush::operator()(
 	boost::hash_combine(hash_val, push_end_coord.at(0));
 	boost::hash_combine(hash_val, push_end_coord.at(1));
 
-	// hash push action (i.e. push fraction)
-	boost::hash_combine(hash_val, aidx);
-
 	return hash_val;
 }
 
-bool EqualsPush::operator()(
-	const std::tuple<ObjectState, Coord, int> &a,
-	const std::tuple<ObjectState, Coord, int> &b) const
+bool EqualsRearrangementAction::operator()(
+	const std::tuple<ObjectState, Coord> &a,
+	const std::tuple<ObjectState, Coord> &b) const
 {
 	return a == b;
 }
@@ -2152,7 +2148,6 @@ bool Robot::PlanPush(
 	sim_time = 0.0;
 
 	// required info about object being pushed
-	int aidx = getPushIdx(push_frac);
 	const Trajectory* obj_traj = object->SolveTraj();
 	std::vector<Object*> pushed_obj = { object->GetObject() };
 	Eigen::Affine3d push_start_pose, push_end_pose;
@@ -2179,7 +2174,7 @@ bool Robot::PlanPush(
 	comms::ObjectsPoses new_scene;
 	trajectory_msgs::JointTrajectory new_action;
 	bool push_in_db = lookupPushInDB(
-						object->GetObject(), obj_traj->back().coord, aidx, curr_scene,
+						object->GetObject(), obj_traj->back().coord, curr_scene,
 						new_scene, new_action);
 	m_stats["push_db_lookup_time"] += GetTime() - start_time;
 
@@ -2442,7 +2437,7 @@ bool Robot::PlanPush(
 	// SMPL_INFO("Computed and simulated new push in %f seconds!", GetTime() - start_time);
 
 	addPushToDB(
-		object->GetObject(), obj_traj->back().coord, aidx,
+		object->GetObject(), obj_traj->back().coord,
 		curr_scene, result, relevant_ids, m_push_actions.at(pidx));
 
 	return true;
@@ -4052,7 +4047,7 @@ int Robot::getPushIdx(double push_frac)
 }
 
 void Robot::addPushToDB(
-	Object* o, const Coord &goal, const int& aidx,
+	Object* o, const Coord &goal,
 	const comms::ObjectsPoses &init_scene,
 	const comms::ObjectsPoses &result_scene,
 	const std::vector<int> &relevant_ids,
@@ -4061,28 +4056,28 @@ void Robot::addPushToDB(
 	ContPose pose(o->desc.o_x, o->desc.o_y, o->desc.o_z, o->desc.o_roll, o->desc.o_pitch, o->desc.o_yaw);
 	ObjectState ooi_state(o->desc.id, o->Symmetric(), pose);
 
-	auto db_key = std::make_tuple(ooi_state, goal, aidx);
+	auto db_key = std::make_tuple(ooi_state, goal);
 	auto db_value = std::make_tuple(init_scene, result_scene, relevant_ids, push_action);
 
-	const auto it = m_valid_sims.find(db_key);
-	if (it != m_valid_sims.end()) {
+	const auto it = m_valid_pushes.find(db_key);
+	if (it != m_valid_pushes.end()) {
 		it->second.push_back(db_value);
 	}
 
-	m_valid_sims[db_key] = { db_value };
+	m_valid_pushes[db_key] = { db_value };
 }
 
 bool Robot::lookupPushInDB(
-	Object* o, const Coord &goal, const int& aidx, const comms::ObjectsPoses &curr_scene,
+	Object* o, const Coord &goal, const comms::ObjectsPoses &curr_scene,
 	comms::ObjectsPoses &new_scene,
 	trajectory_msgs::JointTrajectory &new_action)
 {
 	ContPose pose(o->desc.o_x, o->desc.o_y, o->desc.o_z, o->desc.o_roll, o->desc.o_pitch, o->desc.o_yaw);
 	ObjectState ooi_state(o->desc.id, o->Symmetric(), pose);
 
-	auto db_key = std::make_tuple(ooi_state, goal, aidx);
-	const auto it = m_valid_sims.find(db_key);
-	if (it == m_valid_sims.end())
+	auto db_key = std::make_tuple(ooi_state, goal);
+	const auto it = m_valid_pushes.find(db_key);
+	if (it == m_valid_pushes.end())
 	{
 		// have not seen this push before
 		return false;
