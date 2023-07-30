@@ -122,6 +122,21 @@ private:
 	// void identifyRelevantMovables();
 
 	void resetAgents();
+
+	bool tryPickPlace(
+		std::vector<MAMOAction> *succ_object_centric_actions,
+		std::vector<comms::ObjectsPoses> *succ_objects,
+		std::vector<trajectory_msgs::JointTrajectory> *succ_trajs,
+		std::vector<std::tuple<State, State, int> > *debug_actions,
+		std::vector<std::tuple<State, State, int> > *invalid_action_samples,
+		const std::vector<Object*> &movable_obstacles, int aid);
+	bool tryPush(
+		std::vector<MAMOAction> *succ_object_centric_actions,
+		std::vector<comms::ObjectsPoses> *succ_objects,
+		std::vector<trajectory_msgs::JointTrajectory> *succ_trajs,
+		std::vector<std::tuple<State, State, int> > *debug_actions,
+		std::vector<std::tuple<State, State, int> > *invalid_action_samples,
+		const std::vector<Object*> &movable_obstacles, size_t aid, double *sim_time);
 };
 
 ////////////////////////

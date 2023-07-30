@@ -92,6 +92,143 @@ bool MAMONode::RunMAPF()
 	return result;
 }
 
+bool MAMONode::tryPickPlace(
+	std::vector<MAMOAction> *succ_object_centric_actions,
+	std::vector<comms::ObjectsPoses> *succ_objects,
+	std::vector<trajectory_msgs::JointTrajectory> *succ_trajs,
+	std::vector<std::tuple<State, State, int> > *debug_actions,
+	std::vector<std::tuple<State, State, int> > *invalid_action_samples,
+	const std::vector<Object*> &movable_obstacles, int aid)
+{
+	comms::ObjectsPoses result;
+	int pick_at, place_at;
+	double plan_time = 0.0, sim_time = 0.0;
+	std::tuple<State, State, int> debug_action;
+	if (m_robot->PlanPickPlace(this->GetCurrentStartState(), m_agents.at(m_agent_map[aid]).get(), movable_obstacles, m_all_objects, result, pick_at, place_at, plan_time, sim_time, debug_action))
+	{
+		// pick-and-place succeeded!
+		MAMOAction action(MAMOActionType::PICKPLACE, aid);
+		action._params.push_back(pick_at);
+		action._params.push_back(place_at);
+
+		succ_object_centric_actions->push_back(action);
+		succ_objects->push_back(std::move(result));
+		succ_trajs->push_back(m_robot->GetLastPlan());
+		debug_actions->push_back(std::move(debug_action));
+
+		return true;
+	}
+	invalid_action_samples->push_back(std::move(debug_action));
+	return false;
+}
+
+bool MAMONode::tryPush(
+	std::vector<MAMOAction> *succ_object_centric_actions,
+	std::vector<comms::ObjectsPoses> *succ_objects,
+	std::vector<trajectory_msgs::JointTrajectory> *succ_trajs,
+	std::vector<std::tuple<State, State, int> > *debug_actions,
+	std::vector<std::tuple<State, State, int> > *invalid_action_samples,
+	const std::vector<Object*> &movable_obstacles, size_t aid, double *sim_time)
+{
+	const auto& moved = m_mapf_solution.at(aid);
+
+	// check if we have seen this push before
+	int samples = m_agents.at(m_agent_map[moved.first])->InvalidPushCount(moved.second.back().coord);
+	if (samples >= SAMPLES) {
+		return true; // known invalid push, do not compute
+	}
+	else if (samples == 0) {
+		samples = SAMPLES; // never before seen push, must compute
+	}
+	else {
+		samples = 1; // seen valid push before, lookup from DB
+		// samples = SAMPLES - samples;
+	}
+
+	// get push location
+	std::vector<double> push;
+	m_agents.at(m_agent_map[moved.first])->SetSolveTraj(moved.second);
+	m_agents.at(m_agent_map[moved.first])->GetSE2Push(push);
+
+	int p = 0;
+	bool globally_invalid = false;
+	bool success = true;
+	for (; p < samples; ++p)
+	{
+		// plan to push location
+		// m_robot->PlanPush creates the planner internally, because it might
+		// change KDL chain during the process
+		comms::ObjectsPoses result;
+		int push_failure;
+		std::tuple<State, State, int> debug_action;
+		double sim_time_push = 0.0;
+		if (m_robot->PlanPush(this->GetCurrentStartState(), m_agents.at(m_agent_map[moved.first]).get(), push, movable_obstacles, m_all_objects, 1.0, result, push_failure, debug_action, sim_time_push))
+		{
+			// valid push found!
+			MAMOAction action(MAMOActionType::PUSH, moved.first);
+			action._params.clear();
+
+			succ_object_centric_actions->push_back(action); // TODO: currently only one aidx
+			succ_objects->push_back(std::move(result));
+			succ_trajs->push_back(m_robot->GetLastPlan());
+			debug_actions->push_back(std::move(debug_action));
+			if (samples == SAMPLES) {
+				m_successful_pushes.push_back(std::make_pair(moved.first, moved.second.back().coord));
+			}
+
+			break;
+		}
+		else
+		{
+			assert(samples == SAMPLES);
+			// SMPL_INFO("Tried pushing object %d. Return value = %d", moved.first, push_failure);
+			switch (push_failure)
+			{
+				case 3: // SMPL_ERROR("Inverse dynamics failed to reach push end."); break;
+				case 4: // SMPL_ERROR("Inverse kinematics/dynamics failed (joint limits likely)."); break;
+				case 5: // SMPL_ERROR("Inverse kinematics hit static obstacle."); break;
+				{
+					m_planner->AddGloballyInvalidPush(std::make_pair(moved.second.front().coord, moved.second.back().coord));
+					globally_invalid = true;
+					break;
+				}
+				// case 1: // SMPL_ERROR("Push start inside object."); break;
+				// case 2: // SMPL_ERROR("Failed to reach push start."); break;
+				// case 6: // SMPL_ERROR("Push action did not collide with intended object."); break;
+				// case 0: // SMPL_ERROR("Valid push computed! Failed in simulation."); break;
+				// case -1: SMPL_INFO("Push succeeded in simulation!"); break;
+				// default: SMPL_WARN("Unknown push failure cause.");
+			}
+			invalid_action_samples->push_back(std::move(debug_action));
+			if (globally_invalid) {
+				break;
+			}
+		}
+		*sim_time += sim_time_push;
+	}
+
+	if (samples == SAMPLES) // this was a new push I was considering
+	{
+		if (globally_invalid) {
+			p = SAMPLES * 2; // automatic maximum penalty
+		}
+		if (p >= SAMPLES) {
+			success = false; // failed to find a push, must add new constraint to this state
+		}
+		if (p > 0)
+		{
+			// treat this action to have p invalid samples
+			m_planner->AddLocallyInvalidPush(
+				this->GetObjectsHash(),
+				moved.first,
+				moved.second.back().coord,
+				p);
+		}
+	}
+
+	return success;
+}
+
 void MAMONode::GetSuccs(
 	std::vector<MAMOAction> *succ_object_centric_actions,
 	std::vector<comms::ObjectsPoses> *succ_objects,
@@ -129,24 +266,6 @@ void MAMONode::GetSuccs(
 			continue;
 		}
 
-		// check if we have seen this push before
-		int samples = m_agents.at(m_agent_map[moved.first])->InvalidPushCount(moved.second.back().coord);
-		if (samples >= SAMPLES) {
-			continue; // known invalid push, do not compute
-		}
-		else if (samples == 0) {
-			samples = SAMPLES; // never before seen push, must compute
-		}
-		else {
-			samples = 1; // seen valid push before, lookup from DB
-			// samples = SAMPLES - samples;
-		}
-
-		// get push location
-		std::vector<double> push;
-		m_agents.at(m_agent_map[moved.first])->SetSolveTraj(moved.second);
-		m_agents.at(m_agent_map[moved.first])->GetSE2Push(push);
-
 		// other movables to be considered as obstacles
 		std::vector<Object*> movable_obstacles;
 		for (size_t i = 0; i < m_agents.size(); ++i)
@@ -158,77 +277,12 @@ void MAMONode::GetSuccs(
 			movable_obstacles.push_back(m_agents.at(i)->GetObject());
 		}
 
-		int p = 0;
-		bool globally_invalid = false;
-		for (; p < samples; ++p)
-		{
-			// plan to push location
-			// m_robot->PlanPush creates the planner internally, because it might
-			// change KDL chain during the process
-			comms::ObjectsPoses result;
-			int push_failure;
-			std::tuple<State, State, int> debug_push;
-			double sim_time_push = 0.0;
-			if (m_robot->PlanPush(this->GetCurrentStartState(), m_agents.at(m_agent_map[moved.first]).get(), push, movable_obstacles, m_all_objects, 1.0, result, push_failure, debug_push, sim_time_push))
-			{
-				// valid push found!
-				succ_object_centric_actions->emplace_back(moved.first, 0); // TODO: currently only one aidx
-				succ_objects->push_back(std::move(result));
-				succ_trajs->push_back(m_robot->GetLastPlan());
-				debug_pushes->push_back(std::move(debug_push));
-				if (samples == SAMPLES) {
-					m_successful_pushes.push_back(std::make_pair(moved.first, moved.second.back().coord));
-				}
+		bool result = tryPickPlace(succ_object_centric_actions, succ_objects, succ_trajs, debug_actions, &invalid_action_samples, movable_obstacles, moved.first);
+		// duplicate_successor = duplicate_successor || !result;
 
-				break;
-			}
-			else
-			{
-				assert(samples == SAMPLES);
-				// SMPL_INFO("Tried pushing object %d. Return value = %d", moved.first, push_failure);
-				switch (push_failure)
-				{
-					case 3: // SMPL_ERROR("Inverse dynamics failed to reach push end."); break;
-					case 4: // SMPL_ERROR("Inverse kinematics/dynamics failed (joint limits likely)."); break;
-					case 5: // SMPL_ERROR("Inverse kinematics hit static obstacle."); break;
-					{
-						m_planner->AddGloballyInvalidPush(std::make_pair(moved.second.front().coord, moved.second.back().coord));
-						globally_invalid = true;
-						break;
-					}
-					// case 1: // SMPL_ERROR("Push start inside object."); break;
-					// case 2: // SMPL_ERROR("Failed to reach push start."); break;
-					// case 6: // SMPL_ERROR("Push action did not collide with intended object."); break;
-					// case 0: // SMPL_ERROR("Valid push computed! Failed in simulation."); break;
-					// case -1: SMPL_INFO("Push succeeded in simulation!"); break;
-					// default: SMPL_WARN("Unknown push failure cause.");
-				}
-				invalid_push_samples.push_back(std::move(debug_push));
-				if (globally_invalid) {
-					break;
-				}
-			}
-			*sim_time += sim_time_push;
-		}
-
-		if (samples == SAMPLES) // this was a new push I was considering
-		{
-			if (globally_invalid) {
-				p = SAMPLES * 2; // automatic maximum penalty
-			}
-			if (p >= SAMPLES && !duplicate_successor) {
-				duplicate_successor = true; // failed to find a push, must add new constraint to this state
-			}
-			if (p > 0)
-			{
-				// treat this action to have p invalid samples
-				m_planner->AddLocallyInvalidPush(
-					this->GetObjectsHash(),
-					moved.first,
-					moved.second.back().coord,
-					p);
-			}
-		}
+		// result = tryPush(succ_object_centric_actions, succ_objects, succ_trajs, debug_actions, &invalid_action_samples, movable_obstacles, i, sim_time);
+		// // create duplicate_successor state if any object could not be pushed
+		// duplicate_successor = duplicate_successor || !result;
 	}
 
 	if (duplicate_successor)
