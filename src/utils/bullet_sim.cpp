@@ -11,7 +11,6 @@
 #include <comms/SetColours.h>
 #include <comms/ExecTraj.h>
 #include <comms/SimPushes.h>
-#include <comms/SimPickPlace.h>
 
 #include <smpl/angles.h>
 #include <smpl/console/console.h>
@@ -216,13 +215,14 @@ bool BulletSim::SetColours(int ooi)
 bool BulletSim::ExecTraj(
 	const trajectory_msgs::JointTrajectory& traj,
 	const comms::ObjectsPoses& rearranged,
-	int grasp_at, int ooi)
+	int pick_at, int place_at, int ooi)
 {
 	comms::ExecTraj srv;
 	srv.request.traj = traj;
-	srv.request.objects = rearranged;
-	srv.request.grasp_at = grasp_at;
 	srv.request.ooi = ooi;
+	srv.request.pick_at = pick_at;
+	srv.request.place_at = place_at;
+	srv.request.objects = rearranged;
 
 	if (!m_services.at(m_servicemap["exec_traj"]).call(srv))
 	{
@@ -280,21 +280,24 @@ bool BulletSim::SimPushes(
 bool BulletSim::SimPickPlace(
 	const trajectory_msgs::JointTrajectory& traj,
 	const comms::ObjectsPoses& rearranged,
-	int pick_at, int place_at, int oid)
+	int pick_at, int place_at, int oid,
+	comms::ObjectsPoses& result)
 {
-	comms::SimPickPlace srv;
+	comms::ExecTraj srv;
 	srv.request.traj = traj;
-	srv.request.objects = rearranged;
+	srv.request.ooi = oid;
 	srv.request.pick_at = pick_at;
 	srv.request.place_at = place_at;
-	srv.request.oid = oid;
+	srv.request.objects = rearranged;
 
 	if (!m_services.at(m_servicemap["sim_pick_place"]).call(srv))
 	{
 		ROS_ERROR("Failed to execute trajectory in sim.");
 		return false;
 	}
-	return !srv.response.res;
+
+	result = srv.response.objects;
+	return !srv.response.violation;
 }
 
 bool BulletSim::RemoveConstraint()
@@ -1075,7 +1078,7 @@ void BulletSim::setupServices()
 
 	m_servicemap["sim_pick_place"] = m_services.size();
 	m_services.push_back(
-			m_nh.serviceClient<comms::SimPickPlace>("/sim_pick_place"));
+			m_nh.serviceClient<comms::ExecTraj>("/sim_pick_place"));
 
 	m_servicemap["remove_constraint"] = m_services.size();
 	m_services.push_back(

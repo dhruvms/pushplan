@@ -32,7 +32,7 @@ public:
 	bool ExecTraj(
 		const trajectory_msgs::JointTrajectory& traj,
 		const comms::ObjectsPoses& rearranged,
-		int grasp_at=-1, int ooi=-1);
+		int pick_at=-1, int place_at=-1, int ooi=-1);
 	bool SimPushes(
 		const std::vector<trajectory_msgs::JointTrajectory>& pushes,
 		int oid, float gx, float gy,
@@ -43,7 +43,8 @@ public:
 	bool SimPickPlace(
 		const trajectory_msgs::JointTrajectory& traj,
 		const comms::ObjectsPoses& rearranged,
-		int pick_at, int place_at, int oid);
+		int pick_at, int place_at, int oid,
+		comms::ObjectsPoses& result);
 	bool RemoveConstraint();
 
 	const std::vector<std::vector<double>>* GetImmovableObjs() const {

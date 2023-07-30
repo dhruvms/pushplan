@@ -23,7 +23,6 @@ from comms.srv import ResetScene, ResetSceneResponse, ResetSceneRequest
 from comms.srv import SetColours, SetColoursResponse
 from comms.srv import ExecTraj, ExecTrajResponse
 from comms.srv import SimPushes, SimPushesResponse
-from comms.srv import SimPickPlace, SimPickPlaceResponse
 from comms.msg import ObjectPose, ObjectsPoses
 
 from utils import *
@@ -83,7 +82,7 @@ class BulletSim:
 		self.sim_pushes = rospy.Service('sim_pushes',
 												SimPushes, self.SimPushesDefault)
 		self.sim_pick_place = rospy.Service('sim_pick_place',
-												SimPickPlace, self.SimPickPlace)
+												ExecTraj, self.SimPickPlace)
 		self.remove_constraint = rospy.Service('remove_constraint',
 										ResetSimulation, self.RemoveConstraint)
 
@@ -962,10 +961,16 @@ class BulletSim:
 					break
 			del action_interactions[:]
 
-		output = SimPickPlaceResponse()
-		output.res = violation_flag
+		output = ExecTrajResponse()
+		output.violation = violation_flag
+
+		all_objs = self.getObjects(sim_id)
+		return_objs = []
+		for object in all_objs:
+			if sim_data['objs'][object.id]['movable']:
+				return_objs.append(object)
 		output.objects = ObjectsPoses()
-		output.objects.poses = self.getObjects(sim_id)
+		output.objects.poses = return_objs
 
 		return output
 
