@@ -99,7 +99,8 @@ public:
 		const std::vector<Object*>& other_movables,	const comms::ObjectsPoses& curr_scene,
 		comms::ObjectsPoses& result,
 		int& pick_at, int& place_at,
-		double &plan_time, double &sim_time);
+		double &plan_time, double &sim_time,
+		std::tuple<State, State, int>& debug_action);
 	bool PlanPush(
 		std::vector<double> *start_state,
 		Agent* object, const std::vector<double>& push,
@@ -108,7 +109,7 @@ public:
 		const double& push_frac,
 		comms::ObjectsPoses& result,
 		int& push_result,
-		std::tuple<State, State, int>& debug_push,
+		std::tuple<State, State, int>& debug_action,
 		double &sim_time, bool input=false);
 	bool GenMovablePush(
 		Object& movable,
