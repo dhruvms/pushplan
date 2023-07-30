@@ -41,6 +41,14 @@ enum class MAPFAlgo
 	OURS,
 	ALGO_TYPES
 };
+enum class MAMOActionType
+{
+	PUSH,
+	PICKPLACE,
+	RETRIEVEOOI,
+	DUMMY,
+	ACTION_TYPES
+};
 
 extern bool FRIDGE;
 
