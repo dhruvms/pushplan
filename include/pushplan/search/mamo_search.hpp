@@ -54,7 +54,9 @@ public:
 
 	bool CreateRoot();
 	bool Solve(double budget=300.0);
-	void GetRearrangements(std::vector<trajectory_msgs::JointTrajectory>& rearrangements, int& grasp_at);
+	void GetRearrangements(
+		std::vector<trajectory_msgs::JointTrajectory> &rearrangements,
+		std::vector<MAMOAction> &actions);
 	void SaveStats();
 	void SaveNBData();
 	void Cleanup();
@@ -74,8 +76,8 @@ private:
 	std::map<std::string, double> m_stats;
 
 	std::vector<trajectory_msgs::JointTrajectory> m_rearrangements;
+	std::vector<MAMOAction> m_actions;
 	trajectory_msgs::JointTrajectory m_exec_traj;
-	int m_grasp_at;
 
 	bool expand(MAMOSearchState *state);
 	bool done(MAMOSearchState *state);
@@ -83,7 +85,7 @@ private:
 	void createSuccs(
 		MAMONode *parent_node,
 		MAMOSearchState *parent_search_state,
-		std::vector<std::pair<int, int> > *succ_object_centric_actions,
+		std::vector<MAMOAction> *succ_object_centric_actions,
 		std::vector<comms::ObjectsPoses> *succ_objects,
 		std::vector<trajectory_msgs::JointTrajectory> *succ_trajs,
 		std::vector<std::tuple<State, State, int> > *debug_pushes);

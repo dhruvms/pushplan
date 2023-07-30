@@ -31,7 +31,9 @@ bool MAMOSearch::CreateRoot()
 	m_root_node->SetCBS(m_planner->GetCBS());
 	m_root_node->SetCC(m_planner->GetCC());
 	m_root_node->SetRobot(m_planner->GetRobot());
-	m_root_node->SetEdgeTo(-1, -1);
+	MAMOAction action(MAMOActionType::DUMMY, -1);
+	action._params.clear();
+	m_root_node->SetEdgeTo(action);
 
 	std::vector<int> reachable_ids;
 	// m_planner->GetRobot()->IdentifyReachableMovables(m_planner->GetAllAgents(), reachable_ids);
@@ -90,11 +92,15 @@ bool MAMOSearch::Solve(double budget)
 	return false;
 }
 
-void MAMOSearch::GetRearrangements(std::vector<trajectory_msgs::JointTrajectory>& rearrangements, int& grasp_at)
+void MAMOSearch::GetRearrangements(
+	std::vector<trajectory_msgs::JointTrajectory> &rearrangements,
+	std::vector<MAMOAction> &actions)
 {
 	rearrangements.clear();
 	rearrangements = m_rearrangements;
-	grasp_at = m_grasp_at;
+
+	actions.clear();
+	actions = m_actions;
 }
 
 void MAMOSearch::SaveStats()
@@ -186,13 +192,13 @@ bool MAMOSearch::expand(MAMOSearchState *state)
 	SMPL_WARN("Expand %d, priority = %.2e", state->state_id, state->priority);
 	auto node = m_hashtable.GetState(state->state_id);
 
-	std::vector<std::pair<int, int> > succ_object_centric_actions;
+	std::vector<MAMOAction> succ_object_centric_actions;
 	std::vector<comms::ObjectsPoses> succ_objects;
 	std::vector<trajectory_msgs::JointTrajectory> succ_trajs;
-	std::vector<std::tuple<State, State, int> > debug_pushes;
+	std::vector<std::tuple<State, State, int> > debug_actions;
 	bool close;
 	double mapf_time = 0.0, get_succs_time = 0.0, sim_time = 0.0;
-	node->GetSuccs(&succ_object_centric_actions, &succ_objects, &succ_trajs, &debug_pushes, &close, &mapf_time, &get_succs_time, &sim_time);
+	node->GetSuccs(&succ_object_centric_actions, &succ_objects, &succ_trajs, &debug_actions, &close, &mapf_time, &get_succs_time, &sim_time);
 	m_stats["push_planner_time"] += get_succs_time - sim_time;
 	m_stats["sim_time"] += sim_time;
 	m_stats["mapf_time"] += mapf_time;
@@ -208,7 +214,7 @@ bool MAMOSearch::expand(MAMOSearchState *state)
 		return true;
 	}
 
-	createSuccs(node, state, &succ_object_centric_actions, &succ_objects, &succ_trajs, &debug_pushes);
+	createSuccs(node, state, &succ_object_centric_actions, &succ_objects, &succ_trajs, &debug_actions);
 	node->SaveNode(state->state_id, state->bp == nullptr ? 0 : state->bp->state_id);
 	return true;
 }
@@ -216,7 +222,8 @@ bool MAMOSearch::expand(MAMOSearchState *state)
 bool MAMOSearch::done(MAMOSearchState *state)
 {
 	auto node = m_hashtable.GetState(state->state_id);
-	if (node->kparent() != nullptr && node->object_centric_action() == std::make_pair(-1, -1)) {
+	auto action_to_node = node->kobject_centric_action();
+	if (node->kparent() != nullptr && action_to_node._oid == -1 && action_to_node._type == MAMOActionType::DUMMY) {
 		return false;
 	}
 
@@ -252,6 +259,10 @@ void MAMOSearch::extractRearrangements()
 {
 	m_rearrangements.clear();
 	m_rearrangements.push_back(std::move(m_exec_traj));
+	MAMOAction action(MAMOActionType::RETRIEVEOOI, m_planner->GetOoIID());
+	action._params.push_back(m_planner->GetRobot()->GraspAt());
+	m_actions.push_back(action);
+
 	if (m_exec_traj.points.empty()) {
 		SMPL_ERROR("Found MAMO solution without retrieval traj?");
 	}
@@ -263,19 +274,20 @@ void MAMOSearch::extractRearrangements()
 		{
 			SMPL_WARN("\t%d", state->state_id);
 			m_rearrangements.push_back(node->krobot_traj());
+			m_actions.push_back(node->kobject_centric_action());
 		}
 	}
 	std::reverse(m_rearrangements.begin(), m_rearrangements.end());
-	m_grasp_at = m_planner->GetRobot()->GraspAt();
+	std::reverse(m_actions.begin(), m_actions.end());
 }
 
 void MAMOSearch::createSuccs(
 	MAMONode *parent_node,
 	MAMOSearchState *parent_search_state,
-	std::vector<std::pair<int, int> > *succ_object_centric_actions,
+	std::vector<MAMOAction> *succ_object_centric_actions,
 	std::vector<comms::ObjectsPoses> *succ_objects,
 	std::vector<trajectory_msgs::JointTrajectory> *succ_trajs,
-	std::vector<std::tuple<State, State, int> > *debug_pushes)
+	std::vector<std::tuple<State, State, int> > *debug_actions)
 {
 	size_t num_succs = succ_object_centric_actions->size();
 	if (num_succs == 0)
@@ -285,7 +297,10 @@ void MAMOSearch::createSuccs(
 		m_OPEN.erase(parent_search_state->m_OPEN_h);
 		return;
 	}
-	bool duplicate_successor = succ_object_centric_actions->back() == std::make_pair(-1, -1);
+	bool duplicate_successor = false;
+	if (succ_object_centric_actions->back()._oid == -1 && succ_object_centric_actions->back()._type == MAMOActionType::DUMMY) {
+		duplicate_successor = true;
+	}
 
 	if (duplicate_successor && num_succs == 1) {
 		m_stats["only_duplicate"] += 1;
@@ -303,7 +318,7 @@ void MAMOSearch::createSuccs(
 		succ->SetCBS(m_planner->GetCBS());
 		succ->SetCC(m_planner->GetCC());
 		succ->SetRobot(m_planner->GetRobot());
-		succ->SetEdgeTo(succ_object_centric_actions->at(i).first, succ_object_centric_actions->at(i).second);
+		succ->SetEdgeTo(succ_object_centric_actions->at(i));
 
 		std::vector<int> reachable_ids;
 		// m_planner->GetRobot()->IdentifyReachableMovables(m_planner->GetAllAgents(), reachable_ids);
@@ -331,8 +346,8 @@ void MAMOSearch::createSuccs(
 			if (at_duplicate)
 			{
 				delete succ;
-				for (auto it = debug_pushes->begin() + i; it != debug_pushes->end(); ++it) {
-					parent_node->AddDebugPush(*it);
+				for (auto it = debug_actions->begin() + i; it != debug_actions->end(); ++it) {
+					parent_node->AddDebugAction(*it);
 				}
 				// parent_search_state->priority = parent_search_state->priority * (boost::math::pdf(D_noops, succ_noops) / boost::math::pdf(D_noops, parent_search_state->noops));
 				parent_search_state->noops = succ_noops;
@@ -343,7 +358,7 @@ void MAMOSearch::createSuccs(
 			{
 				succ->SetRobotTrajectory(succ_trajs->at(i));
 				succ->SetParent(parent_node);
-				succ->AddDebugPush(debug_pushes->at(i));
+				succ->AddDebugAction(debug_actions->at(i));
 
 				if (prev_search_state != nullptr)
 				{
