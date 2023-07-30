@@ -458,16 +458,25 @@ class BulletSim:
 
 		self.enableCollisionsWithObjects(sim_id)
 
-		grasp_at = req.grasp_at
+		pick_at = req.pick_at
+		place_at = req.place_at
 		violation_flag = False
 		all_interactions = []
 		cause = 0
-		for point in req.traj.points[1:]:
-			if (grasp_at >= 0):
-				if (point == req.traj.points[grasp_at]):
+		for pidx, point in enumerate(req.traj.points[1:]):
+			if (pick_at >= 0):
+				# this is either the OOI retrieval trajectory
+				# or a pick-place rearrangement trajectory
+				if (point == req.traj.points[pick_at]):
 					self.grasp(sim_id, True) # open gripper
 
-				elif (point == req.traj.points[grasp_at+1]):
+				elif (place_at >= 0 and point == req.traj.points[place_at]):
+					self.grasp(sim_id, True) # open gripper
+					self.sims[0].removeConstraint(self.grasp_constraint)
+					for i in range(2 * int(HZ)):
+						sim.stepSimulation()
+
+				elif (point == req.traj.points[pick_at+1]):
 					self.grasp(sim_id, False) # close gripper
 
 					if self.grasp_constraint is None:
@@ -488,7 +497,7 @@ class BulletSim:
 										parentFrameOrientation=grasp_quat,
 										childFrameOrientation=sim.getQuaternionFromEuler([0., 0., 0.]))
 
-				# elif (point == req.traj.points[grasp_at+2]):
+				# elif (point == req.traj.points[pick_at+2]):
 				# 	input("OOI lifted!")
 				# 	# For scene 100020
 				# 	movable_id = 15
@@ -527,6 +536,7 @@ class BulletSim:
 								controlMode=sim.POSITION_CONTROL,
 								targetPositions=[0.0]*len(gripper_joints))
 			else:
+				# keep gripper slightly open for pushing trajectories
 				sim.setJointMotorControlArray(
 						robot_id, gripper_joints,
 						controlMode=sim.POSITION_CONTROL,
@@ -555,10 +565,10 @@ class BulletSim:
 				action_interactions = list(np.unique(np.array(action_interactions)))
 				action_interactions[:] = [idx for idx in action_interactions if idx != req.ooi]
 
-				topple = self.checkPoseConstraints(sim_id, grasp_at, req.ooi)
+				topple = self.checkPoseConstraints(sim_id, pick_at, req.ooi)
 				immovable = any([not sim_data['objs'][x]['movable'] for x in action_interactions])
 				table = self.checkTableCollision(sim_id)
-				velocity = self.checkVelConstraints(sim_id, grasp_at, req.ooi)
+				velocity = self.checkVelConstraints(sim_id, pick_at, req.ooi)
 
 				violation_flag = topple or immovable or table or velocity
 				if (violation_flag):
@@ -592,12 +602,12 @@ class BulletSim:
 				action_interactions = list(np.unique(np.array(action_interactions)))
 				action_interactions[:] = [idx for idx in action_interactions if idx != req.ooi]
 
-				topple = self.checkPoseConstraints(sim_id, grasp_at, req.ooi)
+				topple = self.checkPoseConstraints(sim_id, pick_at, req.ooi)
 				immovable = any([not sim_data['objs'][x]['movable'] for x in action_interactions])
 				table = self.checkTableCollision(sim_id)
-				velocity = self.checkVelConstraints(sim_id, grasp_at, req.ooi)
+				velocity = self.checkVelConstraints(sim_id, pick_at, req.ooi)
 				wrong = False
-				if (grasp_at >= 0):
+				if (pick_at >= 0):
 					wrong = len(action_interactions) > 0
 
 				violation_flag = topple or immovable or table or velocity or wrong
@@ -803,9 +813,6 @@ class BulletSim:
 		sim_data = self.sim_datas[sim_id]
 		robot_id = sim_data['robot_id']
 
-		curr_timestep = 0
-		curr_pose = np.asarray(req.traj.points[0].positions)
-
 		gripper_joints = joints_from_names(robot_id, PR2_GROUPS['right_gripper'], sim=sim)
 		# arm_joints = joints_from_names(robot_id, PR2_GROUPS['right_arm'], sim=sim)
 		arm_joints = joints_from_names(robot_id, req.traj.joint_names, sim=sim)
@@ -817,10 +824,16 @@ class BulletSim:
 		if (len(req.objects.poses) != 0):
 			self.resetObjects(sim_id, req.objects.poses)
 
+		picked_obj = req.ooi
+		pick_at = req.pick_at
+		place_at = req.place_at
+		curr_timestep = req.traj.points[pick_at-1].time_from_start.to_sec()
+		curr_pose = np.asarray(req.traj.points[pick_at-1].positions)
+
 		for jidx, jval in zip(arm_joints, curr_pose):
 			sim.resetJointState(robot_id, jidx, jval, targetVelocity=0.0)
 		for gjidx in gripper_joints:
-			sim.resetJointState(robot_id, gjidx, 0.2, targetVelocity=0.0)
+			sim.resetJointState(robot_id, gjidx, 0.0, targetVelocity=0.0)
 		sim.setJointMotorControlArray(
 				robot_id, arm_joints,
 				controlMode=sim.VELOCITY_CONTROL,
@@ -835,9 +848,6 @@ class BulletSim:
 
 		self.enableCollisionsWithObjects(sim_id)
 
-		picked_obj = req.oid
-		pick_at = req.pick_at
-		place_at = req.place_at
 		start_objs = self.getObjects(sim_id)
 		violation_flag = False
 		cause = 0
@@ -845,18 +855,10 @@ class BulletSim:
 		if (picked_obj != -1):
 			oid_start_xyz, _ = self.sims[sim_id].getBasePositionAndOrientation(picked_obj)
 
-		import ipdb
-		ipdb.set_trace()
-
-		for point in req.traj.points[1:]:
+		# To simulate the pickup action
+		for point in req.traj.points[pick_at:pick_at+2]:
 			if (point == req.traj.points[pick_at]):
 				self.grasp(sim_id, True) # open gripper
-
-			elif (point == req.traj.points[place_at]):
-				self.grasp(sim_id, True) # open gripper
-				self.sims[0].removeConstraint(self.grasp_constraint)
-				for i in range(2 * int(HZ)):
-					sim.stepSimulation()
 
 			elif (point == req.traj.points[pick_at+1]):
 				self.grasp(sim_id, False) # close gripper
@@ -879,13 +881,13 @@ class BulletSim:
 									parentFrameOrientation=grasp_quat,
 									childFrameOrientation=sim.getQuaternionFromEuler([0., 0., 0.]))
 
-			else:
-				# keep gripper closed while moving to pick pose
-				if self.grasp_constraint is None:
-					sim.setJointMotorControlArray(
-							robot_id, gripper_joints,
-							controlMode=sim.POSITION_CONTROL,
-							targetPositions=[0.0]*len(gripper_joints))
+			# else:
+			# 	# keep gripper closed while moving to pick pose
+			# 	if self.grasp_constraint is None:
+			# 		sim.setJointMotorControlArray(
+			# 				robot_id, gripper_joints,
+			# 				controlMode=sim.POSITION_CONTROL,
+			# 				targetPositions=[0.0]*len(gripper_joints))
 
 			prev_timestep = curr_timestep
 			prev_pose = get_joint_positions(robot_id, arm_joints, sim=sim)
@@ -925,6 +927,89 @@ class BulletSim:
 			del action_interactions[:]
 			if (violation_flag):
 				break # trajectory execution failed
+
+		# To simulate the placement action
+		if (not violation_flag):
+			self.disableCollisionsWithObjects(sim_id, ignore=[picked_obj])
+			for obj_id in sim_data['objs']:
+				if (obj_id == picked_obj):
+					continue
+				sim.setCollisionFilterPair(picked_obj, obj_id, -1, -1,
+											enableCollision=0)
+
+			prev_timestep = curr_timestep
+			prev_pose = get_joint_positions(robot_id, arm_joints, sim=sim)
+			curr_timestep = req.traj.points[place_at-2].time_from_start.to_sec()
+			curr_pose = np.asarray(req.traj.points[place_at-2].positions)
+			time_diff = (curr_timestep - prev_timestep) * 1
+			target_vel = shortest_angle_diff(curr_pose, prev_pose)/time_diff
+			duration = math.ceil(time_diff * int(HZ))
+
+			sim.setJointMotorControlArray(
+					robot_id, arm_joints,
+					controlMode=sim.VELOCITY_CONTROL,
+					targetVelocities=target_vel)
+
+			for i in range(int(duration)):
+					sim.stepSimulation()
+			# arm_vels = get_joint_velocities(robot_id, arm_joints, sim=sim)
+			# print("\n\t [ExecTraj] arm_vels = ", arm_vels)
+
+			self.enableCollisionsWithObjects(sim_id, ignore=[picked_obj])
+			for obj_id in sim_data['objs']:
+				if (obj_id == picked_obj):
+					continue
+				sim.setCollisionFilterPair(picked_obj, obj_id, -1, -1,
+											enableCollision=1)
+
+			for point in req.traj.points[place_at-2:]:
+				if (point == req.traj.points[place_at]):
+					self.grasp(sim_id, True) # open gripper
+					self.sims[0].removeConstraint(self.grasp_constraint)
+					for i in range(2 * int(HZ)):
+						sim.stepSimulation()
+
+				prev_timestep = curr_timestep
+				prev_pose = get_joint_positions(robot_id, arm_joints, sim=sim)
+				curr_timestep = point.time_from_start.to_sec()
+				curr_pose = np.asarray(point.positions)
+				time_diff = (curr_timestep - prev_timestep) * 1
+				target_vel = shortest_angle_diff(curr_pose, prev_pose)/time_diff
+				duration = math.ceil(time_diff * int(HZ))
+
+				sim.setJointMotorControlArray(
+						robot_id, arm_joints,
+						controlMode=sim.VELOCITY_CONTROL,
+						targetVelocities=target_vel)
+
+				action_interactions = []
+				objs_curr = self.getObjects(sim_id)
+				for i in range(int(duration)):
+					sim.stepSimulation()
+
+					interactions = self.checkInteractions(sim_id, objs_curr)
+					action_interactions += interactions
+					action_interactions = list(np.unique(np.array(action_interactions)))
+					action_interactions[:] = [idx for idx in action_interactions if idx != picked_obj]
+
+					topple = self.checkPoseConstraints(sim_id, pick_at, picked_obj)
+					immovable = any([not sim_data['objs'][x]['movable'] for x in action_interactions])
+					table = self.checkTableCollision(sim_id)
+					velocity = self.checkVelConstraints(sim_id, pick_at, picked_obj)
+
+					violation_flag = topple or immovable or table or velocity
+					if (violation_flag):
+						cause = int('0' + topple*'1' + immovable*'2' + table*'3' + velocity*'4')
+						# cause_str = 'traj violation: ' + topple*'topple' + immovable*'immovable' + table*'table' + velocity*'velocity'
+						# print(cause_str)
+						break
+
+				del action_interactions[:]
+				if (violation_flag):
+					break # trajectory execution failed
+
+		elif (self.grasp_constraint is not None):
+			self.sims[0].removeConstraint(self.grasp_constraint)
 
 		# To simulate the scene after execution of the trajectory
 		if (not violation_flag):
@@ -983,23 +1068,27 @@ class BulletSim:
 
 		return ResetSimulationResponse(True)
 
-	def disableCollisionsWithObjects(self, sim_id):
+	def disableCollisionsWithObjects(self, sim_id, ignore=None):
 		sim = self.sims[sim_id]
 		sim_data = self.sim_datas[sim_id]
 
 		robot_id = sim_data['robot_id']
 		for joint in get_joints(robot_id, sim=sim):
 			for obj_id in sim_data['objs']:
+				if (ignore is not None and obj_id in ignore):
+					continue
 				sim.setCollisionFilterPair(robot_id, obj_id, joint, -1,
 											enableCollision=0)
 
-	def enableCollisionsWithObjects(self, sim_id):
+	def enableCollisionsWithObjects(self, sim_id, ignore=None):
 		sim = self.sims[sim_id]
 		sim_data = self.sim_datas[sim_id]
 
 		robot_id = sim_data['robot_id']
 		for joint in get_joints(robot_id, sim=sim):
 			for obj_id in sim_data['objs']:
+				if (ignore is not None and obj_id in ignore):
+					continue
 				sim.setCollisionFilterPair(robot_id, obj_id, joint, -1,
 											enableCollision=1)
 
