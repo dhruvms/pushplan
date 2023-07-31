@@ -93,11 +93,11 @@ if __name__ == '__main__':
 	# ['o_ox', 'o_oy', 'o_oz', 'o_oyaw', 'o_shape', 'o_xs', 'o_ys', 'o_zs', 's_x', 's_y', 's_z', 's_yaw', 'm_dir_des', 'm_dist_des']
 
 	X = copy.deepcopy(all_data.iloc[:, :24])
-	# extract only yaw angle from rotation matrices of poses
-	X_rot = X.iloc[:, 13:22].values.reshape(X.shape[0], 3, 3).transpose(0, 2, 1)
-	_, _, yaws = get_euler_from_R_tensor(X_rot)
-	X = X.drop(['o_mass', 'o_mu', 's_r11', 's_r21', 's_r31', 's_r12', 's_r22', 's_r32', 's_r13', 's_r23', 's_r33'], axis=1)
-	X.insert(loc=11, column='s_yaw', value= yaws)
+	X = X.drop(['o_mass', 'o_mu', 's_x', 's_y', 's_z', 's_r11', 's_r21', 's_r31', 's_r12', 's_r22', 's_r32', 's_r13', 's_r23', 's_r33'], axis=1)
+	# # extract only yaw angle from rotation matrices of poses
+	# X_rot = X.iloc[:, 13:22].values.reshape(X.shape[0], 3, 3).transpose(0, 2, 1)
+	# _, _, yaws = get_euler_from_R_tensor(X_rot)
+	# X.insert(loc=11, column='s_yaw', value= yaws)
 	# make binary labels
 	y = copy.deepcopy(all_data.iloc[:, -1])
 	y.loc[y > 0] = 2 # push IK failed => temporarily class 2
@@ -169,11 +169,11 @@ if __name__ == '__main__':
 				obj_draw = in_pts[0, :8].unsqueeze(0).cpu().numpy()
 				draw_object(ax, obj_draw)
 
-				asize = 0.08
-				ayaw = test_pose[0, 11]
-				ax.arrow(test_pose[0, 8], test_pose[0, 9], asize * np.cos(ayaw), asize * np.sin(ayaw),
-							length_includes_head=True, head_width=0.02, head_length=0.02,
-							ec='gold', fc='gold', alpha=0.8)
+				# asize = 0.08
+				# ayaw = test_pose[0, 11]
+				# ax.arrow(test_pose[0, 8], test_pose[0, 9], asize * np.cos(ayaw), asize * np.sin(ayaw),
+				# 			length_includes_head=True, head_width=0.02, head_length=0.02,
+				# 			ec='gold', fc='gold', alpha=0.8)
 				cb = ax.contourf(xx, yy, preds, cmap=plt.cm.Greens, alpha=.8)
 
 				ax.set_xticks(())
@@ -184,5 +184,5 @@ if __name__ == '__main__':
 			# plt.colorbar(cb)
 			plt.tight_layout()
 			# plt.show()
-			plt.savefig('[{}]'.format(','.join(str(x) for x in h_sizes[H])) + '-ikmap.png', bbox_inches='tight')
+			plt.savefig('[{}]'.format(','.join(str(x) for x in h_sizes[H])) + '-ikmap-nostart.png', bbox_inches='tight')
 			[ax.cla() for ax in axes]
