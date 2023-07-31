@@ -21,10 +21,10 @@ if __name__ == '__main__':
 
 	X_ik = copy.deepcopy(all_data.iloc[:, :24])
 	# extract only yaw angle from rotation matrices of poses
-	X_ik_rot = X_ik.iloc[:, 13:22].values.reshape(X_ik.shape[0], 3, 3).transpose(0, 2, 1)
-	_, _, yaws = get_euler_from_R_tensor(X_ik_rot)
-	X_ik = X_ik.drop(['o_mass', 'o_mu', 's_r11', 's_r21', 's_r31', 's_r12', 's_r22', 's_r32', 's_r13', 's_r23', 's_r33'], axis=1)
-	X_ik.insert(loc=11, column='s_yaw', value= yaws)
+	# X_ik_rot = X_ik.iloc[:, 13:22].values.reshape(X_ik.shape[0], 3, 3).transpose(0, 2, 1)
+	# _, _, yaws = get_euler_from_R_tensor(X_ik_rot)
+	X_ik = X_ik.drop(['o_mass', 'o_mu', 's_x', 's_y', 's_z', 's_r11', 's_r21', 's_r31', 's_r12', 's_r22', 's_r32', 's_r13', 's_r23', 's_r33'], axis=1)
+	# X_ik.insert(loc=11, column='s_yaw', value= yaws)
 	# make binary labels
 	y_ik = copy.deepcopy(all_data.iloc[:, -1])
 	y_ik.loc[y_ik > 0] = 2 # push IK failed => temporarily class 2
@@ -45,10 +45,10 @@ if __name__ == '__main__':
 	C_final = copy.deepcopy(all_data.loc[all_data.r == 0, [all_data.columns.tolist()[i] for i in list(range(0, 22)) + list(range(24, 26))]])
 	X_final = copy.deepcopy(all_data.loc[all_data.r == 0, [all_data.columns.tolist()[i] for i in list(range(-13, -1))]])
 	# extract only yaw angle from rotation matrices of poses
-	C_final_rot = C_final.iloc[:, 13:22].values.reshape(C_final.shape[0], 3, 3).transpose(0, 2, 1)
-	_, _, yaws = get_euler_from_R_tensor(C_final_rot)
-	C_final = C_final.drop(['s_r11', 's_r21', 's_r31', 's_r12', 's_r22', 's_r32', 's_r13', 's_r23', 's_r33'], axis=1)
-	C_final.insert(loc=13, column='s_yaw', value= yaws)
+	# C_final_rot = C_final.iloc[:, 13:22].values.reshape(C_final.shape[0], 3, 3).transpose(0, 2, 1)
+	# _, _, yaws = get_euler_from_R_tensor(C_final_rot)
+	C_final = C_final.drop(['s_x', 's_y', 's_z', 's_r11', 's_r21', 's_r31', 's_r12', 's_r22', 's_r32', 's_r13', 's_r23', 's_r33'], axis=1)
+	# C_final.insert(loc=13, column='s_yaw', value= yaws)
 	X_final_rot = X_final.iloc[:, 3:].values.reshape(X_final.shape[0], 3, 3).transpose(0, 2, 1)
 	_, _, yaws = get_euler_from_R_tensor(X_final_rot)
 	X_final = X_final.drop(['e_z', 'e_r11', 'e_r21', 'e_r31', 'e_r12', 'e_r22', 'e_r32', 'e_r13', 'e_r23', 'e_r33'], axis=1)
@@ -59,24 +59,24 @@ if __name__ == '__main__':
 	# train-test split: Hold out the test set for final model evaluation
 	C_final_train, C_final_test, X_final_train, X_final_test = train_test_split(C_final, X_final, train_size=0.85, shuffle=True)
 
-	# get training data - start pose
-	# ipdb> p C_start.columns.tolist()
-	# ['o_ox', 'o_oy', 'o_oz', 'o_oyaw', 'o_shape', 'o_xs', 'o_ys', 'o_zs', 'o_mass', 'o_mu', 'm_dir_ach', 'm_dist_ach']
-	# ipdb> p X_start.columns.tolist()
-	# ['s_x', 's_y', 's_z', 's_yaw']
+	# # get training data - start pose
+	# # ipdb> p C_start.columns.tolist()
+	# # ['o_ox', 'o_oy', 'o_oz', 'o_oyaw', 'o_shape', 'o_xs', 'o_ys', 'o_zs', 'o_mass', 'o_mu', 'm_dir_ach', 'm_dist_ach']
+	# # ipdb> p X_start.columns.tolist()
+	# # ['s_x', 's_y', 's_z', 's_yaw']
 
-	C_start = copy.deepcopy(all_data.loc[all_data.r == 0, [all_data.columns.tolist()[i] for i in list(range(0, 10)) + list(range(24, 26))]])
-	X_start = copy.deepcopy(all_data.loc[all_data.r == 0, [all_data.columns.tolist()[i] for i in list(range(10, 22))]])
-	# extract only yaw angle from rotation matrices of poses
-	X_start_rot = X_start.iloc[:, 3:].values.reshape(X_start.shape[0], 3, 3).transpose(0, 2, 1)
-	_, _, yaws = get_euler_from_R_tensor(X_start_rot)
-	X_start = X_start.drop(['s_r11', 's_r21', 's_r31', 's_r12', 's_r22', 's_r32', 's_r13', 's_r23', 's_r33'], axis=1)
-	X_start.insert(loc=3, column='s_yaw', value= yaws)
-	# Convert to 2D PyTorch tensors
-	C_start = torch.tensor(C_start.values, dtype=torch.float32).to(DEVICE)
-	X_start = torch.tensor(X_start.values, dtype=torch.float32).to(DEVICE)
-	# train-test split: Hold out the test set for start model evaluation
-	C_start_train, C_start_test, X_start_train, X_start_test = train_test_split(C_start, X_start, train_size=0.85, shuffle=True)
+	# C_start = copy.deepcopy(all_data.loc[all_data.r == 0, [all_data.columns.tolist()[i] for i in list(range(0, 10)) + list(range(24, 26))]])
+	# X_start = copy.deepcopy(all_data.loc[all_data.r == 0, [all_data.columns.tolist()[i] for i in list(range(10, 22))]])
+	# # extract only yaw angle from rotation matrices of poses
+	# X_start_rot = X_start.iloc[:, 3:].values.reshape(X_start.shape[0], 3, 3).transpose(0, 2, 1)
+	# _, _, yaws = get_euler_from_R_tensor(X_start_rot)
+	# X_start = X_start.drop(['s_r11', 's_r21', 's_r31', 's_r12', 's_r22', 's_r32', 's_r13', 's_r23', 's_r33'], axis=1)
+	# X_start.insert(loc=3, column='s_yaw', value= yaws)
+	# # Convert to 2D PyTorch tensors
+	# C_start = torch.tensor(C_start.values, dtype=torch.float32).to(DEVICE)
+	# X_start = torch.tensor(X_start.values, dtype=torch.float32).to(DEVICE)
+	# # train-test split: Hold out the test set for start model evaluation
+	# C_start_train, C_start_test, X_start_train, X_start_test = train_test_split(C_start, X_start, train_size=0.85, shuffle=True)
 
 	# create networks
 	layers = 4
@@ -88,18 +88,18 @@ if __name__ == '__main__':
 	final_pose_net = CVAE()
 	final_pose_net.initialise(X_final_train.shape[1], C_final_train.shape[1], latent_dim, activation='relu', layers=layers, h_sizes=h_sizes)
 
-	start_pose_net = CVAE()
-	start_pose_net.initialise(X_start_train.shape[1], C_start_train.shape[1], latent_dim, activation='relu', layers=layers, h_sizes=h_sizes)
+	# start_pose_net = CVAE()
+	# start_pose_net.initialise(X_start_train.shape[1], C_start_train.shape[1], latent_dim, activation='relu', layers=layers, h_sizes=h_sizes)
 
 	# train networks
-	ik_acc = model_train_ik(ik_net, X_ik_train, y_ik_train, X_ik_test, y_ik_test)
-	model_train_cvae(final_pose_net, C_final_train, X_final_train, latent_dim, C_final_test, X_final_test, loss_fn_cvae, eval_fn_cvae)
-	model_train_cvae(start_pose_net, C_start_train, X_start_train, latent_dim, C_start_test, X_start_test, loss_fn_cvae, eval_fn_cvae)
+	ik_acc = model_train_ik(ik_net, X_ik_train, y_ik_train, X_ik_test, y_ik_test, epochs=1000)
+	model_train_cvae(final_pose_net, C_final_train, X_final_train, latent_dim, C_final_test, X_final_test, loss_fn_cvae, eval_fn_cvae, epochs=1000)
+	# model_train_cvae(start_pose_net, C_start_train, X_start_train, latent_dim, C_start_test, X_start_test, loss_fn_cvae, eval_fn_cvae)
 
 	# eval networks
 	ik_net.eval()
 	final_pose_net.eval()
-	start_pose_net.eval()
+	# start_pose_net.eval()
 
 	test_obj_grid_num = 5
 	test_objs = test_obj_grid_num**2
@@ -132,14 +132,14 @@ if __name__ == '__main__':
 			draw_object(ax_ik[ax_row, ax_col], obj_props[None, :], zorder=3)
 			draw_object(ax_dists[ax_row, ax_col], obj_props[None, :], zorder=3)
 
-			start_pose_c = np.hstack([np.repeat(obj_props[None, :], num_test_pts, axis=0), desired_dirs, desired_dists])
-			# start_pose_c = np.repeat(start_pose_c, start_pose_samples, axis=0)
-			start_pose_c_torch = torch.tensor(start_pose_c, dtype=torch.float32).to(DEVICE)
-			start_pose_z_torch = torch.randn(num_test_pts, latent_dim).to(DEVICE)
-			start_pose_pred = start_pose_net.decode(start_pose_z_torch, start_pose_c_torch).cpu().numpy()
+			# start_pose_c = np.hstack([np.repeat(obj_props[None, :], num_test_pts, axis=0), desired_dirs, desired_dists])
+			# # start_pose_c = np.repeat(start_pose_c, start_pose_samples, axis=0)
+			# start_pose_c_torch = torch.tensor(start_pose_c, dtype=torch.float32).to(DEVICE)
+			# start_pose_z_torch = torch.randn(num_test_pts, latent_dim).to(DEVICE)
+			# start_pose_pred = start_pose_net.decode(start_pose_z_torch, start_pose_c_torch).cpu().numpy()
 
 			obj_props_stack_ik = np.repeat(obj_props[None, :8], num_test_pts, axis=0)
-			ik_score_input = np.hstack([obj_props_stack_ik, start_pose_pred, desired_dirs, desired_dists])
+			ik_score_input = np.hstack([obj_props_stack_ik, desired_dirs, desired_dists])
 			ik_score_input_torch = torch.tensor(ik_score_input, dtype=torch.float32).to(DEVICE)
 			ik_scores = ik_net(ik_score_input_torch).cpu().numpy() # num_test_pts x 1
 			ik_scores = ik_scores.reshape(xx.shape)
@@ -185,6 +185,6 @@ if __name__ == '__main__':
 
 		plt.tight_layout()
 		# plt.show()
-		figure_ik.savefig('posterior-ik-[{}].png'.format(o+1), bbox_inches='tight')
-		figure_dists.savefig('posterior-dists-[{}].png'.format(o+1), bbox_inches='tight')
+		figure_ik.savefig('posterior-nostart-ik-[{}].png'.format(o+1), bbox_inches='tight')
+		figure_dists.savefig('posterior-nostart-dists-[{}].png'.format(o+1), bbox_inches='tight')
 		# [ax.cla() for ax in axes]
