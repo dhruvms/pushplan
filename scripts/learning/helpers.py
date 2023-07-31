@@ -1,6 +1,7 @@
 import numpy as np
 from matplotlib.path import Path
 import matplotlib.patches as patches
+import pandas as pd
 
 from constants import *
 
@@ -80,3 +81,105 @@ def shortest_angle_diff(af, ai):
 
 def shortest_angle_dist(af, ai):
 	return np.fabs(shortest_angle_diff(af, ai))
+
+def get_yaw_from_R(R):
+	return np.arctan2(R[1,0], R[0,0])
+
+def get_euler_from_R(R, deg=False):
+	sy = (R[0,0]**2 + R[1,0]**2)**0.5
+	singular = sy < 1e-6
+
+	roll = pitch = yaw = None
+	if not singular:
+		roll = np.arctan2(R[2,1] , R[2,2])
+		pitch = np.arctan2(-R[2,0], sy)
+		yaw = np.arctan2(R[1,0], R[0,0])
+	else:
+		roll = np.arctan2(-R[1,2], R[1,1])
+		pitch = np.arctan2(-R[2,0], sy)
+		yaw = 0
+
+	if deg:
+		return np.rad2deg(roll), np.rad2deg(pitch), np.rad2deg(yaw)
+	else:
+		return roll, pitch, yaw
+
+def get_euler_from_R_tensor(R, deg=False):
+	if (len(R.shape) < 3):
+		R = R[None, :, :]
+
+	sy = (R[:,0,0]**2 + R[:,1,0]**2)**0.5
+	singular = sy < 1e-6
+	singular = singular.astype(np.int)
+
+	roll = np.ones(singular.shape[0]) * np.nan
+	pitch = np.ones(singular.shape[0]) * np.nan
+	yaw = np.ones(singular.shape[0]) * np.nan
+
+	roll[singular == 0] = np.arctan2(R[singular == 0, 2, 1] , R[singular == 0, 2, 2])
+	pitch[singular == 0] = np.arctan2(-R[singular == 0, 2, 0], sy[singular == 0])
+	yaw[singular == 0] = np.arctan2(R[singular == 0, 1, 0], R[singular == 0, 0, 0])
+
+	roll[singular == 1] = np.arctan2(-R[singular == 1, 1, 2], R[singular == 1, 1, 1])
+	pitch[singular == 1] = np.arctan2(-R[singular == 1, 2, 0], sy[singular == 1])
+	yaw[singular == 1] = 0
+
+	if deg:
+		return np.rad2deg(roll), np.rad2deg(pitch), np.rad2deg(yaw)
+	else:
+		return roll, pitch, yaw
+
+def make_rotation_matrix(rotvec):
+	return np.reshape(rotvec, (3, 3)).transpose()
+
+def process_data():
+	# Read data
+	data = pd.read_csv("../../dat/push_data/push_data_with_final_object_pose.csv")
+
+	# center object coordinates at origin
+	data.loc[:, 'o_ox'] -= TABLE[0]
+	data.loc[:, 'o_oy'] -= TABLE[1]
+	data.loc[:, 'o_oz'] -= TABLE[2] + TABLE_SIZE[2]
+
+	# center push start pose coordinates at origin
+	data.loc[:, 's_x'] -= TABLE[0]
+	data.loc[:, 's_y'] -= TABLE[1]
+	data.loc[:, 's_z'] -= TABLE[2] + TABLE_SIZE[2]
+
+	# center object end pose coordinates at origin
+	data.loc[:, 'e_x'] -= TABLE[0]
+	data.loc[:, 'e_y'] -= TABLE[1]
+	data.loc[:, 'e_z'] -= TABLE[2] + TABLE_SIZE[2]
+
+	# normalise object yaw angle
+	sin = np.sin(data.loc[:, 'o_oyaw'])
+	cos = np.cos(data.loc[:, 'o_oyaw'])
+	data.loc[:, 'o_oyaw'] = np.arctan2(sin, cos)
+
+	# normalise desired push direction angle
+	sin = np.sin(data.loc[:, 'm_dir_des'])
+	cos = np.cos(data.loc[:, 'm_dir_des'])
+	data.loc[:, 'm_dir_des'] = np.arctan2(sin, cos)
+
+	# normalise achieved push direction angle
+	sin = np.sin(data.loc[:, 'm_dir_ach'])
+	cos = np.cos(data.loc[:, 'm_dir_ach'])
+	data.loc[:, 'm_dir_ach'] = np.arctan2(sin, cos)
+
+	# reorder columns
+	# 0 : [o_ox, o_oy, o_oz, o_oyaw, o_shape, o_xs, o_ys, o_zs, o_mass, o_mu] : 9
+	# 10 : [s_x, s_y, s_z, s_r11, s_r21, s_r31, s_r12, s_r22, s_r32, s_r13, s_r23, s_r33] : 21
+	# 22 : [m_dir_des, m_dist_des] : 23
+	# 24 : [m_dir_ach, m_dist_ach] : 25
+	# 26 : [e_x, e_y, e_z, e_r11, e_r21, e_r31, e_r12, e_r22, e_r32, e_r13, e_r23, e_r33] : 37
+	# 38 : [r]
+	cols = data.columns.tolist()
+	cols = cols[:10] +\
+			cols[12:24] +\
+			cols[10:12] +\
+			cols[24:26] +\
+			cols[26:-1] +\
+			cols[-1:]
+	data = data[cols]
+
+	return data
