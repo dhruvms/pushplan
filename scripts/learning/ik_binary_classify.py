@@ -13,55 +13,8 @@ from sklearn.metrics import roc_curve
 from sklearn.model_selection import train_test_split
 
 from models import BCNet
-from helpers import draw_object, draw_base_rect
+from helpers import process_data, draw_object, draw_base_rect, get_euler_from_R_tensor
 from constants import *
-
-def process_data():
-	# Read data
-	# data = pd.read_csv("../../dat/push_data/push_data_for_ik_success.csv")
-	data = pd.read_csv("../../dat/push_data/push_data_with_final_object_pose.csv")
-
-	# do not care about final object pose to predict ee start pose
-	data = data.drop(['e_x','e_y','e_z','e_r11','e_r21','e_r31','e_r12','e_r22','e_r32','e_r13','e_r23','e_r33'], axis=1)
-
-	# we will use desired push columns, not achieved
-	data = data.drop(['m_dir_ach', 'm_dist_ach'], axis=1)
-
-	# we do not need object properties
-	# ['o_ox','o_oy','o_oz','o_oyaw','o_shape','o_xs','o_ys','o_zs','o_mass', 'o_mu']
-	data = data.drop(['o_mass', 'o_mu'], axis=1)
-
-	# center object coordinates at origin
-	data.loc[:, 'o_ox'] -= TABLE[0]
-	data.loc[:, 'o_oy'] -= TABLE[1]
-	data.loc[:, 'o_oz'] -= TABLE[2] + TABLE_SIZE[2]
-
-	# normalise object yaw angle
-	sin = np.sin(data.loc[:, 'o_oyaw'])
-	cos = np.cos(data.loc[:, 'o_oyaw'])
-	data.loc[:, 'o_oyaw'] = np.arctan2(sin, cos)
-
-	# center push start pose coordinates at origin
-	data.loc[:, 's_x'] -= TABLE[0]
-	data.loc[:, 's_y'] -= TABLE[1]
-	data.loc[:, 's_z'] -= TABLE[2] + TABLE_SIZE[2]
-
-	# normalise push direction angle
-	sin = np.sin(data.loc[:, 'm_dir_des'])
-	cos = np.cos(data.loc[:, 'm_dir_des'])
-	data.loc[:, 'm_dir_des'] = np.arctan2(sin, cos)
-
-	# make binary labels
-	data.loc[data.r > 0, 'r'] = 2 # push IK failed => temporarily class 2
-	data.loc[data.r <= 0, 'r'] = 1 # push IK succeeded => class 1
-	data.loc[data.r == 2, 'r'] = 0 # push IK failed => class 0
-
-	# reorder columns for easy train/test split
-	cols = data.columns.tolist()
-	# cols = cols[2:-1] + cols[:2] + cols[-1:]
-	cols = cols[:8] + cols[10:-1] + cols[8:10] + cols[-1:]
-	data = data[cols]
-	return data
 
 # Helper function to train one model
 def model_train(model, X_train, y_train, X_val, y_val):
@@ -133,18 +86,28 @@ def make_rotation_matrix(rotvec):
 	return np.reshape(rotvec, (3, 3)).transpose()
 
 if __name__ == '__main__':
-	# get training data
-	data = process_data()
-	X = data.iloc[:, :-1]
-	y = data.iloc[:, -1]
-	# Input columns - ['s_x', 's_y', 's_z', 's_r11', 's_r21', 's_r31', 's_r12', 's_r22', 's_r32', 's_r13', 's_r23', 's_r33', 'm_dir_des', 'm_dist_des']
-	# Predicted columns = ['r']
+	all_data = process_data()
 
+	# get training data - IK
+	# ipdb> p X.columns.tolist()
+	# ['o_ox', 'o_oy', 'o_oz', 'o_oyaw', 'o_shape', 'o_xs', 'o_ys', 'o_zs', 's_x', 's_y', 's_z', 's_yaw', 'm_dir_des', 'm_dist_des']
+
+	X = copy.deepcopy(all_data.iloc[:, :24])
+	# extract only yaw angle from rotation matrices of poses
+	X_rot = X.iloc[:, 13:22].values.reshape(X.shape[0], 3, 3).transpose(0, 2, 1)
+	_, _, yaws = get_euler_from_R_tensor(X_rot)
+	X = X.drop(['o_mass', 'o_mu', 's_r11', 's_r21', 's_r31', 's_r12', 's_r22', 's_r32', 's_r13', 's_r23', 's_r33'], axis=1)
+	X.insert(loc=11, column='s_yaw', value= yaws)
+	# make binary labels
+	y = copy.deepcopy(all_data.iloc[:, -1])
+	y.loc[y > 0] = 2 # push IK failed => temporarily class 2
+	y.loc[y <= 0] = 1 # push IK succeeded => class 1
+	y.loc[y == 2] = 0 # push IK failed => class 0
 	# Convert to 2D PyTorch tensors
 	X = torch.tensor(X.values, dtype=torch.float32).to(DEVICE)
 	y = torch.tensor(y, dtype=torch.float32).reshape(-1, 1).to(DEVICE)
 	# train-test split: Hold out the test set for final model evaluation
-	X_train, X_test, y_train, y_test = train_test_split(X, y, train_size=0.75, shuffle=True)
+	X_train, X_test, y_train, y_test = train_test_split(X, y, train_size=0.85, shuffle=True)
 
 	# network params
 	in_dim = X.shape[1]
@@ -159,7 +122,7 @@ if __name__ == '__main__':
 			]
 	activation = 'relu'
 
-	figure = plt.figure(figsize=(10,10))
+	figure = plt.figure(figsize=(15,15))
 	for H in range(len(h_sizes)):
 		print("Train model: [{}]".format(', '.join(str(x) for x in h_sizes[H])))
 
@@ -176,18 +139,19 @@ if __name__ == '__main__':
 		xx, yy = np.meshgrid(np.arange(-TABLE_SIZE[0], TABLE_SIZE[0], h),
 							 np.arange(-TABLE_SIZE[1], TABLE_SIZE[1], h))
 		push_to_xy = np.c_[xx.ravel(), yy.ravel()]
+		num_test_pts = push_to_xy.shape[0]
 
-		test_plots = 3
+		test_plots = 5
 		with torch.no_grad():
 			plot_count = 1
 			axes = []
 			for t in range(test_plots * test_plots):
 				pidx = np.random.randint(X_test.shape[0])
 				test_pose = X_test[pidx, :-2].cpu().numpy()[None, :]
-				in_pts = np.repeat(test_pose, push_to_xy.shape[0], axis=0)
+				in_pts = np.repeat(test_pose, num_test_pts, axis=0)
 
 				# dirs = np.arctan2(push_to_xy[:, 1] - in_pts[:, 1], push_to_xy[:, 0] - in_pts[:, 0])
-				dirs = np.arctan2(push_to_xy[:, 1] - in_pts[:, 1+8], push_to_xy[:, 0] - in_pts[:, 0+8])
+				dirs = np.arctan2(push_to_xy[:, 1] - in_pts[:, 1], push_to_xy[:, 0] - in_pts[:, 0])
 				dists = np.linalg.norm(in_pts[:, :2] - push_to_xy, axis=1)
 
 				in_pts = np.hstack([in_pts, dirs[:, None], dists[:, None]])
@@ -206,12 +170,8 @@ if __name__ == '__main__':
 				draw_object(ax, obj_draw)
 
 				asize = 0.08
-				# ayaw = get_yaw_from_R(make_rotation_matrix(test_pose[0, 3:]))
-				ayaw = get_yaw_from_R(make_rotation_matrix(test_pose[0, 3+8:]))
-				# ax.arrow(test_pose[0, 0], test_pose[0, 1], asize * np.cos(ayaw), asize * np.sin(ayaw),
-				# 			length_includes_head=True, head_width=0.02, head_length=0.02,
-				# 			ec='gold', fc='gold', alpha=0.8)
-				ax.arrow(test_pose[0, 0+8], test_pose[0, 1+8], asize * np.cos(ayaw), asize * np.sin(ayaw),
+				ayaw = test_pose[0, 11]
+				ax.arrow(test_pose[0, 8], test_pose[0, 9], asize * np.cos(ayaw), asize * np.sin(ayaw),
 							length_includes_head=True, head_width=0.02, head_length=0.02,
 							ec='gold', fc='gold', alpha=0.8)
 				cb = ax.contourf(xx, yy, preds, cmap=plt.cm.Greens, alpha=.8)
