@@ -1,89 +1,13 @@
 import copy
-import sys
+import numpy as np
 import matplotlib.pyplot as plt
 
-import numpy as np
-import pandas as pd
-
 import torch
-import torch.nn as nn
-import torch.optim as optim
-import tqdm
-from sklearn.metrics import roc_curve
 from sklearn.model_selection import train_test_split
 
-from models import BCNet
-from helpers import process_data, draw_object, draw_base_rect, get_euler_from_R_tensor
+from helpers import *
 from constants import *
-
-# Helper function to train one model
-def model_train(model, X_train, y_train, X_val, y_val):
-	model = model.to(DEVICE)
-	# loss function and optimizer
-	loss_fn = nn.BCELoss()  # binary cross entropy
-	optimizer = optim.Adam(model.parameters(), lr=0.0001)
-
-	N = X_train.shape[0]
-	n_epochs = 1000   # number of epochs to run
-	batch_size = 1<<(int(np.sqrt(N))-1).bit_length()  # size of each batch
-	batch_start = torch.arange(0, len(X_train), batch_size)
-
-	# Hold the best model
-	best_acc = -np.inf   # init to negative infinity
-	best_weights = None
-	best_acc_update_epoch = -1
-
-	for epoch in range(n_epochs):
-		idxs = torch.tensor(np.random.permutation(np.arange(0, N)))
-		model.train()
-		with tqdm.tqdm(batch_start, unit="batch", mininterval=0, disable=epoch % 50 != 0) as bar:
-			bar.set_description("Epoch {}".format(epoch))
-			for start in bar:
-				batch_idxs = idxs[start:start+batch_size]
-				# take a batch
-				X_batch = X_train[batch_idxs]
-				y_batch = y_train[batch_idxs]
-
-				# forward pass
-				y_pred = model(X_batch)
-				loss = loss_fn(y_pred, y_batch)
-
-				# backward pass
-				optimizer.zero_grad()
-				loss.backward()
-
-				# update weights
-				optimizer.step()
-				# print progress
-
-				acc = (y_pred.round() == y_batch).float().mean()
-				bar.set_postfix(
-					loss=float(loss),
-					acc=float(acc)
-				)
-		# evaluate accuracy at end of each epoch
-		model.eval()
-		y_pred = model(X_val)
-		acc = (y_pred.round() == y_val).float().mean()
-		acc = float(acc)
-		if acc > best_acc:
-			# print('\tAccuracy improved at epoch {}'.format(epoch))
-			best_acc = acc
-			best_weights = copy.deepcopy(model.state_dict())
-			best_acc_update_epoch = epoch
-		elif ((best_acc_update_epoch >= 0) and epoch > best_acc_update_epoch + n_epochs//10):
-			print('Training stopped at epoch {}. Last acc update was at epoch {}.'.format(epoch, best_acc_update_epoch))
-			break
-
-	# restore model and return best accuracy
-	model.load_state_dict(best_weights)
-	return best_acc
-
-def get_yaw_from_R(R):
-	return np.arctan2(R[1,0], R[0,0])
-
-def make_rotation_matrix(rotvec):
-	return np.reshape(rotvec, (3, 3)).transpose()
+from models import BCNet, model_train_ik
 
 if __name__ == '__main__':
 	all_data = process_data()
@@ -93,11 +17,11 @@ if __name__ == '__main__':
 	# ['o_ox', 'o_oy', 'o_oz', 'o_oyaw', 'o_shape', 'o_xs', 'o_ys', 'o_zs', 's_x', 's_y', 's_z', 's_yaw', 'm_dir_des', 'm_dist_des']
 
 	X = copy.deepcopy(all_data.iloc[:, :24])
-	X = X.drop(['o_mass', 'o_mu', 's_x', 's_y', 's_z', 's_r11', 's_r21', 's_r31', 's_r12', 's_r22', 's_r32', 's_r13', 's_r23', 's_r33'], axis=1)
-	# # extract only yaw angle from rotation matrices of poses
-	# X_rot = X.iloc[:, 13:22].values.reshape(X.shape[0], 3, 3).transpose(0, 2, 1)
-	# _, _, yaws = get_euler_from_R_tensor(X_rot)
-	# X.insert(loc=11, column='s_yaw', value= yaws)
+	# extract only yaw angle from rotation matrices of poses
+	X_rot = X.iloc[:, 13:22].values.reshape(X.shape[0], 3, 3).transpose(0, 2, 1)
+	_, _, yaws = get_euler_from_R_tensor(X_rot)
+	X = X.drop(['o_mass', 'o_mu', 's_r11', 's_r21', 's_r31', 's_r12', 's_r22', 's_r32', 's_r13', 's_r23', 's_r33'], axis=1)
+	X.insert(loc=11, column='s_yaw', value= yaws)
 	# make binary labels
 	y = copy.deepcopy(all_data.iloc[:, -1])
 	y.loc[y > 0] = 2 # push IK failed => temporarily class 2
@@ -129,7 +53,7 @@ if __name__ == '__main__':
 		layers = len(h_sizes[H]) + 1
 		model1 = BCNet()
 		model1.initialise(in_dim, out_dim, activation=activation, layers=layers, h_sizes=h_sizes[H])
-		acc = model_train(model1, X_train, y_train, X_test, y_test)
+		acc = model_train_ik(model1, X_train, y_train, X_test, y_test)
 		# print(model1)
 		print("Final model1 accuracy (4x32 deep, relu): {:.2f}%", acc*100)
 
@@ -169,11 +93,11 @@ if __name__ == '__main__':
 				obj_draw = in_pts[0, :8].unsqueeze(0).cpu().numpy()
 				draw_object(ax, obj_draw)
 
-				# asize = 0.08
-				# ayaw = test_pose[0, 11]
-				# ax.arrow(test_pose[0, 8], test_pose[0, 9], asize * np.cos(ayaw), asize * np.sin(ayaw),
-				# 			length_includes_head=True, head_width=0.02, head_length=0.02,
-				# 			ec='gold', fc='gold', alpha=0.8)
+				asize = 0.08
+				ayaw = test_pose[0, 11]
+				ax.arrow(test_pose[0, 8], test_pose[0, 9], asize * np.cos(ayaw), asize * np.sin(ayaw),
+							length_includes_head=True, head_width=0.02, head_length=0.02,
+							ec='gold', fc='gold', alpha=0.8)
 				cb = ax.contourf(xx, yy, preds, cmap=plt.cm.Greens, alpha=.8)
 
 				ax.set_xticks(())
@@ -184,5 +108,5 @@ if __name__ == '__main__':
 			# plt.colorbar(cb)
 			plt.tight_layout()
 			# plt.show()
-			plt.savefig('[{}]'.format(','.join(str(x) for x in h_sizes[H])) + '-ikmap-nostart.png', bbox_inches='tight')
+			plt.savefig('[{}]'.format(','.join(str(x) for x in h_sizes[H])) + '-ikmap-4dstart.png', bbox_inches='tight')
 			[ax.cla() for ax in axes]
