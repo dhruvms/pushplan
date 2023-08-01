@@ -1897,7 +1897,8 @@ bool Robot::PlanPickPlace(
 	State debug_action_start, debug_action_end;
 	// required info about object being pushed
 	const Trajectory* obj_traj = object->SolveTraj();
-	debug_action_start = obj_traj->front().state;
+	debug_action_start = { obj_traj->front().state.at(0), obj_traj->front().state.at(1) };
+	debug_action_end = { -99.0, -99.0 };
 	// visMAPFPath(obj_traj);
 	std::vector<Object*> rearranged_obj = { object->GetObject() };
 
@@ -1971,10 +1972,9 @@ bool Robot::PlanPickPlace(
 	// 3. create multi pose goal
 	// 4. call planner to plan approach trajectory
 	trajectory_msgs::JointTrajectory pick_traj;
-	if (!planToPoseGoal(pick_start_state, pregrasps, pick_traj, 20.0))
+	if (!planToPoseGoal(pick_start_state, pregrasps, pick_traj, 0.5))
 	{
 		// ++m_debug_push_info["start_unreachable"];
-		debug_action_end = { -99.0, -99.0 };
 		debug_action = std::make_tuple(debug_action_start, debug_action_end, 7);
 
 		// remove all movable objects from immovable collision space
@@ -2083,8 +2083,9 @@ bool Robot::PlanPickPlace(
 								Eigen::AngleAxisd(0.0, Eigen::Vector3d::UnitY()) *
 								Eigen::AngleAxisd(0.0, Eigen::Vector3d::UnitX());
 
+	debug_action_end.clear();
 	debug_action_end = { ee_pose.translation().x(), ee_pose.translation().y() };
-	if (!planToPoseGoal(place_start_state, { ee_pose }, place_traj, 0.1, true))
+	if (!planToPoseGoal(place_start_state, { ee_pose }, place_traj, 0.5, true))
 	{
 		// push_result = 5;
 		// ++m_debug_push_info["start_unreachable"];
