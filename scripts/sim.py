@@ -475,11 +475,12 @@ class BulletSim:
 				elif (place_at >= 0 and point == req.traj.points[place_at]):
 					self.grasp(sim_id, True) # open gripper
 					self.sims[0].removeConstraint(self.grasp_constraint)
-					for i in range(2 * int(HZ)):
-						sim.stepSimulation()
+					self.grasp_constraint = None
+					# for i in range(2 * int(HZ)):
+					# 	sim.stepSimulation()
 
 				elif (point == req.traj.points[pick_at+1]):
-					self.grasp(sim_id, False) # close gripper
+					self.grasp(sim_id, False, oid=req.ooi) # close gripper
 
 					if self.grasp_constraint is None:
 						obj_transform = sim.getBasePositionAndOrientation(req.ooi)
@@ -592,6 +593,10 @@ class BulletSim:
 					robot_id, arm_joints,
 					controlMode=sim.VELOCITY_CONTROL,
 					targetVelocities=len(arm_joints)*[0.0])
+			sim.setJointMotorControlArray(
+					robot_id, self.gripper_joints,
+					controlMode=sim.POSITION_CONTROL,
+					targetPositions=[0.2]*self.n_gripper_joints)
 			self.holdPosition(sim_id)
 
 			objs_curr = self.getObjects(sim_id)
@@ -859,7 +864,7 @@ class BulletSim:
 				self.grasp(sim_id, True) # open gripper
 
 			elif (point == req.traj.points[pick_at+1]):
-				self.grasp(sim_id, False) # close gripper
+				self.grasp(sim_id, False, oid=picked_obj) # close gripper
 
 				if self.grasp_constraint is None:
 					obj_transform = sim.getBasePositionAndOrientation(picked_obj)
@@ -964,8 +969,9 @@ class BulletSim:
 				if (point == req.traj.points[place_at]):
 					self.grasp(sim_id, True) # open gripper
 					self.sims[0].removeConstraint(self.grasp_constraint)
-					for i in range(2 * int(HZ)):
-						sim.stepSimulation()
+					self.grasp_constraint = None
+					# for i in range(2 * int(HZ)):
+					# 	sim.stepSimulation()
 
 				prev_timestep = curr_timestep
 				prev_pose = get_joint_positions(robot_id, arm_joints, sim=sim)
@@ -1008,6 +1014,7 @@ class BulletSim:
 
 		elif (self.grasp_constraint is not None):
 			self.sims[0].removeConstraint(self.grasp_constraint)
+			self.grasp_constraint = None
 
 		# To simulate the scene after execution of the trajectory
 		if (not violation_flag):
@@ -1271,7 +1278,7 @@ class BulletSim:
 								controlMode=sim.POSITION_CONTROL,
 								targetPositions=joints_pos)
 
-	def grasp(self, sim_id, open_g):
+	def grasp(self, sim_id, open_g, oid=None):
 		robot_id = self.sim_datas[sim_id]['robot_id']
 		sim = self.sims[sim_id]
 		self.holdPosition(sim_id)
@@ -1286,6 +1293,9 @@ class BulletSim:
 				targetVelocities=target_vel)
 		for i in range(int(HZ)):
 			sim.stepSimulation()
+			if (not open_g and oid is not None):
+				if (self.grasped(oid, sim_id)):
+					break
 
 		if open_g:
 			sim.setJointMotorControlArray(
@@ -1297,10 +1307,11 @@ class BulletSim:
 			# 	sim.stepSimulation()
 
 	def grasped(self, ooi, sim_id):
+		sim = self.sims[sim_id]
+
 		robot_id = self.sim_datas[sim_id]['robot_id']
-		contacts = self.sims[sim_id].getContactPoints(ooi, robot_id)
-		print(contacts)
-		return len(contacts) > 0
+		contacts = sim.getContactPoints(ooi, robot_id)
+		return any([c[4] in self.gripper_joints for c in contacts])
 
 	def getObjects(self, sim_id):
 		sim = self.sims[sim_id]
