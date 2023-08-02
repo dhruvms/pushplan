@@ -1511,13 +1511,12 @@ bool Planner::executeTraj(const trajectory_msgs::JointTrajectory& traj, bool gra
 	}
 
 	traj_piece.points.clear();
-	traj_piece.points.insert(traj_piece.points.begin(), traj.points.begin() + m_grasp_at, traj.points.begin() + m_grasp_at + 1);
-	
-	// auto skip = traj_piece.points.begin()->time_from_start;
-	// traj_piece.points.begin()->time_from_start -= skip;
-	// for (auto itr = traj_piece.points.begin(); itr != traj_piece.points.end(); ++itr) {
-	// 	itr->time_from_start += ros::Duration(2);
-	// }
+	traj_piece.points.insert(traj_piece.points.begin(), traj.points.begin() + m_grasp_at - 1, traj.points.begin() + m_grasp_at + 1);
+
+	auto skip = traj_piece.points.begin()->time_from_start;
+	for (auto itr = traj_piece.points.begin(); itr != traj_piece.points.end(); ++itr) {
+		itr->time_from_start -= skip;
+	}
 	
 	ROS_WARN("ExecArmTrajectory");
 	m_controller->ExecArmTrajectory(m_controller->PR2TrajFromMsg(traj_piece));
@@ -1530,13 +1529,13 @@ bool Planner::executeTraj(const trajectory_msgs::JointTrajectory& traj, bool gra
 	m_controller->CloseGripper();
 
 	traj_piece.points.clear();
-	traj_piece.points.insert(traj_piece.points.begin(), traj.points.begin() + m_grasp_at + 1, traj.points.end());
+	traj_piece.points.insert(traj_piece.points.begin(), traj.points.begin() + m_grasp_at, traj.points.end());
 	
-	// skip = traj_piece.points.begin()->time_from_start;
-	// traj_piece.points.begin()->time_from_start -= skip;
-	// for (auto itr = traj_piece.points.begin(); itr != traj_piece.points.end(); ++itr) {
-	// 	itr->time_from_start += ros::Duration(2);
-	// }
+	skip = traj_piece.points.begin()->time_from_start;
+	for (auto itr = traj_piece.points.begin(); itr != traj_piece.points.end(); ++itr) {
+		itr->time_from_start -= skip;
+	}
+
 	ROS_WARN("ExecArmTrajectory");
 	m_controller->ExecArmTrajectory(m_controller->PR2TrajFromMsg(traj_piece));
 	while (!m_controller->GetArmState().isDone() && ros::ok())
