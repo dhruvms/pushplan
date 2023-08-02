@@ -180,6 +180,7 @@ bool Planner::SetupNGR()
 	m_robot->ProcessObstacles({ m_ooi->GetObject() });
 	m_robot->UpdateNGR();
 	m_exec = m_robot->GetLastPlanProfiled();
+	m_grasp_at = m_robot->GraspAt();
 
 	double ox, oy, oz, sx, sy, sz;
 	m_sim->GetShelfParams(ox, oy, oz, sx, sy, sz);
