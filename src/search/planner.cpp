@@ -224,6 +224,7 @@ bool Planner::FinalisePlan(bool add_movables)
 	}
 	m_robot->ProcessObstacles({ m_ooi->GetObject() });
 	m_exec = m_robot->GetLastPlanProfiled();
+	m_grasp_at = m_robot->GraspAt();
 
 	m_stats["robot_planner_time"] += GetTime() - m_timer;
 
