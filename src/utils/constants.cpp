@@ -62,16 +62,6 @@ const std::map<int, std::vector<double>> clutter::YCB_OBJECT_DIMS = {
 	{36, {0.0425, 0.0425, 0.1, 0.0}},
 };
 
-
-const std::map<int, std::string> clutter::EXEC_TRAJ_FAIL = {
-	{0, "no violation"},
-	{1, "object toppled"},
-	{2, "obstacle collision"},
-	{3, "table collision"},
-	{4, "velocity constraint violation"},
-	{99, "grabbed wrong object"},
-};
-
 double clutter::DEG5 = 0.0872665;
 double clutter::LOG2PI = std::log(2 * M_PI);
 

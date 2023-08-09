@@ -464,7 +464,6 @@ class BulletSim:
 		place_at = req.place_at
 		violation_flag = False
 		all_interactions = []
-		cause = 0
 		for pidx, point in enumerate(req.traj.points[1:]):
 			if (pick_at >= 0):
 				# this is either the OOI retrieval trajectory
@@ -528,7 +527,6 @@ class BulletSim:
 				# 	input("DONE")
 
 				# 	if not self.grasped(req.ooi, sim_id):
-				# 		cause = 99
 				# 		violation_flag = True
 				# 		break
 
@@ -575,9 +573,6 @@ class BulletSim:
 
 				violation_flag = topple or immovable or table or velocity
 				if (violation_flag):
-					cause = int('0' + topple*'1' + immovable*'2' + table*'3' + velocity*'4')
-					# cause_str = 'traj violation: ' + topple*'topple' + immovable*'immovable' + table*'table' + velocity*'velocity'
-					# print(cause_str)
 					break
 
 			all_interactions += action_interactions
@@ -619,12 +614,6 @@ class BulletSim:
 
 				violation_flag = topple or immovable or table or velocity or wrong
 				if (violation_flag):
-					cause = int('0' + topple*'1' + immovable*'2' + table*'3' + velocity*'4')
-					# cause_str = 'traj violation: ' + topple*'topple' + immovable*'immovable' + table*'table' + velocity*'velocity'
-					if (wrong):
-						cause = 99
-						# cause_str = 'traj violation: wrong object'
-					# print(cause_str)
 					break
 
 			all_interactions += action_interactions
@@ -636,7 +625,6 @@ class BulletSim:
 
 		output = ExecTrajResponse()
 		output.violation = violation_flag
-		output.cause = cause
 		output.interactions = all_interactions
 		output.objects = ObjectsPoses()
 		output.objects.poses = self.getObjects(sim_id)
@@ -657,7 +645,6 @@ class BulletSim:
 		start_objs = None
 		goal_pos = None
 		if (req.oid != -1):
-			assert(num_pushes == 1)
 			goal_pos = np.asarray([req.gx, req.gy])
 
 		for pidx in range(num_pushes):
@@ -692,7 +679,6 @@ class BulletSim:
 
 			start_objs = self.getObjects(sim_id)
 			violation_flag = False
-			cause = 0
 			oid_start_xyz = None
 			if (req.oid != -1):
 				oid_start_xyz, _ = self.sims[sim_id].getBasePositionAndOrientation(req.oid)
@@ -732,8 +718,6 @@ class BulletSim:
 
 					violation_flag = topple or immovable or table or velocity
 					if (violation_flag):
-						# cause = 'push violation: ' + topple*'topple' + immovable*'immovable' + table*'table' + velocity*'velocity'
-						# print(cause)
 						break
 
 				if (violation_flag):
@@ -765,8 +749,6 @@ class BulletSim:
 
 				violation_flag = topple or immovable or table or velocity
 				if (violation_flag):
-					# cause = 'push violation: ' + topple*'topple' + immovable*'immovable' + table*'table' + velocity*'velocity'
-					# print(cause)
 					break
 
 			if (violation_flag):
@@ -853,7 +835,6 @@ class BulletSim:
 
 		start_objs = self.getObjects(sim_id)
 		violation_flag = False
-		cause = 0
 		oid_start_xyz = None
 		if (picked_obj != -1):
 			oid_start_xyz, _ = self.sims[sim_id].getBasePositionAndOrientation(picked_obj)
@@ -922,9 +903,6 @@ class BulletSim:
 
 				violation_flag = topple or immovable or table or velocity
 				if (violation_flag):
-					cause = int('0' + topple*'1' + immovable*'2' + table*'3' + velocity*'4')
-					# cause_str = 'traj violation: ' + topple*'topple' + immovable*'immovable' + table*'table' + velocity*'velocity'
-					# print(cause_str)
 					break
 
 			del action_interactions[:]
@@ -1003,9 +981,6 @@ class BulletSim:
 
 					violation_flag = topple or immovable or table or velocity
 					if (violation_flag):
-						cause = int('0' + topple*'1' + immovable*'2' + table*'3' + velocity*'4')
-						# cause_str = 'traj violation: ' + topple*'topple' + immovable*'immovable' + table*'table' + velocity*'velocity'
-						# print(cause_str)
 						break
 
 				del action_interactions[:]
@@ -1046,8 +1021,6 @@ class BulletSim:
 
 				violation_flag = topple or immovable or table or velocity
 				if (violation_flag):
-					# cause = 'push violation: ' + topple*'topple' + immovable*'immovable' + table*'table' + velocity*'velocity'
-					# print(cause)
 					break
 			del action_interactions[:]
 

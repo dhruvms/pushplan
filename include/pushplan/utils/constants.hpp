@@ -76,8 +76,6 @@ extern const std::vector<int> YCB_OBJECTS;
 extern const std::map<int, std::string> YCB_OBJECT_NAMES;
 extern const std::map<int, std::vector<double>> YCB_OBJECT_DIMS;
 
-extern const std::map<int, std::string> EXEC_TRAJ_FAIL;
-
 extern double DEG5;
 extern double LOG2PI;
 
