@@ -24,7 +24,6 @@ def one_layer(in_f, out_f, activation='relu', *args, **kwargs):
 		activations[activation]
 	)
 
-# Define two models
 class BCNet(nn.Module):
 	def __init__(self):
 		super().__init__()
@@ -50,6 +49,40 @@ class BCNet(nn.Module):
 
 	def forward(self, x):
 		return self.sigmoid(self.output(self.layers(x)))
+
+class PushSuccessNet(nn.Module):
+	def __init__(self):
+		super().__init__()
+		self.initialised = False
+
+	def initialise(self, in_dim, activation='relu', layers=None, h_sizes=None, *args, **kwargs):
+		if self.initialised:
+			return
+
+		if layers is not None:
+			assert h_sizes is not None
+			assert len(h_sizes) == layers-1
+			self.h_sizes = [in_dim] + copy.deepcopy(h_sizes)
+
+			self.layers = nn.Sequential(*[one_layer(self.h_sizes[i-1], self.h_sizes[i], activation=activation, *args, **kwargs) for i in range(1, layers)])
+
+			self.ik_task = nn.Linear(self.h_sizes[-1], 1, *args, **kwargs)
+			self.dist_task = nn.Linear(self.h_sizes[-1], 1, *args, **kwargs)
+		else:
+			self.layers = one_layer(in_dim, in_dim, activation)
+
+			self.ik_task = nn.Linear(in_dim, 1, *args, **kwargs)
+			self.dist_task = nn.Linear(in_dim, 1, *args, **kwargs)
+		self.sigmoid = nn.Sigmoid() # for the IK success probability head
+		self.relu = nn.ReLU() # for the distance between achieved and desired poses
+
+		self.initialised = True
+
+	def forward(self, x):
+		ik = self.sigmoid(self.ik_task(self.layers(x)))
+		dist = self.relu(self.dist_task(self.layers(x)))
+		output = torch.cat([ik, dist], 1)
+		return output
 
 class CVAE(nn.Module):
 	def __init__(self):
