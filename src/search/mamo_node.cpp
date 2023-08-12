@@ -40,7 +40,7 @@ std::vector<double>* MAMONode::GetCurrentStartState()
 
 bool MAMONode::RunMAPF()
 {
-	if (!m_new_constraints && m_successful_pushes.empty()) {
+	if (!m_new_constraints && m_successful_rearranges.empty()) {
 		return false;
 	}
 
@@ -57,10 +57,10 @@ bool MAMONode::RunMAPF()
 
 	if (!m_new_constraints)
 	{
-		const auto &valid_push = m_successful_pushes.back();
+		const auto &valid_push = m_successful_rearranges.back();
 
 		// add all past hallucinated constraints for this object
-		for (const auto& p: m_successful_pushes_invalidated)
+		for (const auto& p: m_successful_rearranges_invalidated)
 		{
 			if (p.first == valid_push.first) {
 				m_agents.at(m_agent_map[p.first])->AddHallucinatedConstraint(p.second);
@@ -69,8 +69,8 @@ bool MAMONode::RunMAPF()
 
 		// add latest hallucinated constraint
 		m_agents.at(m_agent_map[valid_push.first])->AddHallucinatedConstraint(valid_push.second);
-		m_successful_pushes_invalidated.push_back(m_successful_pushes.back());
-		m_successful_pushes.pop_back();
+		m_successful_rearranges_invalidated.push_back(m_successful_rearranges.back());
+		m_successful_rearranges.pop_back();
 	}
 
 	// set/update/init necessary components
@@ -98,16 +98,18 @@ bool MAMONode::tryPickPlace(
 	std::vector<trajectory_msgs::JointTrajectory> *succ_trajs,
 	std::vector<std::tuple<State, State, int> > *debug_actions,
 	std::vector<std::tuple<State, State, int> > *invalid_action_samples,
-	const std::vector<Object*> &movable_obstacles, int aid)
+	const std::vector<Object*> &movable_obstacles, size_t aid)
 {
+	const auto& moved = m_mapf_solution.at(aid);
+
 	comms::ObjectsPoses result;
 	int pick_at, place_at;
 	double plan_time = 0.0, sim_time = 0.0;
 	std::tuple<State, State, int> debug_action;
-	if (m_robot->PlanPickPlace(this->GetCurrentStartState(), m_agents.at(m_agent_map[aid]).get(), movable_obstacles, m_all_objects, result, pick_at, place_at, plan_time, sim_time, debug_action))
+	if (m_robot->PlanPickPlace(this->GetCurrentStartState(), m_agents.at(m_agent_map[moved.first]).get(), movable_obstacles, m_all_objects, result, pick_at, place_at, plan_time, sim_time, debug_action))
 	{
 		// pick-and-place succeeded!
-		MAMOAction action(MAMOActionType::PICKPLACE, aid);
+		MAMOAction action(MAMOActionType::PICKPLACE, moved.first);
 		action._params.push_back(pick_at);
 		action._params.push_back(place_at);
 
@@ -160,7 +162,7 @@ bool MAMONode::tryPush(
 		// m_robot->PlanPush creates the planner internally, because it might
 		// change KDL chain during the process
 		comms::ObjectsPoses result;
-		int push_failure;
+		PushResult push_failure;
 		std::tuple<State, State, int> debug_action;
 		double sim_time_push = 0.0;
 		if (m_robot->PlanPush(this->GetCurrentStartState(), m_agents.at(m_agent_map[moved.first]).get(), push, movable_obstacles, m_all_objects, 1.0, result, push_failure, debug_action, sim_time_push))
@@ -174,7 +176,7 @@ bool MAMONode::tryPush(
 			succ_trajs->push_back(m_robot->GetLastPlan());
 			debug_actions->push_back(std::move(debug_action));
 			if (samples == SAMPLES) {
-				m_successful_pushes.push_back(std::make_pair(moved.first, moved.second.back().coord));
+				m_successful_rearranges.push_back(std::make_pair(moved.first, moved.second.back().coord));
 			}
 
 			break;
@@ -185,20 +187,20 @@ bool MAMONode::tryPush(
 			// SMPL_INFO("Tried pushing object %d. Return value = %d", moved.first, push_failure);
 			switch (push_failure)
 			{
-				case 3: // SMPL_ERROR("Inverse dynamics failed to reach push end."); break;
-				case 4: // SMPL_ERROR("Inverse kinematics/dynamics failed (joint limits likely)."); break;
-				case 5: // SMPL_ERROR("Inverse kinematics hit static obstacle."); break;
+				case PushResult::IK_CATCHALL_FAIL : // SMPL_ERROR("Something went wrong in IK."); break;
+				case PushResult::IK_JOINT_LIMIT : // SMPL_ERROR("IK hit joint limits."); break;
+				case PushResult::IK_OBSTACLE : // SMPL_ERROR("IK hit static obstacle."); break;
 				{
 					m_planner->AddGloballyInvalidPush(std::make_pair(moved.second.front().coord, moved.second.back().coord));
 					globally_invalid = true;
 					break;
 				}
-				// case 1: // SMPL_ERROR("Push start inside object."); break;
-				// case 2: // SMPL_ERROR("Failed to reach push start."); break;
-				// case 6: // SMPL_ERROR("Push action did not collide with intended object."); break;
-				// case 0: // SMPL_ERROR("Valid push computed! Failed in simulation."); break;
-				// case -1: SMPL_INFO("Push succeeded in simulation!"); break;
-				// default: SMPL_WARN("Unknown push failure cause.");
+				// case PushResult::START_INSIDE_OBSTACLE : // SMPL_ERROR("Push start inside object."); break;
+				// case PushResult::START_UNREACHABLE : // SMPL_ERROR("Failed to reach push start."); break;
+				// case PushResult::NO_OOI_COLLISION : // SMPL_ERROR("Push action did not collide with intended object."); break;
+				// case PushResult::FAIL_IN_SIM : // SMPL_ERROR("Valid push failed in simulation!"); break;
+				// case PushResult::SUCCESS_IN_SIM : // SMPL_INFO("Push succeeded in simulation!"); break;
+				// default: // SMPL_WARN("Unknown push failure cause.");
 			}
 			invalid_action_samples->push_back(std::move(debug_action));
 			if (globally_invalid) {
@@ -240,7 +242,7 @@ void MAMONode::GetSuccs(
 {
 	*close = false;
 	*mapf_time = GetTime();
-	if (!this->RunMAPF() && m_successful_pushes.empty())
+	if (!this->RunMAPF() && m_successful_rearranges.empty())
 	{
 		*mapf_time = GetTime() - *mapf_time;
 		// I have no more possible successors, please CLOSE me

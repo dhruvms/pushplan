@@ -76,7 +76,7 @@ void DataGeneration::GetPushData()
 		std::vector<double> push;
 		double to_move_dir, to_move_dist, moved_dir, moved_dist;
 		Eigen::Affine3d start_pose, result_pose;
-		int result = 0;
+		PushResult result = PushResult::PUSH_RESULTS;
 		m_robot->GenMovablePush(
 			movable,
 			push,
@@ -84,7 +84,7 @@ void DataGeneration::GetPushData()
 			start_pose, result_pose,
 			result);
 		ROS_WARN("Push sample result: %d", result);
-		unreachable_count += result <= 0 ? -unreachable_count : 1;
+		unreachable_count += static_cast<int>(result) <= 0 ? -unreachable_count : 1;
 
 		if (unreachable_count == 5) {
 			break;
@@ -131,7 +131,7 @@ void DataGeneration::GetPushData()
 				<< result_pose.rotation()(0, 2) << ','
 				<< result_pose.rotation()(1, 2) << ','
 				<< result_pose.rotation()(2, 2) << ','
-				<< result << '\n';
+				<< static_cast<int>(result) << '\n';
 	}
 	DATA.close();
 }

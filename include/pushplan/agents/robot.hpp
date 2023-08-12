@@ -97,19 +97,19 @@ public:
 		std::vector<double> *start_state,
 		Agent* object,
 		const std::vector<Object*>& other_movables,	const comms::ObjectsPoses& curr_scene,
-		comms::ObjectsPoses& result,
+		comms::ObjectsPoses& result_scene,
 		int& pick_at, int& place_at,
 		double &plan_time, double &sim_time,
-		std::tuple<State, State, int>& debug_action);
+		std::tuple<State, State, int> &debug_action);
 	bool PlanPush(
 		std::vector<double> *start_state,
 		Agent* object, const std::vector<double>& push,
 		const std::vector<Object*>& other_movables,
 		const comms::ObjectsPoses& curr_scene,
 		const double& push_frac,
-		comms::ObjectsPoses& result,
-		int& push_result,
-		std::tuple<State, State, int>& debug_action,
+		comms::ObjectsPoses& result_scene,
+		PushResult& push_result,
+		std::tuple<State, State, int> &debug_action,
 		double &sim_time, bool input=false);
 	bool GenMovablePush(
 		Object& movable,
@@ -118,7 +118,7 @@ public:
 		double& moved_dir, double& moved_dist,
 		Eigen::Affine3d& push_start_pose,
 		Eigen::Affine3d& push_result_pose,
-		int& push_result);
+		PushResult& push_result);
 	void IdentifyReachableMovables(
 		const std::vector<std::shared_ptr<Agent> >& agents,
 		std::vector<int>& reachable_ids);
@@ -319,16 +319,16 @@ private:
 		double t=0.1,
 		bool path_constraints=false);
 
-	int computePushStateIK(
+	PushResult computePushStateIK(
 		const Eigen::Affine3d &ee_pose,
 		const smpl::RobotState &seed,
 		smpl::RobotState &solution);
-	int computePushPoint(
+	PushResult computePushPoint(
 		const double time_start,
 		const smpl::RobotState& jnt_positions,
 		const Eigen::Affine3d& end_pose,
 		trajectory_msgs::JointTrajectory& action);
-	int computePushPath(
+	PushResult computePushPath(
 		const double time_start,
 		const smpl::RobotState& jnt_positions,
 		const std::vector<double>& push,

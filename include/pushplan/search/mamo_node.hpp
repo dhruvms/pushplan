@@ -101,7 +101,7 @@ private:
 	std::vector<MAMONode*> m_children; // children nodes in tree
 
 	std::vector<std::pair<int, Trajectory> > m_mapf_solution; // mapf solution found at this node
-	std::list<std::pair<int, Coord> > m_successful_pushes, m_successful_pushes_invalidated;
+	std::list<std::pair<int, Coord> > m_successful_rearranges, m_successful_rearranges_invalidated;
 	std::vector<int> m_relevant_ids;
 	bool m_new_constraints = true;
 
@@ -129,7 +129,7 @@ private:
 		std::vector<trajectory_msgs::JointTrajectory> *succ_trajs,
 		std::vector<std::tuple<State, State, int> > *debug_actions,
 		std::vector<std::tuple<State, State, int> > *invalid_action_samples,
-		const std::vector<Object*> &movable_obstacles, int aid);
+		const std::vector<Object*> &movable_obstacles, size_t aid);
 	bool tryPush(
 		std::vector<MAMOAction> *succ_object_centric_actions,
 		std::vector<comms::ObjectsPoses> *succ_objects,

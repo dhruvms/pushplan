@@ -1666,12 +1666,12 @@ bool Robot::planToPoseGoal(
 	return true;
 }
 
-int Robot::computePushStateIK(
+PushResult Robot::computePushStateIK(
 	const Eigen::Affine3d &ee_pose,
 	const smpl::RobotState &seed,
 	smpl::RobotState &solution)
 {
-	int result = 0;
+	PushResult result = PushResult::PUSH_RESULTS;
 	// run ik for new state
 	if (m_rm->computeIKPos(ee_pose, seed, solution))
 	{
@@ -1683,14 +1683,14 @@ int Robot::computePushStateIK(
 
 		if (!m_rm->checkJointLimits(solution))
 		{
-			result = 3;
+			result = PushResult::IK_JOINT_LIMIT;
 			++m_debug_push_info["ik_joint_limit"];
 			// return false;
 			return result;
 		}
 		if (!m_cc_i->isStateValid(solution))
 		{
-			result = 2;
+			result = PushResult::IK_OBSTACLE;
 			++m_debug_push_info["obstacle_collision"];
 			// return false;
 			return result;
@@ -1699,22 +1699,23 @@ int Robot::computePushStateIK(
 	else
 	{
 		// SMPL_INFO("IK call failed!");
-		result = 4;
+		result = PushResult::IK_CATCHALL_FAIL;
 		++m_debug_push_info["ik_fail"];
 		// return false;
 		return result;
 	}
 
+	result = PushResult::IK_SUCCESS;
 	return result;
 }
 
-int Robot::computePushPoint(
+PushResult Robot::computePushPoint(
 	const double time_start,
 	const smpl::RobotState& jnt_positions,
 	const Eigen::Affine3d& end_pose,
 	trajectory_msgs::JointTrajectory& action)
 {
-	int result = 0;
+	PushResult result = PushResult::PUSH_RESULTS;
 
 	// Variables
 	auto q_ = jnt_positions;
@@ -1736,7 +1737,7 @@ int Robot::computePushPoint(
 		xo_.translation().z() = (1.0 - t) * x_.translation().z() + t * end_pose.translation().z();
 
 		result = computePushStateIK(xo_, action_pt.positions, q_);
-		if (result == 0)
+		if (result == PushResult::IK_SUCCESS)
 		{
 			action_pt.positions = q_;
 			action_pt.time_from_start += ros::Duration(m_dt);
@@ -1754,7 +1755,7 @@ int Robot::computePushPoint(
 	return result;
 }
 
-int Robot::computePushPath(
+PushResult Robot::computePushPath(
 	const double time_start,
 	const smpl::RobotState& jnt_positions,
 	const std::vector<double>& push,
@@ -1762,7 +1763,7 @@ int Robot::computePushPath(
 	trajectory_msgs::JointTrajectory& action)
 {
 	visMAPFPath(path);
-	int result = 0;
+	PushResult result = PushResult::PUSH_RESULTS;
 
 	// Variables
 	auto q_ = jnt_positions;
@@ -1779,7 +1780,7 @@ int Robot::computePushPath(
 	xo_.translation().y() = push[1];
 	// Add second waypoint to action
 	result = computePushStateIK(xo_, action_pt.positions, q_);
-	if (result == 0)
+	if (result == PushResult::IK_SUCCESS)
 	{
 		action_pt.positions = q_;
 		action_pt.time_from_start += ros::Duration(m_dt);
@@ -1799,7 +1800,7 @@ int Robot::computePushPath(
 		xo_.translation().z() += path->at(i).state[2] - path->at(i-1).state[2];
 
 		result = computePushStateIK(xo_, action_pt.positions, q_);
-		if (result == 0)
+		if (result == PushResult::IK_SUCCESS)
 		{
 			action_pt.positions = q_;
 			action_pt.time_from_start += ros::Duration(m_dt);
@@ -1873,13 +1874,14 @@ bool Robot::PlanPickPlace(
 	std::vector<double> *start_state,
 	Agent* object,
 	const std::vector<Object*>& other_movables,	const comms::ObjectsPoses& curr_scene,
-	comms::ObjectsPoses& result,
+	comms::ObjectsPoses& result_scene,
 	int& pick_at, int& place_at,
 	double &plan_time, double &sim_time,
 	std::tuple<State, State, int>& debug_action)
 {
 	plan_time = 0.0;
 	sim_time = 0.0;
+	PickPlaceResult action_result = PickPlaceResult::PICKPLACE_RESULTS;
 
 	moveit_msgs::RobotState pick_start_state = m_start_state;
 	if (start_state != nullptr)
@@ -1911,7 +1913,7 @@ bool Robot::PlanPickPlace(
 	// 					new_scene, new_action, new_pick_at, new_place_at);
 	// if (pickplace_in_db)
 	// {
-	// 	result = new_scene;
+	// 	result_scene = new_scene;
 	// 	m_traj = new_action;
 	// 	pick_at = new_pick_at;
 	// 	place_at = new_place_at;
@@ -1974,8 +1976,9 @@ bool Robot::PlanPickPlace(
 	trajectory_msgs::JointTrajectory pick_traj;
 	if (!planToPoseGoal(pick_start_state, pregrasps, pick_traj, 0.5))
 	{
+		action_result = PickPlaceResult::PREGRASPS_UNREACHABLE;
 		// ++m_debug_push_info["start_unreachable"];
-		debug_action = std::make_tuple(debug_action_start, debug_action_end, 7);
+		debug_action = std::make_tuple(debug_action_start, debug_action_end, static_cast<int>(action_result));
 
 		// remove all movable objects from immovable collision space
 		ProcessObstacles(rearranged_obj, true);
@@ -2006,9 +2009,10 @@ bool Robot::PlanPickPlace(
 	// 							Eigen::AngleAxisd(0.0, Eigen::Vector3d::UnitX());
 	if (!getStateNearPose(ee_pose, pregrasp_state, grasp_state, 1))
 	{
+		action_result = PickPlaceResult::GRASP_IK_FAIL;
 		// remove all movable objects from immovable collision space
 		ProcessObstacles(other_movables, true);
-		debug_action = std::make_tuple(debug_action_start, debug_action_end, 8);
+		debug_action = std::make_tuple(debug_action_start, debug_action_end, static_cast<int>(action_result));
 		return false;
 	}
 	grasp_pose = m_rm->computeFK(grasp_state);
@@ -2018,9 +2022,10 @@ bool Robot::PlanPickPlace(
 	ee_pose.translation().z() += m_grasp_lift;
 	if (!getStateNearPose(ee_pose, grasp_state, postgrasp_state, 1))
 	{
+		action_result = PickPlaceResult::POSTGRASP_IK_FAIL;
 		// remove all movable objects from immovable collision space
 		ProcessObstacles(other_movables, true);
-		debug_action = std::make_tuple(debug_action_start, debug_action_end, 8);
+		debug_action = std::make_tuple(debug_action_start, debug_action_end, static_cast<int>(action_result));
 		return false;
 	}
 	postgrasp_pose = m_rm->computeFK(postgrasp_state);
@@ -2043,10 +2048,11 @@ bool Robot::PlanPickPlace(
 
 	if (!attachObject(object->GetObject(), palm_postgrasp_pose))
 	{
+		action_result = PickPlaceResult::BAD_ATTACH;
 		ROS_ERROR("Failed to attach object.");
 		// remove all movable objects from immovable collision space
 		ProcessObstacles(other_movables, true);
-		debug_action = std::make_tuple(debug_action_start, debug_action_end, 9);
+		debug_action = std::make_tuple(debug_action_start, debug_action_end, static_cast<int>(action_result));
 		return false;
 	}
 	else
@@ -2058,9 +2064,10 @@ bool Robot::PlanPickPlace(
 		ProcessObstacles(other_movables, true);
 		if (!m_cc_i->isStateValid(postgrasp_state))
 		{
+			action_result = PickPlaceResult::ATTACH_COLLIDES;
 			ROS_ERROR("Robot state is in collision with attached object.");
 			detachObject();
-			debug_action = std::make_tuple(debug_action_start, debug_action_end, 9);
+			debug_action = std::make_tuple(debug_action_start, debug_action_end, static_cast<int>(action_result));
 			return false;
 		}
 		ProcessObstacles(other_movables);
@@ -2087,6 +2094,7 @@ bool Robot::PlanPickPlace(
 	debug_action_end = { ee_pose.translation().x(), ee_pose.translation().y() };
 	if (!planToPoseGoal(place_start_state, { ee_pose }, place_traj, 0.5, true))
 	{
+		action_result = PickPlaceResult::PLAN_TO_POSTGRASP_FAIL;
 		// push_result = 5;
 		// ++m_debug_push_info["start_unreachable"];
 		// debug_action_end = { -99.0, -99.0 };
@@ -2096,7 +2104,7 @@ bool Robot::PlanPickPlace(
 		ProcessObstacles(other_movables, true);
 		detachObject();
 		// m_stats["push_plan_time"] += GetTime() - start_time;
-		debug_action = std::make_tuple(debug_action_start, debug_action_end, 10);
+		debug_action = std::make_tuple(debug_action_start, debug_action_end, static_cast<int>(action_result));
 		return false;
 	}
 	detachObject();
@@ -2106,9 +2114,10 @@ bool Robot::PlanPickPlace(
 	ee_pose.translation().z() -= m_grasp_lift/2.0;
 	if (!getStateNearPose(ee_pose, place_traj.points.back().positions, place_state, 1))
 	{
+		action_result = PickPlaceResult::RETRACT_IK_FAIL;
 		// remove all movable objects from immovable collision space
 		ProcessObstacles(other_movables, true);
-		debug_action = std::make_tuple(debug_action_start, debug_action_end, 11);
+		debug_action = std::make_tuple(debug_action_start, debug_action_end, static_cast<int>(action_result));
 		return false;
 	}
 	place_pose = m_rm->computeFK(place_state);
@@ -2119,9 +2128,10 @@ bool Robot::PlanPickPlace(
 	ee_pose.translation().y() += 0.1 * std::sin(yaw + M_PI);
 	if (!getStateNearPose(ee_pose, place_state, retract_state, 1))
 	{
+		action_result = PickPlaceResult::RETRACT_IK_FAIL;
 		// remove all movable objects from immovable collision space
 		ProcessObstacles(other_movables, true);
-		debug_action = std::make_tuple(debug_action_start, debug_action_end, 11);
+		debug_action = std::make_tuple(debug_action_start, debug_action_end, static_cast<int>(action_result));
 		return false;
 	}
 	retract_pose = m_rm->computeFK(retract_state);
@@ -2152,14 +2162,15 @@ bool Robot::PlanPickPlace(
 
 	// 9. simulate placing action
 	start_time = GetTime();
-	bool success = m_sim->SimPickPlace(m_traj, curr_scene, pick_at, place_at, object->GetID(), result);
+	bool success = m_sim->SimPickPlace(m_traj, curr_scene, pick_at, place_at, object->GetID(), result_scene);
 	sim_time = GetTime() - start_time;
+	action_result = success ? PickPlaceResult::SUCCESS_IN_SIM : PickPlaceResult::FAIL_IN_SIM;
 
 	// addPickPlaceToDB(
 	// 	object->GetObject(), obj_traj->back().coord,
-	// 	curr_scene, result, m_traj, pick_at, place_at);
+	// 	curr_scene, result_scene, m_traj, pick_at, place_at);
 
-	debug_action = std::make_tuple(debug_action_start, debug_action_end, -3);
+	debug_action = std::make_tuple(debug_action_start, debug_action_end, static_cast<int>(action_result));
 	return success;
 }
 
@@ -2175,8 +2186,8 @@ bool Robot::PlanPush(
 	Agent* object, const std::vector<double>& push,
 	const std::vector<Object*>& other_movables,	const comms::ObjectsPoses& curr_scene,
 	const double& push_frac,
-	comms::ObjectsPoses& result,
-	int& push_result,
+	comms::ObjectsPoses& result_scene,
+	PushResult& push_result,
 	std::tuple<State, State, int>& debug_action,
 	double &sim_time, bool input)
 {
@@ -2229,9 +2240,9 @@ bool Robot::PlanPush(
 		bool success = true;
 		if (!m_cc_i->isStateValid(push_start_joints))
 		{
-			push_result = 2;
+			push_result = PushResult::START_INSIDE_OBSTACLE;
 			++m_debug_push_info["obstacle_collision"];
-			debug_action = std::make_tuple(debug_action_start, debug_action_end, push_result);
+			debug_action = std::make_tuple(debug_action_start, debug_action_end, static_cast<int>(push_result));
 
 			success = false;
 		}
@@ -2239,9 +2250,9 @@ bool Robot::PlanPush(
 		trajectory_msgs::JointTrajectory push_traj;
 		if (success && !planToPoseGoal(push_start_state, { push_start_pose }, push_traj))
 		{
-			push_result = 5;
+			push_result = PushResult::START_UNREACHABLE;
 			++m_debug_push_info["start_unreachable"];
-			debug_action = std::make_tuple(debug_action_start, debug_action_end, push_result);
+			debug_action = std::make_tuple(debug_action_start, debug_action_end, static_cast<int>(push_result));
 
 			success = false;
 		}
@@ -2260,10 +2271,10 @@ bool Robot::PlanPush(
 				t_prev = push_traj.points.back().time_from_start;
 			}
 
-			result = new_scene;
-			push_result = 0;
+			result_scene = new_scene;
+			push_result = PushResult::SUCCESS_IN_SIM;
 			++m_debug_push_info["sim_success"];
-			debug_action = std::make_tuple(debug_action_start, debug_action_end, push_result);
+			debug_action = std::make_tuple(debug_action_start, debug_action_end, static_cast<int>(push_result));
 			m_traj = push_traj;
 			++m_stats["push_db_successes"];
 			m_stats["push_db_total_time"] += GetTime() - start_time;
@@ -2293,10 +2304,10 @@ bool Robot::PlanPush(
 		push_start_pose.translation().y(),
 		push_start_pose.translation().z()) <= m_grid_i->resolution())
 	{
-		push_result = 6;
+		push_result = PushResult::START_INSIDE_OBSTACLE;
 		++m_debug_push_info["start_inside_obstacle"];
 		debug_action_end = { -99.0, -99.0 };
-		debug_action = std::make_tuple(debug_action_start, debug_action_end, push_result);
+		debug_action = std::make_tuple(debug_action_start, debug_action_end, static_cast<int>(push_result));
 
 		failure = true;
 	}
@@ -2305,10 +2316,10 @@ bool Robot::PlanPush(
 	trajectory_msgs::JointTrajectory push_traj;
 	if (!failure && !planToPoseGoal(push_start_state, { push_start_pose }, push_traj))
 	{
-		push_result = 5;
+		push_result = PushResult::START_UNREACHABLE;
 		++m_debug_push_info["start_unreachable"];
 		debug_action_end = { -99.0, -99.0 };
-		debug_action = std::make_tuple(debug_action_start, debug_action_end, push_result);
+		debug_action = std::make_tuple(debug_action_start, debug_action_end, static_cast<int>(push_result));
 
 		failure = true;
 	}
@@ -2369,9 +2380,9 @@ bool Robot::PlanPush(
 	// 					obj_traj,
 	// 					push_action);
 
-	if (push_result > 0 || push_action.points.empty())
+	if (push_result != PushResult::IK_SUCCESS || push_action.points.empty())
 	{
-		debug_action = std::make_tuple(debug_action_start, debug_action_end, push_result);
+		debug_action = std::make_tuple(debug_action_start, debug_action_end, static_cast<int>(push_result));
 		m_stats["push_plan_time"] += GetTime() - start_time;
 		return false;
 	}
@@ -2396,16 +2407,16 @@ bool Robot::PlanPush(
 		ProcessObstacles(pushed_obj, true);
 		if (!collides)
 		{
-			push_result = -1;
+			push_result = PushResult::NO_OOI_COLLISION;
 			++m_debug_push_info["no_collision_ooi"];
-			debug_action = std::make_tuple(debug_action_start, debug_action_end, push_result);
+			debug_action = std::make_tuple(debug_action_start, debug_action_end, static_cast<int>(push_result));
 			m_stats["push_plan_time"] += GetTime() - start_time;
 			return false;
 		}
 
 		push_found = true;
 		++m_stats["push_actions_found"];
-		debug_action = std::make_tuple(debug_action_start, debug_action_end, push_result);
+		debug_action = std::make_tuple(debug_action_start, debug_action_end, static_cast<int>(push_result));
 
 		// append waypoint to retract to push start pose
 		push_action.points.push_back(push_action.points.at(0));
@@ -2450,16 +2461,16 @@ bool Robot::PlanPush(
 	int pidx, successes;
 	std::vector<int> relevant_ids;
 	if (!input) {
-		m_sim->SimPushes(m_push_actions, object->GetID(), obj_traj->back().state.at(0), obj_traj->back().state.at(1), curr_scene, pidx, successes, result, relevant_ids);
+		m_sim->SimPushes(m_push_actions, object->GetID(), obj_traj->back().state.at(0), obj_traj->back().state.at(1), curr_scene, pidx, successes, result_scene, relevant_ids);
 	}
 	else {
-		m_sim->SimPushes(m_push_actions, object->GetID(), push[3], push[4], curr_scene, pidx, successes, result, relevant_ids);
+		m_sim->SimPushes(m_push_actions, object->GetID(), push[3], push[4], curr_scene, pidx, successes, result_scene, relevant_ids);
 	}
 	m_stats["push_sim_time"] += GetTime() - start_time;
 	sim_time += GetTime() - start_time;
 
-	push_result = pidx == -1 ? -2 : 0;
-	debug_action = std::make_tuple(debug_action_start, debug_action_end, push_result);
+	push_result = pidx == -1 ? PushResult::FAIL_IN_SIM : PushResult::SUCCESS_IN_SIM;
+	debug_action = std::make_tuple(debug_action_start, debug_action_end, static_cast<int>(push_result));
 	if (pidx == -1)
 	{
 		++m_debug_push_info["sim_fail"];
@@ -2473,7 +2484,7 @@ bool Robot::PlanPush(
 
 	addPushToDB(
 		object->GetObject(), obj_traj->back().coord,
-		curr_scene, result, relevant_ids, m_push_actions.at(pidx));
+		curr_scene, result_scene, relevant_ids, m_push_actions.at(pidx));
 
 	return true;
 }
@@ -2485,7 +2496,7 @@ bool Robot::GenMovablePush(
 	double& moved_dir, double& moved_dist,
 	Eigen::Affine3d& push_start_pose,
 	Eigen::Affine3d& push_result_pose,
-	int& push_result)
+	PushResult& push_result)
 {
 	// add object to be pushed to collision space
 	std::vector<Object> movable_v = { movable };
@@ -2505,12 +2516,12 @@ bool Robot::GenMovablePush(
 	// plan path to push start pose
 	trajectory_msgs::JointTrajectory push_traj;
 	if (!planToPoseGoal(m_start_state, { push_start_pose }, push_traj, 0.5)) {
-		push_result = 5;
+		push_result = PushResult::START_UNREACHABLE;
 	}
 
 	// remove the object to pushed from collision space
 	ProcessObstacles(movable_v, true);
-	if (push_result == 5) {
+	if (push_result == PushResult::START_UNREACHABLE) {
 		return false;
 	}
 
@@ -2538,7 +2549,7 @@ bool Robot::GenMovablePush(
 						push_end_pose,
 						push_action.front());
 
-	if (push_result > 0 || push_action.front().points.empty()) {
+	if (push_result != PushResult::IK_SUCCESS || push_action.front().points.empty()) {
 		return false;
 	}
 
@@ -2559,7 +2570,7 @@ bool Robot::GenMovablePush(
 		ProcessObstacles(movable_v, true);
 		if (!collides)
 		{
-			push_result = -1;
+			push_result = PushResult::NO_OOI_COLLISION;
 			return false;
 		}
 
@@ -2594,7 +2605,7 @@ bool Robot::GenMovablePush(
 	comms::ObjectsPoses dummy_o;
 	m_sim->SimPushes(push_action, movable.desc.id, movable.desc.o_x, movable.desc.o_y, dummy_o, pidx, successes, dummy_o, relevant_ids);
 
-	push_result = pidx == -1 ? -2 : 0;
+	push_result = pidx == -1 ? PushResult::FAIL_IN_SIM : PushResult::SUCCESS_IN_SIM;
 	if (pidx == -1)	{
 		return false;
 	}
@@ -3987,13 +3998,13 @@ void Robot::RunPushIKStudy(int N)
 
 				// 7. get push action trajectory via inverse kinematics
 				trajectory_msgs::JointTrajectory push_action;
-				int failure = computePushPoint(
+				PushResult failure = computePushPoint(
 								path.points.back().time_from_start.toSec(),
 								path.points.back().positions,
 								push_end_pose,
 								push_action);
 				DATA << x0 << ',' << y0 << ',' << yaw0 << ','
-					<< x1 << ',' << y1 << ',' << yaw1 << ',' << failure << '\n';
+					<< x1 << ',' << y1 << ',' << yaw1 << ',' << static_cast<int>(failure) << '\n';
 			}
 		}
 	}
