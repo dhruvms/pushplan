@@ -12,7 +12,7 @@ import pybullet as p
 import pybullet_data
 from pybullet_utils import bullet_client as bc
 
-from comms.srv import AddObject, AddObjectResponse
+from comms.srv import AddObject, AddObjectRequest, AddObjectResponse
 from comms.srv import AddYCBObject, AddYCBObjectResponse
 from comms.srv import ResetSimulation, ResetSimulationRequest, ResetSimulationResponse
 from comms.srv import AddRobot, AddRobotResponse
@@ -55,7 +55,7 @@ class BulletSim:
 			self.cpu_count = cpus if cpus > 0 else mp.cpu_count() - 1
 
 			succ_frac = rospy.get_param("~sim/succ_frac", 1.0)
-			self.succ_needed = max(1, math.floor(succ_frac * self.cpu_count))
+			self.succ_needed = max(1, math.floor(succ_frac * self.cpu_count * self.obj_copies))
 
 			for i in range(self.cpu_count):
 				sim, info = self.setupSim(shadows)
@@ -120,9 +120,9 @@ class BulletSim:
 			sim_data = self.sim_datas[sim_idx]
 
 			if (req.shape == 0):
-				obj_id = self.addBox(req, sim_idx)
+				obj_id = self.addBoxNew(req, sim_idx)
 			elif (req.shape == 2):
-				obj_id = self.addCylinder(req, sim_idx)
+				obj_id = self.addCylinderNew(req, sim_idx)
 
 			aabb = sim.getAABB(obj_id, -1)
 			lower_limits = [x - CLEARANCE for x in aabb[0]]
@@ -160,7 +160,14 @@ class BulletSim:
 				sim.changeDynamics(obj_id, -1, lateralFriction=mu)
 				sim_data['objs'][obj_id]['mu'] = mu
 				sim_data['objs'][obj_id]['movable'] = req.movable
+				sim_data['objs'][obj_id]['copies'] = []
 				sim_data['num_objs'] += 1
+
+				if req.movable:
+					sim.setCollisionFilterGroupMask(obj_id, -1, 1, 1)
+				else:
+					sim.setCollisionFilterGroupMask(obj_id, -1, \
+									self.robot_collision_group, self.robot_collision_group)
 
 		return AddObjectResponse(obj_id, [])
 
@@ -247,6 +254,10 @@ class BulletSim:
 						}
 			sim_data['joint_idxs'] = joints_from_names(robot_id, PR2_GROUPS['right_arm'], sim=self.sims[sim_idx])
 
+			for joint in get_joints(robot_id, sim=self.sims[sim_idx]):
+				sim.setCollisionFilterGroupMask(robot_id, joint, \
+								self.robot_collision_group, self.robot_collision_group)
+
 		# print()
 		robot_id = self.sim_datas[0]['robot_id']
 		self.arm_joints = joints_from_names(robot_id, PR2_GROUPS['right_arm'], sim=sim)
@@ -259,7 +270,6 @@ class BulletSim:
 	def SetRobotStateAll(self, req):
 		for i, sim in enumerate(self.sims):
 			sim_id = i
-
 			sim = self.sims[sim_id]
 			sim_data = self.sim_datas[sim_id]
 			robot_id = sim_data['robot_id']
@@ -291,9 +301,7 @@ class BulletSim:
 	def ResetArmAll(self, req):
 		for i, sim in enumerate(self.sims):
 			sim_id = i
-
 			sim = self.sims[sim_id]
-
 			robot_id = self.sim_datas[sim_id]['robot_id']
 
 			self.disableCollisionsWithObjects(sim_id)
@@ -385,7 +393,45 @@ class BulletSim:
 										posObj=xyz,
 										ornObj=sim.getQuaternionFromEuler(rpy))
 
-		self.enableCollisionsWithObjects(sim_id, simulator=sim)
+			if (sim_data['objs'][obj_id]['movable']):
+				sim.setCollisionFilterGroupMask(obj_id, -1, 1, 1)
+
+				if (not sim_data['objs'][obj_id]['copies'] and self.obj_copies > 1): # have not added copies yet
+					if (not sim_data['objs'][obj_id]['ycb']):
+						req = AddObjectRequest()
+
+						req.shape = sim_data['objs'][obj_id]['shape']
+						req.locked = False
+						req.o_x = xyz[0]
+						req.o_y = xyz[1]
+						req.o_z = xyz[2]
+						req.o_r = rpy[0]
+						req.o_p = rpy[1]
+						req.o_yaw = rpy[2]
+						req.x_size = sim_data['objs'][obj_id]['extents'][0]
+						req.y_size = sim_data['objs'][obj_id]['extents'][1]
+						req.z_size = sim_data['objs'][obj_id]['extents'][2]
+
+						# add object copies
+						for copy_num in range(2, self.obj_copies + 1):
+							req.mass = sim_data['objs'][obj_id]['mass'] * copy_num
+							if (req.shape == 0):
+								obj_copy_id = self.addBoxDuplicate(req, sim_id, obj_id)
+							elif (req.shape == 2):
+								obj_copy_id = self.addCylinderDuplicate(req, sim_id, obj_id)
+
+							sim.changeDynamics(obj_copy_id, -1, lateralFriction=sim_data['objs'][obj_id]['mu']/copy_num)
+							sim.setCollisionFilterGroupMask(obj_copy_id, -1, \
+											2**(copy_num - 1), 2**(copy_num - 1))
+
+				for copy_num, obj_copy_id in enumerate(sim_data['objs'][obj_id]['copies']):
+					sim.resetBasePositionAndOrientation(obj_copy_id,
+											posObj=xyz,
+											ornObj=sim.getQuaternionFromEuler(rpy))
+					sim.setCollisionFilterGroupMask(obj_copy_id, -1, 2**((copy_num+2) - 1), 2**((copy_num+2) - 1))
+
+		# all collision groups are valid again
+		sim_data['valid_groups'] = list(range(self.obj_copies))
 
 	def SetColours(self, req):
 		sim_id = req.sim_id
@@ -417,6 +463,13 @@ class BulletSim:
 									rgbaColor=MOVEABLE_COLOUR + [1.0],
 									specularColor=MOVEABLE_COLOUR)
 					sim_data['objs'][obj_id]['type'] = 1
+
+					alpha_factor = 0.5/len(sim_data['objs'][obj_id]['copies'])
+					for copy_num, obj_copy_id in enumerate(sim_data['objs'][obj_id]['copies']):
+						alpha = 1.0 - (alpha_factor * (copy_num + 1))
+						sim.changeVisualShape(obj_copy_id, -1,
+										rgbaColor=MOVEABLE_COLOUR + [alpha],
+										specularColor=MOVEABLE_COLOUR)
 
 				if req.type[idx] == 999: # ooi
 					sim.changeVisualShape(obj_id, -1,
@@ -1160,7 +1213,7 @@ class BulletSim:
 				sim.setCollisionFilterPair(robot_id, obj_id, joint, -1,
 											enableCollision=1)
 
-	def addBox(self, req, sim_id):
+	def addBox(self, req, sim_id, duplicate=False):
 		sim = self.sims[sim_id]
 		sim_data = self.sim_datas[sim_id]
 
@@ -1191,19 +1244,30 @@ class BulletSim:
 								baseInertialFramePosition=[0, 0, 0],
 								baseInertialFrameOrientation=[0, 0, 0, 1])
 
-		sim_data['objs'][body_id] = {
-								'shape': req.shape,
-								'vis': vis_id,
-								'coll': coll_id,
-								'mass': mass,
-								'xyz': xyz,
-								'rpy': rpy,
-								'extents': [req.x_size, req.y_size, req.z_size],
-								'ycb': False,
-							}
+		if (not duplicate):
+			sim_data['objs'][body_id] = {
+									'shape': req.shape,
+									'vis': vis_id,
+									'coll': coll_id,
+									'mass': mass,
+									'xyz': xyz,
+									'rpy': rpy,
+									'extents': [req.x_size, req.y_size, req.z_size],
+									'ycb': False,
+								}
+
 		return body_id
 
-	def addCylinder(self, req, sim_id):
+	def addBoxNew(self, req, sim_id):
+		return self.addBox(req, sim_id)
+
+	def addBoxDuplicate(self, req, sim_id, orig_id):
+		copy_id = self.addBox(req, sim_id, duplicate=True)
+		self.sim_datas[sim_id]['objs'][orig_id]['copies'].append(copy_id)
+
+		return copy_id
+
+	def addCylinder(self, req, sim_id, duplicate=False):
 		sim = self.sims[sim_id]
 		sim_data = self.sim_datas[sim_id]
 
@@ -1230,17 +1294,28 @@ class BulletSim:
 								baseInertialFramePosition=[0, 0, 0],
 								baseInertialFrameOrientation=[0, 0, 0, 1])
 
-		sim_data['objs'][body_id] = {
-								'shape': req.shape,
-								'vis': vis_id,
-								'coll': coll_id,
-								'mass': mass,
-								'xyz': xyz,
-								'rpy': rpy,
-								'extents': [req.x_size, req.y_size, req.z_size],
-								'ycb': False,
-							}
+		if (not duplicate):
+			sim_data['objs'][body_id] = {
+									'shape': req.shape,
+									'vis': vis_id,
+									'coll': coll_id,
+									'mass': mass,
+									'xyz': xyz,
+									'rpy': rpy,
+									'extents': [req.x_size, req.y_size, req.z_size],
+									'ycb': False,
+								}
+
 		return body_id
+
+	def addCylinderNew(self, req, sim_id):
+		return self.addCylinder(req, sim_id)
+
+	def addCylinderDuplicate(self, req, sim_id, orig_id):
+		copy_id = self.addCylinder(req, sim_id, duplicate=True)
+		self.sim_datas[sim_id]['objs'][orig_id]['copies'].append(copy_id)
+
+		return copy_id
 
 	def checkInteractions(self, sim_id, objects, simulator=None):
 		sim = self.sims[sim_id] if simulator is None else simulator

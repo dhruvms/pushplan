@@ -1,5 +1,7 @@
 sim:
-  cpus: 1
+  cpus: 2
+  obj_copies: 2
+  succ_frac: 0.75
 
 objects:
   friction_min: 0.5
