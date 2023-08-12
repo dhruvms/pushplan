@@ -118,6 +118,7 @@ bool MAMONode::tryPickPlace(
 		succ_trajs->push_back(m_robot->GetLastPlan());
 		debug_actions->push_back(std::move(debug_action));
 
+		m_successful_rearranges.push_back(std::make_pair(moved.first, moved.second.back().coord));
 		return true;
 	}
 	invalid_action_samples->push_back(std::move(debug_action));
@@ -280,19 +281,26 @@ void MAMONode::GetSuccs(
 			movable_obstacles.push_back(m_agents.at(i)->GetObject());
 		}
 
-		bool result;
-		if (m_agents.at(m_agent_map[moved.first])->GetObject()->Graspable())
-		{
-			result = tryPickPlace(succ_object_centric_actions, succ_objects, succ_trajs, debug_actions, &invalid_action_samples, movable_obstacles, moved.first);
-			duplicate_successor = duplicate_successor || !result;
+		bool pickplace_result, push_result, graspable = m_agents.at(m_agent_map[moved.first])->GetObject()->Graspable();
+		if (graspable) {
+			pickplace_result = tryPickPlace(succ_object_centric_actions, succ_objects, succ_trajs, debug_actions, &invalid_action_samples, movable_obstacles, i);
 		}
-		else {
+		else
+		{
+			pickplace_result = false;
 			SMPL_INFO("Object %d is NOT graspable!", moved.first);
 		}
 
-		result = tryPush(succ_object_centric_actions, succ_objects, succ_trajs, debug_actions, &invalid_action_samples, movable_obstacles, i, sim_time);
+		push_result = tryPush(succ_object_centric_actions, succ_objects, succ_trajs, debug_actions, &invalid_action_samples, movable_obstacles, i, sim_time);
 		// create duplicate_successor state if any object could not be pushed
-		duplicate_successor = duplicate_successor || !result;
+		duplicate_successor = duplicate_successor || !push_result;
+
+		if (graspable)
+		{
+			if (pickplace_result && push_result) {
+				m_successful_rearranges.pop_back();
+			}
+		}
 	}
 
 	if (duplicate_successor)
