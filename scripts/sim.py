@@ -42,6 +42,8 @@ class BulletSim:
 		self.gui = gui
 		self.obj_copies = rospy.get_param("~sim/obj_copies", 1)
 		self.robot_collision_group = (2**self.obj_copies) - 1
+		self.no_collision_group = 2**self.obj_copies
+		self.grasped_mass = 5e-2
 
 		if self.gui:
 			self.cpu_count = 1
@@ -556,31 +558,22 @@ class BulletSim:
 
 				elif (place_at >= 0 and point == req.traj.points[place_at]):
 					self.grasp(sim_id, True, simulator=sim) # open gripper
-					sim.removeConstraint(sim_data['grasp_constraint'])
-					sim_data['grasp_constraint'] = None
+					for constraint in sim_data['grasp_constraint']:
+						sim.removeConstraint(constraint[3])
+						sim.changeDynamics(constraint[0], -1, mass=constraint[4])
+					del sim_data['grasp_constraint'][:]
 					# for i in range(2 * int(HZ)):
 					# 	sim.stepSimulation()
 
 				elif (point == req.traj.points[pick_at+1]):
 					self.grasp(sim_id, False, oid=req.ooi, simulator=sim) # close gripper
 
-					if sim_data['grasp_constraint'] is None:
-						obj_transform = sim.getBasePositionAndOrientation(req.ooi)
-						robot_link = link_from_name(sim_data['robot_id'], 'r_gripper_finger_dummy_planning_link', sim=sim)
-
-						ee_state = get_link_state(sim_data['robot_id'], robot_link, sim=sim)
-						ee_transform = sim.invertTransform(ee_state.linkWorldPosition, ee_state.linkWorldOrientation)
-
-						grasp_pose = sim.multiplyTransforms(ee_transform[0], ee_transform[1], *obj_transform)
-						grasp_point, grasp_quat = grasp_pose
-
-						sim_data['grasp_constraint'] = sim.createConstraint(
-										sim_data['robot_id'], robot_link, req.ooi, BASE_LINK,
-										sim.JOINT_FIXED, jointAxis=[0., 0., 0.],
-										parentFramePosition=grasp_point,
-										childFramePosition=[0., 0., 0.],
-										parentFrameOrientation=grasp_quat,
-										childFrameOrientation=sim.getQuaternionFromEuler([0., 0., 0.]))
+					if not sim_data['grasp_constraint']:
+						if (0 in sim_data['valid_groups']):
+							self.addGraspConstraint(req.ooi, 0, sim_id, simulator=sim)
+						for copy_num, obj_copy_id in enumerate(sim_data['objs'][req.ooi]['copies']):
+							if (copy_num+1 in sim_data['valid_groups']):
+								self.addGraspConstraint(obj_copy_id, copy_num+1, sim_id, simulator=sim)
 
 				# elif (point == req.traj.points[pick_at+2]):
 				# 	input("OOI lifted!")
@@ -614,7 +607,7 @@ class BulletSim:
 				# 		break
 
 				else:
-					if sim_data['grasp_constraint'] is None:
+					if not sim_data['grasp_constraint']:
 						sim.setJointMotorControlArray(
 								robot_id, self.gripper_joints,
 								controlMode=sim.POSITION_CONTROL,
@@ -987,27 +980,16 @@ class BulletSim:
 			elif (point == req.traj.points[pick_at+1]):
 				self.grasp(sim_id, False, oid=picked_obj, simulator=sim) # close gripper
 
-				if sim_data['grasp_constraint'] is None:
-					obj_transform = sim.getBasePositionAndOrientation(picked_obj)
-					robot_link = link_from_name(sim_data['robot_id'], 'r_gripper_finger_dummy_planning_link', sim=sim)
-
-					ee_state = get_link_state(sim_data['robot_id'], robot_link, sim=sim)
-					ee_transform = sim.invertTransform(ee_state.linkWorldPosition, ee_state.linkWorldOrientation)
-
-					grasp_pose = sim.multiplyTransforms(ee_transform[0], ee_transform[1], *obj_transform)
-					grasp_point, grasp_quat = grasp_pose
-
-					sim_data['grasp_constraint'] = sim.createConstraint(
-									sim_data['robot_id'], robot_link, picked_obj, BASE_LINK,
-									sim.JOINT_FIXED, jointAxis=[0., 0., 0.],
-									parentFramePosition=grasp_point,
-									childFramePosition=[0., 0., 0.],
-									parentFrameOrientation=grasp_quat,
-									childFrameOrientation=sim.getQuaternionFromEuler([0., 0., 0.]))
+				if not sim_data['grasp_constraint']:
+					if (0 in sim_data['valid_groups']):
+						self.addGraspConstraint(picked_obj, 0, sim_id, simulator=sim)
+					for copy_num, obj_copy_id in enumerate(sim_data['objs'][req.ooi]['copies']):
+						if (copy_num+1 in sim_data['valid_groups']):
+							self.addGraspConstraint(obj_copy_id, copy_num+1, sim_id, simulator=sim)
 
 			# else:
 			# 	# keep gripper closed while moving to pick pose
-			# 	if sim_data['grasp_constraint'] is None:
+			# 	if not sim_data['grasp_constraint']:
 			# 		sim.setJointMotorControlArray(
 			# 				robot_id, self.gripper_joints,
 			# 				controlMode=sim.POSITION_CONTROL,
@@ -1055,7 +1037,13 @@ class BulletSim:
 			for obj_id in sim_data['objs']:
 				if (obj_id == picked_obj):
 					continue
-				sim.setCollisionFilterPair(picked_obj, obj_id, -1, -1,
+				for constraint in sim_data['grasp_constraint']:
+					if (0 in sim_data['valid_groups']):
+						sim.setCollisionFilterPair(constraint[0], obj_id, -1, -1,
+											enableCollision=0)
+					for copy_num, obj_copy_id in enumerate(sim_data['objs'][obj_id]['copies']):
+						if (copy_num+1 in sim_data['valid_groups']):
+							sim.setCollisionFilterPair(constraint[0], obj_copy_id, -1, -1,
 											enableCollision=0)
 
 			prev_timestep = curr_timestep
@@ -1080,14 +1068,22 @@ class BulletSim:
 			for obj_id in sim_data['objs']:
 				if (obj_id == picked_obj):
 					continue
-				sim.setCollisionFilterPair(picked_obj, obj_id, -1, -1,
+				for constraint in sim_data['grasp_constraint']:
+					if (0 in sim_data['valid_groups']):
+						sim.setCollisionFilterPair(constraint[0], obj_id, -1, -1,
+											enableCollision=1)
+					for copy_num, obj_copy_id in enumerate(sim_data['objs'][obj_id]['copies']):
+						if (copy_num+1 in sim_data['valid_groups']):
+							sim.setCollisionFilterPair(constraint[0], obj_copy_id, -1, -1,
 											enableCollision=1)
 
 			for point in req.traj.points[place_at-2:]:
 				if (point == req.traj.points[place_at]):
 					self.grasp(sim_id, True, simulator=sim) # open gripper
-					sim.removeConstraint(sim_data['grasp_constraint'])
-					sim_data['grasp_constraint'] = None
+					for constraint in sim_data['grasp_constraint']:
+						sim.removeConstraint(constraint[3])
+						sim.changeDynamics(constraint[0], -1, mass=constraint[4])
+					del sim_data['grasp_constraint'][:]
 					# for i in range(2 * int(HZ)):
 					# 	sim.stepSimulation()
 
@@ -1128,8 +1124,10 @@ class BulletSim:
 					break # trajectory execution failed
 
 		elif (sim_data['grasp_constraint'] is not None):
-			sim.removeConstraint(sim_data['grasp_constraint'])
-			sim_data['grasp_constraint'] = None
+			for constraint in sim_data['grasp_constraint']:
+				sim.removeConstraint(constraint[3])
+				sim.changeDynamics(constraint[0], -1, mass=constraint[4])
+			del sim_data['grasp_constraint'][:]
 
 		# To simulate the scene after execution of the trajectory
 		if (not violation_flag):
@@ -1182,10 +1180,15 @@ class BulletSim:
 	def RemoveConstraint(self, req):
 		for sim_id, sim in enumerate(self.sims):
 			sim_data = self.sim_datas[sim_id]
-			if sim_data['grasp_constraint'] is not None:
-				sim.removeConstraint(sim_data['grasp_constraint'])
-				sim_data['grasp_constraint'] = None
+			if sim_data['grasp_constraint']:
+				for constraint in sim_data['grasp_constraint']:
+					sim.removeConstraint(constraint[3])
+					sim.changeDynamics(constraint[0], -1, mass=constraint[4])
+				del sim_data['grasp_constraint'][:]
+
+				self.disableCollisionsWithObjects(sim_id, simulator=sim)
 				self._reset_scene(sim_id, simulator=sim)
+				self.enableCollisionsWithObjects(sim_id, simulator=sim)
 
 		return ResetSimulationResponse(True)
 
@@ -1460,10 +1463,60 @@ class BulletSim:
 
 	def grasped(self, ooi, sim_id, simulator=None):
 		sim = self.sims[sim_id] if simulator is None else simulator
+		sim_data = self.sim_datas[sim_id]
+		robot_id = sim_data['robot_id']
 
-		robot_id = self.sim_datas[sim_id]['robot_id']
-		contacts = sim.getContactPoints(ooi, robot_id)
-		return any([c[4] in self.gripper_joints for c in contacts])
+		good_grasp = True
+		if (0 in sim_data['valid_groups']):
+			contacts = sim.getContactPoints(ooi, robot_id)
+			good_grasp = any([c[4] in self.gripper_joints for c in contacts])
+
+		if (good_grasp):
+			for copy_num, obj_copy_id in enumerate(sim_data['objs'][ooi]['copies']):
+				if (copy_num+1 in sim_data['valid_groups']):
+					contacts = sim.getContactPoints(obj_copy_id, robot_id)
+					good_grasp = good_grasp and any([c[4] in self.gripper_joints for c in contacts])
+					if not good_grasp:
+						break
+
+		return good_grasp
+
+	def addGraspConstraint(self, obj_id, group_id, sim_id, simulator=None):
+		sim = self.sims[sim_id] if simulator is None else simulator
+		sim_data = self.sim_datas[sim_id]
+
+		obj_transform = sim.getBasePositionAndOrientation(obj_id)
+		robot_link = link_from_name(sim_data['robot_id'], 'r_gripper_finger_dummy_planning_link', sim=sim)
+
+		ee_state = get_link_state(sim_data['robot_id'], robot_link, sim=sim)
+		ee_transform = sim.invertTransform(ee_state.linkWorldPosition, ee_state.linkWorldOrientation)
+
+		grasp_pose = sim.multiplyTransforms(ee_transform[0], ee_transform[1], *obj_transform)
+		grasp_point, grasp_quat = grasp_pose
+
+		constraint = sim.createConstraint(
+						sim_data['robot_id'], robot_link, obj_id, BASE_LINK,
+						sim.JOINT_FIXED, jointAxis=[0., 0., 0.],
+						parentFramePosition=grasp_point,
+						childFramePosition=[0., 0., 0.],
+						parentFrameOrientation=grasp_quat,
+						childFrameOrientation=sim.getQuaternionFromEuler([0., 0., 0.]))
+
+		obj_info = sim.getDynamicsInfo(obj_id, -1)
+		curr_mass = obj_info[0]
+		sim.changeDynamics(obj_id, -1, mass=self.grasped_mass)
+		sim_data['grasp_constraint'].append((obj_id, group_id, sim_id, constraint, curr_mass))
+
+	def get_object_pose(self, obj_id, sim_id, simulator=None):
+		sim = self.sims[sim_id] if simulator is None else simulator
+
+		xyz, quat = sim.getBasePositionAndOrientation(obj_id)
+		rpy = sim.getEulerFromQuaternion(quat)
+		obj_pose = ObjectPose()
+		obj_pose.id = obj_id
+		obj_pose.xyz = xyz
+		obj_pose.rpy = rpy
+		return obj_pose
 
 	def getObjects(self, sim_id, simulator=None):
 		sim = self.sims[sim_id] if simulator is None else simulator
@@ -1475,12 +1528,7 @@ class BulletSim:
 			if (obj_id in table_id):
 				continue
 
-			xyz, quat = sim.getBasePositionAndOrientation(obj_id)
-			rpy = sim.getEulerFromQuaternion(quat)
-			obj_pose = ObjectPose()
-			obj_pose.id = obj_id
-			obj_pose.xyz = xyz
-			obj_pose.rpy = rpy
+			obj_pose = self.get_object_pose(obj_id, sim_id, simulator=sim)
 			objects.append(obj_pose)
 
 		return objects
@@ -1522,7 +1570,8 @@ class BulletSim:
 		info['robot_id'] = -1
 		info['objs'] = {}
 		info['num_objs'] = 0
-		info['grasp_constraint'] = None
+		info['grasp_constraint'] = []
+		info['valid_groups'] = list(range(self.obj_copies))
 
 		return sim, info
 
