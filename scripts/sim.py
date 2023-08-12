@@ -490,25 +490,27 @@ class BulletSim:
 		if self.gui:
 			retval = dict()
 			response = self.exec_traj_job(0, self.sims[0], retval, params)
+			if (len(response[0]) < self.succ_needed):
+				response[1].violation = True
 		else:
 			retvals = self.run_jobs_in_threads(self.exec_traj_job, params)
 
 			# count successful simulations
 			succ_count = 0
 			for sim_id, sim_result in retvals:
-				if not sim_result.violation:
-					succ_count += 1
+				if not sim_result[1].violation:
+					succ_count += len(sim_result[0])
 
 			success = succ_count >= self.succ_needed
 			# pick one simulation result to return, reset all
 			for sim_id, sim_result in retvals:
 				if response is None:
-					if success and not sim_result.violation:
+					if success and not sim_result[1].violation:
 						response = sim_result
-					elif not success and sim_result.violation:
+					elif not success and sim_result[1].violation:
 						response = sim_result
 
-		return response
+		return response[1]
 
 	def exec_traj_job(self, sim_id, sim, retvals, params):
 		sim_data = self.sim_datas[sim_id]
@@ -704,11 +706,11 @@ class BulletSim:
 		output.violation = violation_flag
 		output.interactions = all_interactions
 		output.objects = ObjectsPoses()
-		output.objects.poses = self.getObjects(sim_id, simulator=sim)
+		output.objects.poses = self.getValidObjects(sim_id, simulator=sim)
 
-		retvals[sim_id] = output
+		retvals[sim_id] = (sim_data['valid_groups'], output)
 		if self.gui:
-			return output
+			return (sim_data['valid_groups'], output)
 
 	def SimPushes(self, req):
 		params = (req,)
@@ -716,6 +718,10 @@ class BulletSim:
 		if self.gui:
 			retval = dict()
 			response = self.sim_pushes_job(0, self.sims[0], retval, params)
+			if (len(response[0]) < self.succ_needed):
+				response[1].res = False
+				response[1].idx = -1
+				response[1].successes = len(response[0])
 		else:
 			start = time.time()
 			retvals = self.run_jobs_in_threads(self.sim_pushes_job, params)
@@ -723,21 +729,24 @@ class BulletSim:
 			# count successful simulations
 			succ_count = 0
 			for sim_id, sim_result in retvals:
-				if sim_result.idx >= 0:
-					succ_count += 1
+				print("\tThread {} result: successes, idx, valid_groups = {}, {}, [{}]".format(sim_id, sim_result[1].successes, sim_result[1].idx, ', '.join(map(str, sim_result[0]))))
+				if sim_result[1].idx >= 0:
+					succ_count += len(sim_result[0])
 
 			success = succ_count >= self.succ_needed
 			# pick one simulation result to return, reset all
 			for sim_id, sim_result in retvals:
 				if response is None:
-					if success and sim_result.idx >= 0:
+					if success and sim_result[1].idx >= 0:
+						print('\t\tSelect thread {} SUCCESS result!'.format(sim_id))
 						response = sim_result
-					elif not success and sim_result.idx < 0:
+					elif not success and sim_result[1].idx < 0:
 						response = sim_result
+						print('\t\tSelect thread {} FAIL result!'.format(sim_id))
 
 			elapsed = time.time() - start
 			print('\tSimPushes took {:.3f} seconds'.format(elapsed))
-		return response
+		return response[1]
 
 	def sim_pushes_job(self, sim_id, sim, retvals, params):
 		sim_data = self.sim_datas[sim_id]
@@ -915,35 +924,37 @@ class BulletSim:
 		output.objects = ObjectsPoses()
 		output.objects.poses = return_objs
 		output.relevant_ids = relevant_ids
-		retvals[sim_id] = output
+		retvals[sim_id] = (sim_data['valid_groups'], output)
 		if self.gui:
-			return output
+			return (sim_data['valid_groups'], output)
 
 	def SimPickPlace(self, req):
 		params = (req,)
 		response = None
 		if self.gui:
 			retval = dict()
-			response = self.sim_pushes_job(0, self.sims[0], retval, params)
+			response = self.sim_pick_place_job(0, self.sims[0], retval, params)
+			if (len(response[0]) < self.succ_needed):
+				response[1].violation = True
 		else:
 			retvals = self.run_jobs_in_threads(self.sim_pick_place_job, params)
 
 			# count successful simulations
 			succ_count = 0
 			for sim_id, sim_result in retvals:
-				if not sim_result.violation:
-					succ_count += 1
+				if not sim_result[1].violation:
+					succ_count += len(sim_result[0])
 
 			success = succ_count >= self.succ_needed
 			# pick one simulation result to return, reset all
 			for sim_id, sim_result in retvals:
 				if response is None:
-					if success and not sim_result.violation:
+					if success and not sim_result[1].violation:
 						response = sim_result
-					elif not success and sim_result.violation:
+					elif not success and sim_result[1].violation:
 						response = sim_result
 
-		return response
+		return response[1]
 
 	def sim_pick_place_job(self, sim_id, sim, retvals, params):
 		sim_data = self.sim_datas[sim_id]
@@ -1201,9 +1212,9 @@ class BulletSim:
 		output.objects = ObjectsPoses()
 		output.objects.poses = return_objs
 
-		retvals[sim_id] = output
+		retvals[sim_id] = (sim_data['valid_groups'], output)
 		if self.gui:
-			return output
+			return (sim_data['valid_groups'], output)
 
 	def RemoveConstraint(self, req):
 		for sim_id, sim in enumerate(self.sims):
