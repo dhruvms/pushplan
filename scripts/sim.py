@@ -748,7 +748,7 @@ class BulletSim:
 		successes = 0
 		best_idx = -1
 		best_dist = float('inf')
-		best_objs = self.getObjects(sim_id, simulator=sim)
+		best_objs = self.getValidObjects(sim_id, simulator=sim)
 		start_objs = None
 		goal_pos = None
 		if (req.oid != -1):
@@ -784,11 +784,17 @@ class BulletSim:
 
 			self.enableCollisionsWithObjects(sim_id, simulator=sim)
 
-			start_objs = self.getObjects(sim_id, simulator=sim)
+			start_objs = self.getValidObjects(sim_id, simulator=sim)
 			violation_flag = False
 			oid_start_xyz = None
 			if (req.oid != -1):
-				oid_start_xyz, _ = sim.getBasePositionAndOrientation(req.oid)
+				if (0 in sim_data['valid_groups']):
+					oid_start_xyz, _ = sim.getBasePositionAndOrientation(req.oid)
+				else:
+					for copy_num, obj_copy_id in enumerate(sim_data['objs'][req.oid]['copies']):
+						if (copy_num+1 in sim_data['valid_groups']):
+							oid_start_xyz, _ = sim.getBasePositionAndOrientation(obj_copy_id)
+							break
 
 			for point in push_traj.points[1:]:
 				sim.setJointMotorControlArray(
@@ -867,20 +873,27 @@ class BulletSim:
 			else:
 				oid_xyz = None
 				if (req.oid != -1):
-					oid_xyz, _ = sim.getBasePositionAndOrientation(req.oid)
+					if (0 in sim_data['valid_groups']):
+						oid_xyz, _ = sim.getBasePositionAndOrientation(req.oid)
+					else:
+						for copy_num, obj_copy_id in enumerate(sim_data['objs'][req.oid]['copies']):
+							if (copy_num+1 in sim_data['valid_groups']):
+								oid_xyz, _ = sim.getBasePositionAndOrientation(obj_copy_id)
+								break
+
 					if (np.linalg.norm(np.asarray(oid_start_xyz) - np.asarray(oid_xyz)) <= 0.01):
 						continue
 
-				successes += 1
+				successes += len(sim_data['valid_groups'])
 				if (req.oid != -1):
 					dist = np.linalg.norm(goal_pos - np.asarray(oid_xyz[:2]))
 					if (dist < best_dist):
 						best_dist = dist
 						best_idx = pidx
-						best_objs = self.getObjects(sim_id, simulator=sim)
+						best_objs = self.getValidObjects(sim_id, simulator=sim)
 				else:
 					best_idx = 0
-					best_objs = self.getObjects(sim_id, simulator=sim)
+					best_objs = self.getValidObjects(sim_id, simulator=sim)
 
 		res = best_idx != -1
 		return_objs = []
@@ -971,11 +984,16 @@ class BulletSim:
 
 		self.enableCollisionsWithObjects(sim_id, simulator=sim)
 
-		start_objs = self.getObjects(sim_id, simulator=sim)
 		violation_flag = False
 		oid_start_xyz = None
 		if (picked_obj != -1):
-			oid_start_xyz, _ = sim.getBasePositionAndOrientation(picked_obj)
+			if (0 in sim_data['valid_groups']):
+				oid_start_xyz, _ = sim.getBasePositionAndOrientation(picked_obj)
+			else:
+				for copy_num, obj_copy_id in enumerate(sim_data['objs'][picked_obj]['copies']):
+					if (copy_num+1 in sim_data['valid_groups']):
+						oid_start_xyz, _ = sim.getBasePositionAndOrientation(obj_copy_id)
+						break
 
 		# To simulate the pickup action
 		for point in req.traj.points[pick_at:pick_at+2]:
@@ -1175,7 +1193,7 @@ class BulletSim:
 		output = ExecTrajResponse()
 		output.violation = violation_flag
 
-		all_objs = self.getObjects(sim_id, simulator=sim)
+		all_objs = self.getValidObjects(sim_id, simulator=sim)
 		return_objs = []
 		for object in all_objs:
 			if sim_data['objs'][object.id]['movable']:
@@ -1209,9 +1227,19 @@ class BulletSim:
 		robot_id = sim_data['robot_id']
 		for joint in get_joints(robot_id, sim=sim):
 			for obj_id in sim_data['objs']:
-				if (ignore is not None and obj_id in ignore):
-					continue
-				sim.setCollisionFilterPair(robot_id, obj_id, joint, -1,
+				if (not sim_data['objs'][obj_id]['movable']):
+					sim.setCollisionFilterPair(robot_id, obj_id, joint, -1,
+											enableCollision=0)
+				else:
+					if (ignore is not None and obj_id in ignore):
+						continue
+
+					if (0 in sim_data['valid_groups']):
+						sim.setCollisionFilterPair(robot_id, obj_id, joint, -1,
+											enableCollision=0)
+					for copy_num, obj_copy_id in enumerate(sim_data['objs'][obj_id]['copies']):
+						if (copy_num+1 in sim_data['valid_groups']):
+							sim.setCollisionFilterPair(robot_id, obj_copy_id, joint, -1,
 											enableCollision=0)
 
 	def enableCollisionsWithObjects(self, sim_id, ignore=None, simulator=None):
@@ -1221,9 +1249,19 @@ class BulletSim:
 		robot_id = sim_data['robot_id']
 		for joint in get_joints(robot_id, sim=sim):
 			for obj_id in sim_data['objs']:
-				if (ignore is not None and obj_id in ignore):
-					continue
-				sim.setCollisionFilterPair(robot_id, obj_id, joint, -1,
+				if (not sim_data['objs'][obj_id]['movable']):
+					sim.setCollisionFilterPair(robot_id, obj_id, joint, -1,
+											enableCollision=1)
+				else:
+					if (ignore is not None and obj_id in ignore):
+						continue
+
+					if (0 in sim_data['valid_groups']):
+						sim.setCollisionFilterPair(robot_id, obj_id, joint, -1,
+											enableCollision=1)
+					for copy_num, obj_copy_id in enumerate(sim_data['objs'][obj_id]['copies']):
+						if (copy_num+1 in sim_data['valid_groups']):
+							sim.setCollisionFilterPair(robot_id, obj_copy_id, joint, -1,
 											enableCollision=1)
 
 	def addBox(self, req, sim_id, duplicate=False):
@@ -1587,17 +1625,46 @@ class BulletSim:
 
 		return objects
 
+	def getValidObjects(self, sim_id, simulator=None):
+		sim = self.sims[sim_id] if simulator is None else simulator
+		sim_data = self.sim_datas[sim_id]
+		table_id = sim_data['table_id']
+
+		objects = []
+		for obj_id in sim_data['objs']:
+			if (obj_id in table_id):
+				continue
+
+			if (not sim_data['objs'][obj_id]['movable']):
+				obj_pose = self.get_object_pose(obj_id, sim_id, simulator=sim)
+				objects.append(obj_pose)
+			else:
+				if (0 in sim_data['valid_groups']):
+					obj_pose = self.get_object_pose(obj_id, sim_id, simulator=sim)
+					objects.append(obj_pose)
+				else:
+					for copy_num, obj_copy_id in enumerate(sim_data['objs'][obj_id]['copies']):
+						if (copy_num+1 in sim_data['valid_groups']):
+							obj_pose = self.get_object_pose(obj_copy_id, sim_id, simulator=sim)
+							obj_pose.id = obj_id
+							objects.append(obj_pose)
+							break
+
+		return objects
+
 	def resetObjects(self, sim_id, objects, simulator=None):
 		sim = self.sims[sim_id] if simulator is None else simulator
-
-		self.disableCollisionsWithObjects(sim_id, simulator=sim)
+		sim_data = self.sim_datas[sim_id]
 
 		for object in objects:
 			sim.resetBasePositionAndOrientation(object.id,
 										posObj=object.xyz,
 										ornObj=sim.getQuaternionFromEuler(object.rpy))
 
-		self.enableCollisionsWithObjects(sim_id, simulator=sim)
+			for obj_copy_id in sim_data['objs'][object.id]['copies']:
+				sim.resetBasePositionAndOrientation(obj_copy_id,
+									posObj=object.xyz,
+									ornObj=sim.getQuaternionFromEuler(object.rpy))
 
 	def setupSim(self, shadows):
 		connection = p.GUI if self.gui else p.DIRECT
