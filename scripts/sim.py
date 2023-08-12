@@ -641,13 +641,15 @@ class BulletSim:
 				action_interactions += interactions
 				action_interactions = list(np.unique(np.array(action_interactions)))
 				action_interactions[:] = [idx for idx in action_interactions if idx != req.ooi]
+				violation_flag = any([not sim_data['objs'][x]['movable'] for x in action_interactions])
 
-				topple = self.checkPoseConstraints(sim_id, pick_at, req.ooi, simulator=sim)
-				immovable = any([not sim_data['objs'][x]['movable'] for x in action_interactions])
-				table = self.checkTableCollision(sim_id, simulator=sim)
-				velocity = self.checkVelConstraints(sim_id, pick_at, req.ooi, simulator=sim)
+				if not violation_flag:
+					violation_flag = self.checkTableCollision(sim_id, simulator=sim)
+				if not violation_flag:
+					violation_flag = self.checkPoseConstraints(sim_id, grasp_at=pick_at, ooi=req.ooi, simulator=sim)
+				if not violation_flag:
+					violation_flag = self.checkVelConstraints(sim_id, grasp_at=pick_at, ooi=req.ooi, simulator=sim)
 
-				violation_flag = topple or immovable or table or velocity
 				if (violation_flag):
 					break
 
@@ -679,16 +681,15 @@ class BulletSim:
 				action_interactions += interactions
 				action_interactions = list(np.unique(np.array(action_interactions)))
 				action_interactions[:] = [idx for idx in action_interactions if idx != req.ooi]
+				violation_flag = any([not sim_data['objs'][x]['movable'] for x in action_interactions])
 
-				topple = self.checkPoseConstraints(sim_id, pick_at, req.ooi, simulator=sim)
-				immovable = any([not sim_data['objs'][x]['movable'] for x in action_interactions])
-				table = self.checkTableCollision(sim_id, simulator=sim)
-				velocity = self.checkVelConstraints(sim_id, pick_at, req.ooi, simulator=sim)
-				wrong = False
-				if (pick_at >= 0):
-					wrong = len(action_interactions) > 0
+				if not violation_flag:
+					violation_flag = self.checkTableCollision(sim_id, simulator=sim)
+				if not violation_flag:
+					violation_flag = self.checkPoseConstraints(sim_id, grasp_at=pick_at, ooi=req.ooi, simulator=sim)
+				if not violation_flag:
+					violation_flag = self.checkVelConstraints(sim_id, grasp_at=pick_at, ooi=req.ooi, simulator=sim)
 
-				violation_flag = topple or immovable or table or velocity or wrong
 				if (violation_flag):
 					break
 
@@ -816,13 +817,15 @@ class BulletSim:
 					interactions = self.checkInteractions(sim_id, objs_curr, simulator=sim)
 					action_interactions += interactions
 					action_interactions = list(np.unique(np.array(action_interactions)))
+					violation_flag = any([not sim_data['objs'][x]['movable'] for x in action_interactions])
 
-					topple = self.checkPoseConstraints(sim_id, simulator=sim)
-					immovable = any([not sim_data['objs'][x]['movable'] for x in action_interactions])
-					table = self.checkTableCollision(sim_id, simulator=sim)
-					velocity = self.checkVelConstraints(sim_id, simulator=sim)
+					if not violation_flag:
+						violation_flag = self.checkTableCollision(sim_id, simulator=sim)
+					if not violation_flag:
+						violation_flag = self.checkPoseConstraints(sim_id, simulator=sim)
+					if not violation_flag:
+						violation_flag = self.checkVelConstraints(sim_id, simulator=sim)
 
-					violation_flag = topple or immovable or table or velocity
 					if (violation_flag):
 						break
 
@@ -847,13 +850,15 @@ class BulletSim:
 				interactions = self.checkInteractions(sim_id, objs_curr, simulator=sim)
 				action_interactions += interactions
 				action_interactions = list(np.unique(np.array(action_interactions)))
+				violation_flag = any([not sim_data['objs'][x]['movable'] for x in action_interactions])
 
-				topple = self.checkPoseConstraints(sim_id, simulator=sim)
-				immovable = any([not sim_data['objs'][x]['movable'] for x in action_interactions])
-				table = self.checkTableCollision(sim_id, simulator=sim)
-				velocity = self.checkVelConstraints(sim_id, simulator=sim)
+				if not violation_flag:
+					violation_flag = self.checkTableCollision(sim_id, simulator=sim)
+				if not violation_flag:
+					violation_flag = self.checkPoseConstraints(sim_id, simulator=sim)
+				if not violation_flag:
+					violation_flag = self.checkVelConstraints(sim_id, simulator=sim)
 
-				violation_flag = topple or immovable or table or velocity
 				if (violation_flag):
 					break
 
@@ -1017,13 +1022,15 @@ class BulletSim:
 				action_interactions += interactions
 				action_interactions = list(np.unique(np.array(action_interactions)))
 				action_interactions[:] = [idx for idx in action_interactions if idx != picked_obj]
+				violation_flag = any([not sim_data['objs'][x]['movable'] for x in action_interactions])
 
-				topple = self.checkPoseConstraints(sim_id, pick_at, picked_obj, simulator=sim)
-				immovable = any([not sim_data['objs'][x]['movable'] for x in action_interactions])
-				table = self.checkTableCollision(sim_id, simulator=sim)
-				velocity = self.checkVelConstraints(sim_id, pick_at, picked_obj, simulator=sim)
+				if not violation_flag:
+					violation_flag = self.checkTableCollision(sim_id, simulator=sim)
+				if not violation_flag:
+					violation_flag = self.checkPoseConstraints(sim_id, grasp_at=pick_at, ooi=picked_obj, simulator=sim)
+				if not violation_flag:
+					violation_flag = self.checkVelConstraints(sim_id, grasp_at=pick_at, ooi=picked_obj, simulator=sim)
 
-				violation_flag = topple or immovable or table or velocity
 				if (violation_flag):
 					break
 
@@ -1110,10 +1117,10 @@ class BulletSim:
 					action_interactions = list(np.unique(np.array(action_interactions)))
 					action_interactions[:] = [idx for idx in action_interactions if idx != picked_obj]
 
-					topple = self.checkPoseConstraints(sim_id, pick_at, picked_obj, simulator=sim)
+					topple = self.checkPoseConstraints(sim_id, grasp_at=pick_at, ooi=picked_obj, simulator=sim)
 					immovable = any([not sim_data['objs'][x]['movable'] for x in action_interactions])
 					table = self.checkTableCollision(sim_id, simulator=sim)
-					velocity = self.checkVelConstraints(sim_id, pick_at, picked_obj, simulator=sim)
+					velocity = self.checkVelConstraints(sim_id, grasp_at=pick_at, ooi=picked_obj, simulator=sim)
 
 					violation_flag = topple or immovable or table or velocity
 					if (violation_flag):
@@ -1151,15 +1158,18 @@ class BulletSim:
 				action_interactions += interactions
 				action_interactions = list(np.unique(np.array(action_interactions)))
 				action_interactions[:] = [idx for idx in action_interactions if idx != picked_obj]
+				violation_flag = any([not sim_data['objs'][x]['movable'] for x in action_interactions])
 
-				topple = self.checkPoseConstraints(sim_id, simulator=sim)
-				immovable = any([not sim_data['objs'][x]['movable'] for x in action_interactions])
-				table = self.checkTableCollision(sim_id, simulator=sim)
-				velocity = self.checkVelConstraints(sim_id, simulator=sim)
+				if not violation_flag:
+					violation_flag = self.checkTableCollision(sim_id, simulator=sim)
+				if not violation_flag:
+					violation_flag = self.checkPoseConstraints(sim_id, simulator=sim)
+				if not violation_flag:
+					violation_flag = self.checkVelConstraints(sim_id, simulator=sim)
 
-				violation_flag = topple or immovable or table or velocity
 				if (violation_flag):
 					break
+
 			del action_interactions[:]
 
 		output = ExecTrajResponse()
@@ -1330,22 +1340,45 @@ class BulletSim:
 		interactions = []
 		for obj1 in objects:
 			obj1_id = obj1.id
-			if(obj1_id in table_id): # check id
+			if (obj1_id in table_id): # do not include interactions with the table
 				continue
 
-			# (robot, obj1) contacts
-			contacts = sim.getContactPoints(obj1_id, robot_id)
-			if any(pt[8] < CONTACT_THRESH for pt in contacts):
-				interactions.append(obj1_id)
+			if (not sim_data['objs'][obj1_id]['movable']):
+				contacts = sim.getContactPoints(obj1_id, robot_id)
+				if any(pt[8] < CONTACT_THRESH for pt in contacts):
+					# robot interacted with immovable obstacle
+					interactions.append(obj1_id)
+					# action failed
+					# no more checks needed
+					break
 
-			contacts = tuple()
-			if (obj1_id not in interactions and not sim_data['objs'][obj1_id]['movable']):
+				contacts = tuple()
 				for obj2 in objects:
 					obj2_id = obj2.id
-					if(obj2_id in table_id or obj2_id == obj1_id):
+					if (obj2_id in table_id or obj2_id == obj1_id or not sim_data['objs'][obj2_id]['movable']):
 						continue
-					# (obj1, obj2) contacts
-					contacts += sim.getContactPoints(obj1_id, obj2_id)
+
+					# check if any other movable object interacts with this immovable obstacle
+					if (0 in sim_data['valid_groups']):
+						contacts += sim.getContactPoints(obj1_id, obj2_id)
+					for copy_num, obj_copy_id in enumerate(sim_data['objs'][obj2_id]['copies']):
+						if (copy_num+1 in sim_data['valid_groups']):
+							contacts += sim.getContactPoints(obj1_id, obj_copy_id)
+
+				if any(pt[8] < CONTACT_THRESH for pt in contacts):
+					# some movable object interacted with immovable obstacle
+					interactions.append(obj1_id)
+					# action failed
+					# no more checks needed
+					break
+			else:
+				# (robot, movable object) contacts
+				contacts = tuple()
+				if (0 in sim_data['valid_groups']):
+					contacts += sim.getContactPoints(obj1_id, robot_id)
+				for copy_num, obj_copy_id in enumerate(sim_data['objs'][obj1_id]['copies']):
+					if (copy_num+1 in sim_data['valid_groups']):
+						contacts += sim.getContactPoints(obj_copy_id, robot_id)
 
 				if any(pt[8] < CONTACT_THRESH for pt in contacts):
 					interactions.append(obj1_id)
@@ -1356,17 +1389,39 @@ class BulletSim:
 		sim = self.sims[sim_id] if simulator is None else simulator
 		sim_data = self.sim_datas[sim_id]
 
+		groups_to_remove = []
 		for obj_id in sim_data['objs']:
-			if (grasp_at >= 0 and obj_id == ooi):
+			if ((grasp_at >= 0 and obj_id == ooi) or not sim_data['objs'][obj_id]['movable']):
 				continue
 
 			start_rpy = sim_data['objs'][obj_id]['rpy']
-			curr_xyz, curr_rpy = sim.getBasePositionAndOrientation(obj_id)
-			if(shortest_angle_dist(curr_rpy[0], start_rpy[0]) > 0.95 * FALL_POS_THRESH or
-				shortest_angle_dist(curr_rpy[1], start_rpy[1]) > 0.95 * FALL_POS_THRESH or
-				curr_xyz[2] < 0.5): # off the table/refrigerator
-				return True
-		return False
+			if (0 in sim_data['valid_groups']):
+				curr_xyz, curr_rpy = sim.getBasePositionAndOrientation(obj_id)
+				if (shortest_angle_dist(curr_rpy[0], start_rpy[0]) > 0.95 * FALL_POS_THRESH or
+					shortest_angle_dist(curr_rpy[1], start_rpy[1]) > 0.95 * FALL_POS_THRESH or
+					curr_xyz[2] < 0.5): # off the table/refrigerator
+					groups_to_remove.append(0)
+			for copy_num, obj_copy_id in enumerate(sim_data['objs'][obj_id]['copies']):
+				if (copy_num+1 in sim_data['valid_groups']):
+					curr_xyz, curr_rpy = sim.getBasePositionAndOrientation(obj_copy_id)
+					if(shortest_angle_dist(curr_rpy[0], start_rpy[0]) > 0.95 * FALL_POS_THRESH or
+						shortest_angle_dist(curr_rpy[1], start_rpy[1]) > 0.95 * FALL_POS_THRESH or
+						curr_xyz[2] < 0.5): # off the table/refrigerator
+						groups_to_remove.append(copy_num+1)
+
+		groups_to_remove = list(np.unique(np.array(groups_to_remove)))
+		for obj_id in sim_data['objs']:
+			if (not sim_data['objs'][obj_id]['movable']):
+				continue
+
+			if (0 in groups_to_remove):
+				sim.setCollisionFilterGroupMask(obj_id, -1, self.no_collision_group, self.no_collision_group)
+			for copy_num, obj_copy_id in enumerate(sim_data['objs'][obj_id]['copies']):
+				if (copy_num+1 in groups_to_remove):
+					sim.setCollisionFilterGroupMask(obj_copy_id, -1, self.no_collision_group, self.no_collision_group)
+
+		[sim_data['valid_groups'].remove(group) for group in groups_to_remove]
+		return len(sim_data['valid_groups']) == 0
 
 	def checkTableCollision(self, sim_id, simulator=None):
 		sim = self.sims[sim_id] if simulator is None else simulator
@@ -1386,35 +1441,34 @@ class BulletSim:
 		sim = self.sims[sim_id] if simulator is None else simulator
 		sim_data = self.sim_datas[sim_id]
 
+		groups_to_remove = []
 		for obj_id in sim_data['objs']:
-			if (grasp_at >= 0 and obj_id == ooi):
+			if ((grasp_at >= 0 and obj_id == ooi) or not sim_data['objs'][obj_id]['movable']):
 				continue
 
-			vel_xyz, vel_rpy = sim.getBaseVelocity(obj_id)
-			# obj_pos, obj_orn = sim.getBasePositionAndOrientation(obj_id)
-			# obj_orn_euler = sim.getEulerFromQuaternion(obj_orn)
-			# roll, pitch, yaw = obj_orn_euler
-			# rot_around_z = np.array(
-			# 	[[np.cos(-yaw), -np.sin(-yaw), 0],
-			# 	[np.sin(-yaw), np.cos(-yaw), 0],
-			# 	[		0,			 0, 1]]
-			# )
-			# rot_around_y = np.array(
-			# 	[[np.cos(pitch), 0, np.sin(pitch)],
-			# 	[0, 1, 0],
-			# 	[-np.sin(pitch), 0, np.cos(pitch)]]
-			# )
-			# rot_around_x = np.array(
-			# 	[[1, 0, 0],
-			# 	[0, np.cos(roll), -np.sin(roll)],
-			# 	[0, np.sin(roll), np.cos(roll)]]
-			# )
-			# R = np.dot(rot_around_z, np.dot(rot_around_y, rot_around_x))
-			# wx, wy, wz = np.dot(R.transpose(), vel_rpy)
-			# if(abs(wx) > 0.95 * FALL_VEL_THRESH or abs(wy) > 0.95 * FALL_VEL_THRESH):
-			if(any(np.abs(np.array(vel_xyz)) > 0.95 * FALL_VEL_THRESH)):
-				return True
-		return False
+			if (0 in sim_data['valid_groups']):
+				vel_xyz, vel_rpy = sim.getBaseVelocity(obj_id)
+				if (any(np.abs(np.array(vel_xyz)) > 0.95 * FALL_VEL_THRESH)):
+					groups_to_remove.append(0)
+			for copy_num, obj_copy_id in enumerate(sim_data['objs'][obj_id]['copies']):
+				if (copy_num+1 in sim_data['valid_groups']):
+					vel_xyz, vel_rpy = sim.getBaseVelocity(obj_copy_id)
+					if (any(np.abs(np.array(vel_xyz)) > 0.95 * FALL_VEL_THRESH)):
+						groups_to_remove.append(copy_num+1)
+
+		groups_to_remove = list(np.unique(np.array(groups_to_remove)))
+		for obj_id in sim_data['objs']:
+			if (not sim_data['objs'][obj_id]['movable']):
+				continue
+
+			if (0 in groups_to_remove):
+				sim.setCollisionFilterGroupMask(obj_id, -1, self.no_collision_group, self.no_collision_group)
+			for copy_num, obj_copy_id in enumerate(sim_data['objs'][obj_id]['copies']):
+				if (copy_num+1 in groups_to_remove):
+					sim.setCollisionFilterGroupMask(obj_copy_id, -1, self.no_collision_group, self.no_collision_group)
+
+		[sim_data['valid_groups'].remove(group) for group in groups_to_remove]
+		return len(sim_data['valid_groups']) == 0
 
 	def holdPosition(self, sim_id, simulator=None):
 		sim = self.sims[sim_id] if simulator is None else simulator
