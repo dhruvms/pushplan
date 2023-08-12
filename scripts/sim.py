@@ -364,8 +364,10 @@ class BulletSim:
 	def ResetScene(self, req):
 		sim_id = req.sim_id
 		all_sims = sim_id < 0
-		for sidx, sim in enumerate(self.sims) if all_sims else enumerate(self.sims[sim_id:sim_id + 1]):
-			self._reset_scene(sidx, simulator=sim)
+		for sim_id, sim in enumerate(self.sims) if all_sims else enumerate(self.sims[sim_id:sim_id + 1]):
+			self.disableCollisionsWithObjects(sim_id, simulator=sim)
+			self._reset_scene(sim_id, simulator=sim)
+			self.enableCollisionsWithObjects(sim_id, simulator=sim)
 
 		return ResetSceneResponse(True)
 
@@ -383,8 +385,6 @@ class BulletSim:
 					# cameraDistance=0.8, cameraYaw=-120.0, cameraPitch=0.0, # left side camera angle
 					cameraTargetPosition=table_xyz)
 				self.camera_set = True
-
-		self.disableCollisionsWithObjects(sim_id, simulator=sim)
 
 		for obj_id in sim_data['objs']:
 			xyz = sim_data['objs'][obj_id]['xyz']
