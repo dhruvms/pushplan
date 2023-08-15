@@ -373,24 +373,8 @@ size_t MAMONode::GetObjectsHash() const
 
 	size_t hash_val = 0;
 
-	for (const auto &object_state : kobject_states())
-	{
-		boost::hash_combine(hash_val, object_state.id());
-		const auto &disc_pose = object_state.disc_pose();
-		boost::hash_combine(hash_val, disc_pose.x());
-		boost::hash_combine(hash_val, disc_pose.y());
-
-		bool p = disc_pose.pitch() != 0, r = disc_pose.roll() != 0;
-		if (!object_state.symmetric() || p || r)
-		{
-			boost::hash_combine(hash_val, disc_pose.yaw());
-			if (p) {
-				boost::hash_combine(hash_val, disc_pose.pitch());
-			}
-			if (r) {
-				boost::hash_combine(hash_val, disc_pose.roll());
-			}
-		}
+	for (const auto &object_state : kall_object_states()) {
+		object_state.hash_state(hash_val);
 	}
 
 	return hash_val;

@@ -35,24 +35,7 @@ size_t HashRearrangementAction::operator()(
 	const auto &push_end_coord = std::get<1>(push_info);
 
 	size_t hash_val = 0;
-
-	// hash pushed object initial state
-	boost::hash_combine(hash_val, object_state.id());
-	const auto &disc_pose = object_state.disc_pose();
-	boost::hash_combine(hash_val, disc_pose.x());
-	boost::hash_combine(hash_val, disc_pose.y());
-
-	bool p = disc_pose.pitch() != 0, r = disc_pose.roll() != 0;
-	if (!object_state.symmetric() || p || r)
-	{
-		boost::hash_combine(hash_val, disc_pose.yaw());
-		if (p) {
-			boost::hash_combine(hash_val, disc_pose.pitch());
-		}
-		if (r) {
-			boost::hash_combine(hash_val, disc_pose.roll());
-		}
-	}
+	object_state.hash_state(hash_val);
 
 	// hash push end pose
 	boost::hash_combine(hash_val, push_end_coord.at(0));
@@ -66,6 +49,28 @@ bool EqualsRearrangementAction::operator()(
 	const std::tuple<ObjectState, Coord> &b) const
 {
 	return a == b;
+}
+
+size_t HashObjectStates::operator()(
+	const std::vector<ObjectState> &obj_states) const
+{
+	size_t hash_val = 0;
+	for (const auto &object_state : obj_states)	{
+		object_state.hash_state(hash_val);
+	}
+
+	return hash_val;
+}
+
+bool EqualsObjectStates::operator()(
+	const std::vector<ObjectState> &a,
+	const std::vector<ObjectState> &b) const
+{
+	if (a.size() != b.size()) {
+		return false;
+	}
+
+	return std::is_permutation(a.begin(), a.end(), b.begin());
 }
 
 bool Robot::Setup()

@@ -954,6 +954,10 @@ void Object::initPregrasps()
 	}
 }
 
+///////////////////////////////////////////////////////////////////////////////
+// HashObjectState
+///////////////////////////////////////////////////////////////////////////////
+
 constexpr double kFloatingPointTolerance = 1e-5;
 
 ///////////////////////////////////////////////////////////////////////////////
@@ -1082,6 +1086,26 @@ m_id(id), m_symmetric(symmetric),	m_cont_pose(cont_pose), m_disc_pose(cont_pose)
 
 ObjectState::ObjectState(int id, bool symmetric, const DiscPose &disc_pose) :
 m_id(id), m_symmetric(symmetric),	m_cont_pose(disc_pose), m_disc_pose(disc_pose) {}
+
+void ObjectState::hash_state(size_t &hash_val) const
+{
+	// hash pushed object initial state
+	boost::hash_combine(hash_val, m_id);
+	boost::hash_combine(hash_val, m_disc_pose.x());
+	boost::hash_combine(hash_val, m_disc_pose.y());
+
+	bool p = m_disc_pose.pitch() != 0, r = m_disc_pose.roll() != 0;
+	if (!m_symmetric || p || r)
+	{
+		boost::hash_combine(hash_val, m_disc_pose.yaw());
+		if (p) {
+			boost::hash_combine(hash_val, m_disc_pose.pitch());
+		}
+		if (r) {
+			boost::hash_combine(hash_val, m_disc_pose.roll());
+		}
+	}
+}
 
 bool ObjectState::operator==(const ObjectState &other) const
 {

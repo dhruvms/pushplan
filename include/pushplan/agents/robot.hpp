@@ -45,6 +45,17 @@ struct EqualsRearrangementAction
 		const std::tuple<ObjectState, Coord> &b) const;
 };
 
+struct HashObjectStates {
+	size_t operator()(const std::vector<ObjectState> &obj_states) const;
+};
+
+struct EqualsObjectStates
+{
+	bool operator()(
+		const std::vector<ObjectState> &a,
+		const std::vector<ObjectState> &b) const;
+};
+
 class Robot
 {
 public:

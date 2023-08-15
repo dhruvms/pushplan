@@ -118,6 +118,8 @@ class ContPose;
 class DiscPose;
 class ObjectState;
 
+void HashObjectState(size_t &hash_val, const ObjectState &state);
+
 class ContPose
 {
 public:
@@ -204,6 +206,7 @@ public:
 	ObjectState();
 	ObjectState(int id, bool symmetric, const ContPose &cont_pose);
 	ObjectState(int id, bool symmetric, const DiscPose &disc_pose);
+	void hash_state(size_t &hash_val) const;
 
 	const int &id() const {
 		return m_id;
