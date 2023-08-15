@@ -1609,7 +1609,8 @@ bool Robot::planToPoseGoal(
 	const std::vector<Eigen::Affine3d> &poses,
 	trajectory_msgs::JointTrajectory& push_traj,
 	double t,
-	bool path_constraints)
+	bool path_constraints,
+	moveit_msgs::Constraints *goal)
 {
 	// create planning problem to push start pose
 	InitArmPlanner(false);
@@ -1617,21 +1618,33 @@ bool Robot::planToPoseGoal(
 	moveit_msgs::MotionPlanRequest req;
 	moveit_msgs::MotionPlanResponse res;
 
-	if (poses.size() == 1)
+	if (goal == nullptr)
 	{
-		createPoseGoalConstraint(poses[0]);
-		req.goal_constraints.clear();
-		req.goal_constraints.resize(1);
-		req.goal_constraints[0] = m_goal;
-		req.planner_id = "arastar.manip.bfs";
+		if (poses.size() == 1)
+		{
+			createPoseGoalConstraint(poses[0]);
+			req.goal_constraints.clear();
+			req.goal_constraints.resize(1);
+			req.goal_constraints[0] = m_goal;
+			req.planner_id = "arastar.manip.bfs";
+		}
+		else
+		{
+			createMultiPoseGoalConstraint(poses, req);
+			req.planner_id = "mhastar.manip";
+			for (size_t g = 0; g < poses.size(); ++g) {
+				req.planner_id += ".bfs" + std::to_string(g);
+			}
+		}
 	}
 	else
 	{
-		createMultiPoseGoalConstraint(poses, req);
-		req.planner_id = "mhastar.manip";
-		for (size_t g = 0; g < poses.size(); ++g) {
-			req.planner_id += ".bfs" + std::to_string(g);
-		}
+		// when we send in a pose goal for a particular object
+		req.goal_constraints.clear();
+		req.goal_constraints.resize(1);
+		req.goal_constraints[0] = *goal;
+		req.goal_constraints[0].position_constraints[0].header.frame_id = m_planning_frame;
+		req.planner_id = "arastar.manip.bfs";
 	}
 
 	req.allowed_planning_time = t;
@@ -1842,37 +1855,54 @@ void Robot::profileTrajectoryMoveIt(trajectory_msgs::JointTrajectory& traj)
 
 void Robot::IdentifyReachableMovables(
 	const std::vector<std::shared_ptr<Agent> >& agents,
-	std::vector<int>& reachable_ids)
+	const comms::ObjectsPoses& curr_scene, std::vector<int>& reachable_ids)
 {
+	double start_time = GetTime();
+
 	reachable_ids.clear();
 
 	std::vector<Object*> movables;
-	for (const auto &a: agents) {
-		movables.push_back(a->GetObject());
-	}
-	ProcessObstacles(movables);
-
-	Eigen::Affine3d obj_pose;
-	trajectory_msgs::JointTrajectory traj;
-
-	for (size_t i = 0; i < movables.size(); ++i)
+	std::vector<ObjectState> obj_states;
+	for (size_t i = 0; i < agents.size(); ++i)
 	{
-		std::vector<Object*> plan_to = { movables[i] };
-		ProcessObstacles(plan_to, true);
+		agents.at(i)->SetObjectPose(curr_scene.poses.at(i).xyz, curr_scene.poses.at(i).rpy);
+		auto object = agents.at(i)->GetObject();
+		movables.push_back(object);
 
-		obj_pose = Eigen::Translation3d(movables[i]->desc.o_x, movables[i]->desc.o_y, movables[i]->desc.o_z) *
-				Eigen::AngleAxisd(movables[i]->desc.o_yaw, Eigen::Vector3d::UnitZ()) *
-				Eigen::AngleAxisd(movables[i]->desc.o_pitch, Eigen::Vector3d::UnitY()) *
-				Eigen::AngleAxisd(movables[i]->desc.o_roll, Eigen::Vector3d::UnitX());
-		if (planToPoseGoal(m_start_state, { obj_pose }, traj))
-		{
-			// object i is reachable
-			reachable_ids.push_back(movables[i]->desc.id);
-		}
-		ProcessObstacles(plan_to);
+		ContPose pose(object->desc.o_x, object->desc.o_y, object->desc.o_z, object->desc.o_roll, object->desc.o_pitch, object->desc.o_yaw);
+		obj_states.emplace_back(object->desc.id, object->Symmetric(), pose);
 	}
 
-	ProcessObstacles(movables, true);
+	// look for current movable state in hash map
+	if (m_reachable_movables.find(obj_states) != m_reachable_movables.end()) {
+		ROS_INFO("Found previously computed result for IdentifyReachableMovables!");
+		// return previously computed reachable_ids
+		reachable_ids = m_reachable_movables[obj_states];
+	}
+	else
+	{
+		ProcessObstacles(movables);
+		moveit_msgs::Constraints obj_pose_goal;
+		trajectory_msgs::JointTrajectory traj;
+		for (size_t i = 0; i < movables.size(); ++i)
+		{
+			std::vector<Object*> plan_to = { movables[i] };
+			ProcessObstacles(plan_to, true);
+
+			movables[i]->GetPoseGoal(obj_pose_goal);
+			if (planToPoseGoal(m_start_state, {}, traj, 0.1, false, &obj_pose_goal)) {
+				// object i is reachable
+				reachable_ids.push_back(movables[i]->desc.id);
+			}
+			ProcessObstacles(plan_to);
+		}
+		ProcessObstacles(movables, true);
+
+		m_reachable_movables[obj_states] = reachable_ids;
+	}
+
+	double time_taken = GetTime() - start_time;
+	ROS_WARN("Robot::IdentifyReachableMovables took %f seconds", time_taken);
 }
 
 bool Robot::PlanPickPlace(

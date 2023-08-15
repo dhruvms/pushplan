@@ -132,6 +132,7 @@ public:
 		PushResult& push_result);
 	void IdentifyReachableMovables(
 		const std::vector<std::shared_ptr<Agent> >& agents,
+		const comms::ObjectsPoses& curr_scene,
 		std::vector<int>& reachable_ids);
 
 	const trajectory_msgs::JointTrajectory& GetLastPlanProfiled()
@@ -315,6 +316,11 @@ private:
 	// 	std::vector<std::tuple<comms::ObjectsPoses, comms::ObjectsPoses, trajectory_msgs::JointTrajectory, int, int> >,
 	// 	HashRearrangementAction,
 	// 	EqualsRearrangementAction> m_valid_pickplaces;
+	std::unordered_map<
+		std::vector<ObjectState>,
+		std::vector<int>,
+		HashObjectStates,
+		EqualsObjectStates> m_reachable_movables;
 
 	void getPushStartPose(
 		const std::vector<double>& push,
@@ -328,7 +334,8 @@ private:
 		const std::vector<Eigen::Affine3d> &poses,
 		trajectory_msgs::JointTrajectory& push_traj,
 		double t=0.1,
-		bool path_constraints=false);
+		bool path_constraints=false,
+		moveit_msgs::Constraints *goal=nullptr);
 
 	PushResult computePushStateIK(
 		const Eigen::Affine3d &ee_pose,
