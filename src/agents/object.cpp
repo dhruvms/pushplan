@@ -343,6 +343,8 @@ bool Object::CreateCollisionObjects()
 		fcl_obj = new fcl::CollisionObject(mesh_geom);
 	}
 
+	// init my pose goal
+	updatePoseGoal();
 	return true;
 }
 
@@ -852,7 +854,7 @@ void Object::updatePoseGoal()
 		m_goal.position_constraints.resize(1);
 		m_goal.position_constraints[0].constraint_region.primitives.resize(1);
 		m_goal.position_constraints[0].constraint_region.primitive_poses.resize(1);
-		m_goal.position_constraints[0].header.frame_id = "odom_combined";
+		// m_goal.position_constraints[0].header.frame_id = "odom_combined";
 
 		m_goal.orientation_constraints.resize(1);
 		m_goal.orientation_constraints[0].absolute_x_axis_tolerance = 2 * M_PI;
@@ -861,8 +863,11 @@ void Object::updatePoseGoal()
 	if (!moveit_obj->primitives.empty()) // primitive object
 	{
 		m_goal.position_constraints[0].constraint_region.primitives[0] = moveit_obj->primitives[0];
-		m_goal.position_constraints[0].constraint_region.primitive_poses[0] = moveit_obj->primitive_poses[0];
+		m_goal.position_constraints[0].constraint_region.primitives[0].dimensions[0] += 0.05;
+		m_goal.position_constraints[0].constraint_region.primitives[0].dimensions[1] += 0.05;
+		m_goal.position_constraints[0].constraint_region.primitives[0].dimensions[2] += 0.05;
 
+		m_goal.position_constraints[0].constraint_region.primitive_poses[0] = moveit_obj->primitive_poses[0];
 		m_goal.orientation_constraints[0].orientation = moveit_obj->primitive_poses[0].orientation;
 	}
 	else // YCB object
@@ -872,15 +877,15 @@ void Object::updatePoseGoal()
 		if (this->Shape() == 0)
 		{
 			m_goal.position_constraints[0].constraint_region.primitives[0].type = shape_msgs::SolidPrimitive::BOX;
-			m_goal.position_constraints[0].constraint_region.primitives[0].dimensions[0] = 2 * obj->second[0];
-			m_goal.position_constraints[0].constraint_region.primitives[0].dimensions[1] = 2 * obj->second[1];
-			m_goal.position_constraints[0].constraint_region.primitives[0].dimensions[2] = 2 * obj->second[2];
+			m_goal.position_constraints[0].constraint_region.primitives[0].dimensions[0] = 2 * obj->second[0] + 0.05;
+			m_goal.position_constraints[0].constraint_region.primitives[0].dimensions[1] = 2 * obj->second[1] + 0.05;
+			m_goal.position_constraints[0].constraint_region.primitives[0].dimensions[2] = 2 * obj->second[2] + 0.05;
 		}
 		else
 		{
 			m_goal.position_constraints[0].constraint_region.primitives[0].type = shape_msgs::SolidPrimitive::CYLINDER;
-			m_goal.position_constraints[0].constraint_region.primitives[0].dimensions[0] = 2 * obj->second[2];
-			m_goal.position_constraints[0].constraint_region.primitives[0].dimensions[1] = obj->second[0];
+			m_goal.position_constraints[0].constraint_region.primitives[0].dimensions[0] = 2 * obj->second[2] + 0.05;
+			m_goal.position_constraints[0].constraint_region.primitives[0].dimensions[1] = obj->second[0] + 0.05;
 		}
 
 		m_goal.position_constraints[0].constraint_region.primitive_poses[0] = moveit_obj->mesh_poses[0];
