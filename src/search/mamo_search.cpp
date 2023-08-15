@@ -36,13 +36,17 @@ bool MAMOSearch::CreateRoot()
 	m_root_node->SetEdgeTo(action);
 
 	std::vector<int> reachable_ids;
-	// m_planner->GetRobot()->IdentifyReachableMovables(m_planner->GetAllAgents(), reachable_ids);
+	m_planner->GetRobot()->IdentifyReachableMovables(m_planner->GetAllAgents(), m_planner->GetStartObjects(), reachable_ids);
 	m_root_node->InitAgents(m_planner->GetAllAgents(), m_planner->GetStartObjects(), reachable_ids); // inits required fields for hashing
 
 	m_root_id = m_hashtable.GetStateIDForceful(m_root_node);
 	m_root_search = getSearchState(m_root_id);
 	m_search_nodes.push_back(m_root_node);
 	m_stats["total_time"] += GetTime() - t1;
+
+	std::stringstream reachable_str;
+	std::copy(reachable_ids.begin(), reachable_ids.end(), std::ostream_iterator<int>(reachable_str, ","));
+	SMPL_INFO("Movables reachable in state %d : (%s)", m_root_id, reachable_str.str().c_str());
 
 	return true;
 }
@@ -321,7 +325,8 @@ void MAMOSearch::createSuccs(
 		succ->SetEdgeTo(succ_object_centric_actions->at(i));
 
 		std::vector<int> reachable_ids;
-		// m_planner->GetRobot()->IdentifyReachableMovables(m_planner->GetAllAgents(), reachable_ids);
+		SMPL_INFO("Successor number %d - IdentifyReachableMovables", i);
+		m_planner->GetRobot()->IdentifyReachableMovables(m_planner->GetAllAgents(), succ_objects->at(i), reachable_ids);
 		succ->InitAgents(m_planner->GetAllAgents(), succ_objects->at(i), reachable_ids); // inits required fields for hashing
 
 		// check if we have visited this mamo state before
@@ -338,6 +343,7 @@ void MAMOSearch::createSuccs(
 		if (prev_search_state != nullptr && (prev_search_state->closed || prev_search_state->actions < succ_actions))
 		{
 			// previously visited this mamo state with fewer actions, move on
+			SMPL_INFO("Successor number %d - previously visited this mamo state with fewer actions, move on", i);
 			delete succ;
 			continue;
 		}
@@ -353,6 +359,10 @@ void MAMOSearch::createSuccs(
 				parent_search_state->noops = succ_noops;
 				m_OPEN.update(parent_search_state->m_OPEN_h);
 				SMPL_WARN("Update duplicate %d, priority = %.2e", old_id, parent_search_state->priority);
+
+				std::stringstream reachable_str;
+				std::copy(reachable_ids.begin(), reachable_ids.end(), std::ostream_iterator<int>(reachable_str, ","));
+				SMPL_INFO("Movables reachable in DUPLICATE state %d : (%s)", old_id, reachable_str.str().c_str());
 			}
 			else
 			{
@@ -389,6 +399,10 @@ void MAMOSearch::createSuccs(
 					succ_search_state->m_OPEN_h = m_OPEN.push(succ_search_state);
 
 					SMPL_WARN("Generate %d, priority = %.2e", succ_id, succ_search_state->priority);
+
+					std::stringstream reachable_str;
+					std::copy(reachable_ids.begin(), reachable_ids.end(), std::ostream_iterator<int>(reachable_str, ","));
+					SMPL_INFO("Movables reachable in NEW state %d : (%s)", succ_id, reachable_str.str().c_str());
 				}
 				parent_node->AddChild(succ);
 				m_search_nodes.push_back(succ);
