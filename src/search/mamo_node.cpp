@@ -263,6 +263,7 @@ void MAMONode::GetSuccs(
 	std::vector<std::tuple<State, State, int> > invalid_action_samples;
 	*get_succs_time = GetTime();
 	bool duplicate_successor = false;
+	bool something_moved = false;
 	for (size_t i = 0; i < m_mapf_solution.size(); ++i)
 	{
 		const auto& moved = m_mapf_solution.at(i);
@@ -277,6 +278,7 @@ void MAMONode::GetSuccs(
 		if (moved.second.size() == 1 || moved.second.front().coord == moved.second.back().coord) {
 			continue;
 		}
+		something_moved = true;
 
 		// other movables to be considered as obstacles
 		std::vector<Object*> movable_obstacles;
@@ -296,7 +298,7 @@ void MAMONode::GetSuccs(
 		else
 		{
 			pickplace_result = false;
-			SMPL_INFO("Object %d is NOT graspable!", moved.first);
+			// SMPL_INFO("Object %d is NOT graspable!", moved.first);
 		}
 
 		push_result = tryPush(succ_object_centric_actions, succ_objects, succ_trajs, debug_actions, &invalid_action_samples, movable_obstacles, i, sim_time);
@@ -324,6 +326,10 @@ void MAMONode::GetSuccs(
 		m_new_constraints = true;
 	}
 	*get_succs_time = GetTime() - *get_succs_time;
+
+	if (!something_moved) {
+		SMPL_WARN("Nothing moved in the MAPF solution, so why did we expand the state?");
+	}
 }
 
 unsigned int MAMONode::ComputeMAMOPriorityOrig()
