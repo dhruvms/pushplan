@@ -256,7 +256,7 @@ bool MAMOSearch::done(MAMOSearchState *state)
 
 	auto start_state = node->GetCurrentStartState();
 	state->try_finalise = true;
-	return m_planner->FinalisePlan(node->kobject_states(), start_state, m_exec_traj);
+	return m_planner->FinalisePlan(node->kall_object_states(), start_state, m_exec_traj);
 }
 
 void MAMOSearch::extractRearrangements()

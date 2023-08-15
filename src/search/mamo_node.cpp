@@ -16,9 +16,17 @@ void MAMONode::InitAgents(
 	m_all_objects = all_objects;
 	for (size_t i = 0; i < agents.size(); ++i)
 	{
-		// if (std::find(reachable_ids.begin(), reachable_ids.end(), agents.at(i)->GetID()) != reachable_ids.end()) {
+		if (std::find(reachable_ids.begin(), reachable_ids.end(), agents.at(i)->GetID()) != reachable_ids.end()) {
 			this->addAgent(agents.at(i), i);
-		// }
+		}
+		else
+		{
+			// agents.at(i)->SetObjectPose(m_all_objects.poses.at(i).xyz, m_all_objects.poses.at(i).rpy);
+
+			auto o = agents.at(i)->GetObject();
+			ContPose pose(o->desc.o_x, o->desc.o_y, o->desc.o_z, o->desc.o_roll, o->desc.o_pitch, o->desc.o_yaw);
+			m_all_object_states.emplace_back(o->desc.id, o->Symmetric(), pose);
+		}
 	}
 }
 
@@ -506,15 +514,20 @@ void MAMONode::RemoveChild(MAMONode* child)
 
 size_t MAMONode::num_objects() const
 {
-	if (m_agents.size() != m_object_states.size()) {
-		throw std::runtime_error("Objects and object states size mismatch!");
-	}
-	return m_object_states.size();
+	// if (m_agents.size() != m_object_states.size()) {
+	// 	throw std::runtime_error("Objects and object states size mismatch!");
+	// }
+	return m_all_object_states.size();
 }
 
 const std::vector<ObjectState>& MAMONode::kobject_states() const
 {
 	return m_object_states;
+}
+
+const std::vector<ObjectState>& MAMONode::kall_object_states() const
+{
+	return m_all_object_states;
 }
 
 trajectory_msgs::JointTrajectory& MAMONode::robot_traj()
@@ -581,11 +594,12 @@ void MAMONode::addAgent(
 	// SMPL_INFO("Agent ID %d added to MAMONode!", agent->GetID());
 
 	assert(m_agents.back()->GetID() == m_all_objects.poses.at(pidx).id);
-	m_agents.back()->SetObjectPose(m_all_objects.poses.at(pidx).xyz, m_all_objects.poses.at(pidx).rpy);
+	// m_agents.back()->SetObjectPose(m_all_objects.poses.at(pidx).xyz, m_all_objects.poses.at(pidx).rpy);
 
 	auto o = m_agents.back()->GetObject();
 	ContPose pose(o->desc.o_x, o->desc.o_y, o->desc.o_z, o->desc.o_roll, o->desc.o_pitch, o->desc.o_yaw);
 	m_object_states.emplace_back(o->desc.id, o->Symmetric(), pose);
+	m_all_object_states.emplace_back(o->desc.id, o->Symmetric(), pose);
 }
 
 // void MAMONode::identifyRelevantMovables()
@@ -599,6 +613,7 @@ void MAMONode::resetAgents()
 {
 	m_agents.clear();
 	m_object_states.clear();
+	m_all_object_states.clear();
 }
 
 void MAMONode::SaveNode(unsigned int my_id,	unsigned int parent_id)

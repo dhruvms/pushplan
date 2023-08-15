@@ -76,6 +76,7 @@ public:
 
 	size_t num_objects() const;
 	const std::vector<ObjectState>& kobject_states() const;
+	const std::vector<ObjectState>& kall_object_states() const;
 	trajectory_msgs::JointTrajectory& robot_traj();
 	const trajectory_msgs::JointTrajectory& krobot_traj() const;
 	const MAMONode* kparent() const;
@@ -92,7 +93,7 @@ private:
 	comms::ObjectsPoses m_all_objects; // all object poses at node
 	std::vector<std::shared_ptr<Agent> > m_agents; // pointers to relevant objects
 	std::unordered_map<int, size_t> m_agent_map;
-	std::vector<ObjectState> m_object_states; // current relevant object states
+	std::vector<ObjectState> m_object_states, m_all_object_states; // current relevant object states
 	MAMOAction m_action_to_me; // used action details
 	trajectory_msgs::JointTrajectory m_robot_traj; // robot trajectory from parent to this node
 	std::vector<std::tuple<State, State, int> > m_debug_actions; // push start and end for viz purposes
@@ -151,7 +152,7 @@ struct EqualsObjects
 			return false;
 		}
 
-		return std::is_permutation(a->kobject_states().begin(), a->kobject_states().end(), b->kobject_states().begin());
+		return std::is_permutation(a->kall_object_states().begin(), a->kall_object_states().end(), b->kall_object_states().begin());
 	}
 };
 
