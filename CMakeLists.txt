@@ -33,6 +33,9 @@ find_package(catkin REQUIRED COMPONENTS
 find_package(smpl REQUIRED)
 find_package(comms REQUIRED)
 
+set(CMAKE_PREFIX_PATH "/home/dhruv/work/libs/libtorch")
+find_package(Torch REQUIRED)
+
 catkin_package(
 	CATKIN_DEPENDS
 	std_msgs
@@ -74,7 +77,7 @@ add_library(
 	src/utils/hash_manager.cpp
 	src/utils/geometry.cpp
 	src/utils/types.cpp)
-target_link_libraries(PUSHPLAN ${catkin_LIBRARIES} smpl::smpl) # -lprofiler
+target_link_libraries(PUSHPLAN ${catkin_LIBRARIES} smpl::smpl ${TORCH_LIBRARIES}) # -lprofiler
 
 add_executable(coop_plan test/coop_plan.cpp)
 target_link_libraries(coop_plan ${catkin_LIBRARIES} smpl::smpl PUSHPLAN)
@@ -91,3 +94,6 @@ target_link_libraries(gen_data ${catkin_LIBRARIES} smpl::smpl PUSHPLAN)
 add_executable(run_ompl test/run_ompl.cpp)
 target_include_directories(run_ompl SYSTEM PRIVATE ${OMPL_INCLUDE_DIRS})
 target_link_libraries(run_ompl ${catkin_LIBRARIES} ${OMPL_LIBRARIES} smpl::smpl PUSHPLAN)
+
+add_executable(torchtest test/torchtest.cpp)
+target_link_libraries(torchtest ${TORCH_LIBRARIES})
