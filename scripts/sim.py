@@ -466,12 +466,13 @@ class BulletSim:
 									specularColor=MOVEABLE_COLOUR)
 					sim_data['objs'][obj_id]['type'] = 1
 
-					alpha_factor = 0.5/len(sim_data['objs'][obj_id]['copies'])
-					for copy_num, obj_copy_id in enumerate(sim_data['objs'][obj_id]['copies']):
-						alpha = 1.0 - (alpha_factor * (copy_num + 1))
-						sim.changeVisualShape(obj_copy_id, -1,
-										rgbaColor=MOVEABLE_COLOUR + [alpha],
-										specularColor=MOVEABLE_COLOUR)
+					if (sim_data['objs'][obj_id]['copies']):
+						alpha_factor = 0.5/len(sim_data['objs'][obj_id]['copies'])
+						for copy_num, obj_copy_id in enumerate(sim_data['objs'][obj_id]['copies']):
+							alpha = 1.0 - (alpha_factor * (copy_num + 1))
+							sim.changeVisualShape(obj_copy_id, -1,
+											rgbaColor=MOVEABLE_COLOUR + [alpha],
+											specularColor=MOVEABLE_COLOUR)
 
 				if req.type[idx] == 999: # ooi
 					sim.changeVisualShape(obj_id, -1,
