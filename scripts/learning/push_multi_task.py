@@ -22,7 +22,7 @@ CB_IK = []
 CB_DISTS = []
 CB_COMBINED = []
 
-def draw_checkpoint(model, model_name, epoch=None, suffix=None):
+def draw_checkpoint(model, model_name, epoch=None, suffix=None, threshold=0.05):
 	device = DEVICE if suffix is None else torch.device("cpu")
 
 	test_objs = TEST_OBJ_GRID_NUM**2
@@ -40,7 +40,7 @@ def draw_checkpoint(model, model_name, epoch=None, suffix=None):
 			ax_col = o % TEST_OBJ_GRID_NUM
 
 			pidx = np.random.randint(X_test.shape[0])
-			obj_props = X_test[pidx, :-2].cpu().numpy()[None, :]
+			obj_props = X_test[pidx, :-3].cpu().numpy()[None, :]
 
 			draw_base_rect(AX_IK[ax_row, ax_col])
 			draw_base_rect(AX_DISTS[ax_row, ax_col])
@@ -56,14 +56,14 @@ def draw_checkpoint(model, model_name, epoch=None, suffix=None):
 
 			obj_props_stack = np.repeat(obj_props, num_test_pts, axis=0)
 			# test_input = np.hstack([obj_props_stack, desired_dirs, desired_dists])
-			test_input = np.hstack([obj_props_stack, delta_x_test[:, None], delta_y_test[:, None]])
+			test_input = np.hstack([obj_props_stack, delta_x_test[:, None], delta_y_test[:, None], threshold * np.ones(obj_props_stack.shape[0])[:, None]])
 			test_input_torch = torch.tensor(test_input, dtype=torch.float32).to(device)
 
 			preds = model(test_input_torch)
 			preds = preds.cpu().numpy()
 			ik_preds = preds[:, 0].reshape(xx.shape)
 			dist_preds = preds[:, 1].reshape(xx.shape)
-			combined_preds = np.maximum(dist_preds, ik_preds) * ik_preds * 100
+			combined_preds = dist_preds * ik_preds
 
 			contour_ik = AX_IK[ax_row, ax_col].contourf(xx, yy, ik_preds, cmap=plt.cm.Greens, alpha=.8)
 			AX_IK[ax_row, ax_col].set_xlim(-TABLE_SIZE[0] - 0.01, TABLE_SIZE[0] + 0.01)
@@ -149,11 +149,13 @@ def model_train_multi_head(model, model_name, X_train, y_train, loss_mask_train,
 
 				# forward pass
 				combined_pred = model(X_batch)
-				bce_loss = bce(combined_pred[:, 0], y_batch[:, 0])
-				bce_loss = bce_loss * loss_mask_batch[:, 0]
-				mse_loss = mse(combined_pred[:, 1], y_batch[:, 1])
-				mse_loss = mse_loss * loss_mask_batch[:, 1]
-				loss = bce_loss + mse_loss
+				bce_loss_ik = bce(combined_pred[:, 0], y_batch[:, 0])
+				bce_loss_ik = bce_loss_ik * loss_mask_batch[:, 0]
+				# mse_loss = mse(combined_pred[:, 1], y_batch[:, 1])
+				# mse_loss = mse_loss * loss_mask_batch[:, 1]
+				bce_loss_disc = bce(combined_pred[:, 1], y_batch[:, 1])
+				bce_loss_disc = bce_loss_disc * loss_mask_batch[:, 1]
+				loss = bce_loss_ik + bce_loss_disc
 				loss = loss.mean()
 
 				# backward pass
@@ -167,8 +169,8 @@ def model_train_multi_head(model, model_name, X_train, y_train, loss_mask_train,
 		with torch.no_grad():
 			combined_pred_eval = model(X_val)
 			eval_ik_loss = F.binary_cross_entropy(combined_pred_eval[:, 0], y_val[:, 0], reduction='none') * loss_mask_val[:, 0]
-			eval_dist_loss = F.mse_loss(combined_pred_eval[:, 1], y_val[:, 1], reduction='none') * loss_mask_val[:, 1]
-			eval_loss = eval_ik_loss + eval_dist_loss
+			eval_disc_loss = F.binary_cross_entropy(combined_pred_eval[:, 1], y_val[:, 1], reduction='none') * loss_mask_val[:, 1]
+			eval_loss = eval_ik_loss + eval_disc_loss
 			eval_loss = eval_loss.mean().cpu().numpy()
 			if eval_loss < best_eval_loss:
 				# print('\tAccuracy improved at epoch {}'.format(epoch))
@@ -179,19 +181,19 @@ def model_train_multi_head(model, model_name, X_train, y_train, loss_mask_train,
 				print('Training stopped at epoch {}. Last update was at epoch {}.'.format(epoch, last_update_epoch))
 				break
 
-		# if (epoch % 50 == 0):
-		# 	draw_checkpoint(model, model_name, epoch=epoch)
+		if (epoch % 50 == 0):
+			draw_checkpoint(model, model_name, epoch=epoch)
 
 	# restore model and return best accuracy
 	model.eval()
 	model.to(torch.device("cpu"))
 	with torch.no_grad():
-		draw_checkpoint(model1, model_name, epoch=-1, suffix='-inputpushto-end-test')
-		torch.save(model.state_dict(), 'models/' + model_name + '_end.pth')
+		draw_checkpoint(model1, model_name, epoch=-1, suffix='-double_prob-end-test')
+		torch.save(model.state_dict(), 'models/' + model_name + '_end-double_prob.pth')
 
 		model.load_state_dict(best_weights)
-		torch.save(model.state_dict(), 'models/' + model_name + '_best.pth')
-		draw_checkpoint(model1, model_name, epoch=-1, suffix='-inputpushto-best-test')
+		torch.save(model.state_dict(), 'models/' + model_name + '_best-double_prob.pth')
+		draw_checkpoint(model1, model_name, epoch=-1, suffix='-double_prob-best-test')
 
 		x_sample = X_val[0].unsqueeze(0).to(torch.device("cpu"))
 		print()
@@ -202,11 +204,11 @@ def model_train_multi_head(model, model_name, X_train, y_train, loss_mask_train,
 
 		# Use torch.jit.trace to generate a torch.jit.ScriptModule via tracing.
 		traced_model = torch.jit.trace(model, (x_sample))
-		torch.jit.save(traced_model, 'models/' + model_name + '_best_traced.pth')
+		torch.jit.save(traced_model, 'models/' + model_name + '_best_traced-double_prob.pth')
 
-		model.load_state_dict(torch.load('models/' + model_name + '_end.pth'))
+		model.load_state_dict(torch.load('models/' + model_name + '_end-double_prob.pth'))
 		traced_model = torch.jit.trace(model, (x_sample))
-		torch.jit.save(traced_model, 'models/' + model_name + '_end_traced.pth')
+		torch.jit.save(traced_model, 'models/' + model_name + '_end_traced-double_prob.pth')
 
 	return best_eval_loss
 
@@ -228,8 +230,8 @@ if __name__ == '__main__':
 	y = copy.deepcopy(all_data.iloc[:, [i for i in list(range(24, 26)) + [-1]]])
 	# binarise ik success labels
 	y.loc[y['r'] > 0, 'r'] = 2 # push IK failed => temporarily class 2
-	y.loc[y['r'] <= 0, 'r'] = 0 # push IK succeeded => class 0
-	y.loc[y['r'] == 2, 'r'] = 1 # push IK failed => class 1
+	y.loc[y['r'] <= 0, 'r'] = 1 # push IK succeeded => class 1
+	y.loc[y['r'] == 2, 'r'] = 0 # push IK failed => class 0
 
 	# compute distance between desired and achieved poses in polar coordinates
 	final_pose_rot = all_data.iloc[:, 29:38].values.reshape(all_data.shape[0], 3, 3).transpose(0, 2, 1)
@@ -240,37 +242,68 @@ if __name__ == '__main__':
 	ang_dist = shortest_angle_dist(y.loc[:, 'm_dir_ach'], X.loc[:, 'm_dir_des'])
 	polar_dist = y.loc[:, 'm_dist_ach']**2 + X.loc[:, 'm_dist_des']**2 - 2*y.loc[:, 'm_dist_ach']*X.loc[:, 'm_dist_des']*np.cos(ang_dist)
 	polar_dist = np.sqrt(polar_dist)
-	pose_dist = polar_dist + yaw_discrepancy
+	pose_dist = polar_dist
 	y.insert(loc=3, column='pose_dist', value=pose_dist)
 
 	X = X.drop(['m_dir_des', 'm_dist_des'], axis=1)
 	y = y.drop(['m_dir_ach', 'm_dist_ach'], axis=1)
 
+	# augment data
+	no_disc_rows = all_data['r'] != 0
+	X_no_disc = copy.deepcopy(X[no_disc_rows])
+	y_no_disc = copy.deepcopy(y[no_disc_rows])
+	y_no_disc = y_no_disc.astype(int)
+
+	disc_rows = all_data['r'] == 0
+	X_disc = copy.deepcopy(X[disc_rows])
+	y_disc = copy.deepcopy(y[disc_rows])
+
+	h, disc_levels = np.histogram(y_disc.iloc[:,1], bins=20)
+	X_disc_aug = None
+	y_disc_aug = None
+	for l in disc_levels:
+		y_new = (y_disc.iloc[:, 1] < l).astype(int)
+		y_new = np.hstack([y_disc.iloc[:, 0].values[:, None], y_new.values[:, None]])
+		X_new = np.hstack([X_disc, l * np.ones(X_disc.shape[0])[:, None]])
+
+		if X_disc_aug is None:
+			X_disc_aug = X_new
+			y_disc_aug = y_new
+		else:
+			X_disc_aug = np.vstack([X_disc_aug, X_new])
+			y_disc_aug = np.vstack([y_disc_aug, y_new])
+
+	no_disc_new_col = np.random.choice(disc_levels, size=X_no_disc.shape[0]) * np.ones(X_no_disc.shape[0])
+	X_no_disc_new_col = np.hstack([X_no_disc, no_disc_new_col[:, None]])
+
+	X_all = np.vstack([X_disc_aug, X_no_disc_new_col])
+	y_all = np.vstack([y_disc_aug, y_no_disc])
+
 	# compute loss mask - task 2 (distance/discrepancy prediction) is only if we sucessfully simulated
-	task1_loss = np.ones(all_data.shape[0])
-	task2_loss = all_data['r'] == 0
-	task2_loss = task2_loss.values.astype(np.int)
-	loss_mask = np.vstack([task1_loss, task2_loss]).transpose()
-	y = np.hstack([y.values, loss_mask])
+	loss_mask = np.ones(y_all.shape)
+	loss_mask[X_disc.shape[0]:X_disc_aug.shape[0], 0] = 0.0
+	loss_mask[X_disc_aug.shape[0]:, 1] = 0.0
+	y_all = np.hstack([y_all, loss_mask])
 
 	# Convert to 2D PyTorch tensors
-	X = torch.tensor(X.values, dtype=torch.float32).to(DEVICE)
-	y = torch.tensor(y, dtype=torch.float32).to(DEVICE)
+	X_torch = torch.tensor(X_all, dtype=torch.float32).to(DEVICE)
+	y_torch = torch.tensor(y_all, dtype=torch.float32).to(DEVICE)
 	# train-test split: Hold out the test set for final model evaluation
-	X_train, X_test, y_train, y_test = train_test_split(X, y, train_size=0.95, shuffle=True)
+	X_train, X_test, y_train, y_test = train_test_split(X_torch, y_torch, train_size=0.75, shuffle=True)
 	loss_mask_train = y_train[:, -2:]
 	y_train = y_train[:, :-2]
 	loss_mask_test = y_test[:, -2:]
 	y_test = y_test[:, :-2]
 
 	# network params
-	in_dim = X.shape[1]
+	in_dim = X.shape[1]-1
 	h_sizes = [
 				# [32, 32, 32],
-				[256, 256, 256],
+				# [256, 256, 256],
 				# [32, 256, 32],
 				# [128, 64, 32],
 				# [64, 32, 64]
+				[128, 256, 128],
 			]
 	activation = 'relu'
 
@@ -279,7 +312,7 @@ if __name__ == '__main__':
 		print("Train model: " + model_name)
 
 		layers = len(h_sizes[H]) + 1
-		model1 = PushSuccessNet()
+		model1 = PushSuccessNet(threshold=True)
 		model1.initialise(in_dim, activation=activation, layers=layers, h_sizes=h_sizes[H])
 		loss = model_train_multi_head(model1, model_name, X_train, y_train, loss_mask_train, X_test, y_test, loss_mask_test)
 		# print(model1)

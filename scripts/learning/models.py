@@ -51,9 +51,10 @@ class BCNet(nn.Module):
 		return self.sigmoid(self.output(self.layers(x)))
 
 class PushSuccessNet(nn.Module):
-	def __init__(self):
+	def __init__(self, threshold=False):
 		super().__init__()
 		self.initialised = False
+		self.threshold = threshold
 
 	def initialise(self, in_dim, activation='relu', layers=None, h_sizes=None, *args, **kwargs):
 		if self.initialised:
@@ -62,25 +63,53 @@ class PushSuccessNet(nn.Module):
 		if layers is not None:
 			assert h_sizes is not None
 			assert len(h_sizes) == layers-1
-			self.h_sizes = [in_dim] + copy.deepcopy(h_sizes)
+			self.in_dim = in_dim
+			self.in_dim += 1 if self.threshold else 0
+			self.h_sizes = [self.in_dim] + copy.deepcopy(h_sizes)
 
 			self.layers = nn.Sequential(*[one_layer(self.h_sizes[i-1], self.h_sizes[i], activation=activation, *args, **kwargs) for i in range(1, layers)])
-
 			self.ik_task = nn.Linear(self.h_sizes[-1], 1, *args, **kwargs)
-			self.dist_task = nn.Linear(self.h_sizes[-1], 1, *args, **kwargs)
-		else:
-			self.layers = one_layer(in_dim, in_dim, activation)
 
-			self.ik_task = nn.Linear(in_dim, 1, *args, **kwargs)
-			self.dist_task = nn.Linear(in_dim, 1, *args, **kwargs)
+			if self.threshold:
+				self.dist_task = nn.Sequential(
+									nn.Linear(self.h_sizes[-1]+1, self.h_sizes[-1], *args, **kwargs),
+									nn.ReLU(),
+									nn.Linear(self.h_sizes[-1], 1, *args, **kwargs)
+								)
+			else:
+				self.dist_task = nn.Linear(self.h_sizes[-1], 1, *args, **kwargs)
+		else:
+			self.layers = one_layer(self.in_dim, self.in_dim, activation)
+			self.ik_task = nn.Linear(self.in_dim, 1, *args, **kwargs)
+
+			if self.threshold:
+				self.dist_task = nn.Sequential(
+									nn.Linear(self.in_dim+1, self.in_dim, *args, **kwargs),
+									nn.ReLU(),
+									nn.Linear(self.in_dim, 1, *args, **kwargs)
+								)
+			else:
+				self.dist_task = nn.Linear(self.in_dim, 1, *args, **kwargs)
+
 		self.sigmoid = nn.Sigmoid() # for the IK success probability head
 		self.relu = nn.ReLU() # for the distance between achieved and desired poses
 
 		self.initialised = True
 
 	def forward(self, x):
-		ik = self.sigmoid(self.ik_task(self.layers(x)))
-		dist = self.relu(self.dist_task(self.layers(x)))
+		ik = None
+		dist = None
+		if self.threshold:
+			out = x[:, :-1]
+			out = self.layers(out)
+			ik = self.sigmoid(self.ik_task(out))
+
+			out = torch.cat([out, x[:, -1].unsqueeze(-1)], 1)
+			dist = self.sigmoid(self.dist_task(out))
+		else:
+			ik = self.sigmoid(self.ik_task(self.layers(x)))
+			dist = self.relu(self.dist_task(self.layers(x)))
+
 		output = torch.cat([ik, dist], 1)
 		return output
 

@@ -132,9 +132,10 @@ def get_euler_from_R_tensor(R, deg=False):
 def make_rotation_matrix(rotvec):
 	return np.reshape(rotvec, (3, 3)).transpose()
 
-def process_data():
+def process_data(filename=None):
 	# Read data
-	data = pd.read_csv("../../dat/push_data/push_data_with_final_object_pose.csv")
+	datafile = filename if filename is not None else "../../dat/push_data/push_data_with_final_object_pose.csv"
+	data = pd.read_csv(datafile)
 
 	# center object coordinates at origin
 	data.loc[:, 'o_ox'] -= TABLE[0]
