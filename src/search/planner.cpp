@@ -134,6 +134,8 @@ bool Planner::Init(const std::string& scene_file, int scene_id, bool ycb)
 	}
 	m_robot->VizCC();
 
+	setupTorch();
+
 	setupSim(m_sim.get(), m_robot->GetStartState()->joint_state, m_ooi->GetID());
 	m_violation = 0x00000008;
 	m_distD = std::uniform_real_distribution<double>(0.0, 1.0);
@@ -389,6 +391,34 @@ bool Planner::setupProblem()
 	}
 
 	return true;
+}
+
+void Planner::setupTorch()
+{
+	double ox, oy, oz, sx, sy, sz;
+	m_sim->GetShelfParams(ox, oy, oz, sx, sy, sz);
+
+	std::vector<double> push_locs;
+	for (double dx = -sx/2; dx <= sx/2; dx += RES)
+	{
+		for (double dy = -sy/2; dy <= sy/2; dy += RES)
+		{
+			push_locs.push_back(dx);
+			push_locs.push_back(dy);
+		}
+	}
+	std::vector<int64_t> push_locs_size = {(int)push_locs.size()/2, 2};
+	m_tensoroptions = std::make_shared<at::TensorOptions>(at::TensorOptions(at::ScalarType::Double));
+	m_push_locs = std::make_shared<at::Tensor>(torch::from_blob(push_locs.data(), at::IntList(push_locs_size), *m_tensoroptions));
+	*m_push_locs = m_push_locs->toType(at::kFloat);
+
+	std::string torch_model_path;
+	m_ph.getParam("model_file", torch_model_path);
+	m_push_model = std::make_shared<torch::jit::script::Module>(torch::jit::load(torch_model_path));
+
+	for (auto& a: m_agents) {
+		a->InitTorch(m_tensoroptions, m_push_locs, m_push_model, ox + sx/2, oy + sy/2, oz, sx/2, sy/2);
+	}
 }
 
 bool Planner::TryExtract()

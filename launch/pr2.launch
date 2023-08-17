@@ -53,6 +53,9 @@
         <!-- 3. Scene -->
         <param name="scene_id" type="string" value="100002" />
         <param name="allowed_planning_time" value="2.0"/>
+
+        <!-- torch model -->
+        <param name="model_file" type="str" value="$(find pushplan)/scripts/learning/models/[128,256,128]_best_traced-double_prob.pth" />
     </node>
 
     <node name="joint_state_publisher" pkg="joint_state_publisher" type="joint_state_publisher"/>

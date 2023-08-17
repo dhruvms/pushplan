@@ -11,6 +11,7 @@
 
 #include <ros/ros.h>
 #include <std_srvs/Empty.h>
+#include <torch/script.h> // One-stop header.
 
 #include <string>
 #include <vector>
@@ -171,6 +172,12 @@ private:
 	std::vector<size_t> m_priorities;
 	void prioritise();
 	void writeState(const std::string& prefix);
+
+	// torch things
+	std::shared_ptr<at::TensorOptions> m_tensoroptions;
+	std::shared_ptr<at::Tensor> m_push_locs;
+	std::shared_ptr<torch::jit::script::Module> m_push_model;
+	void setupTorch();
 };
 
 } // namespace clutter
