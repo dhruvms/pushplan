@@ -19,7 +19,6 @@
 #include <smpl/distance_map/euclid_distance_map.h>
 #include <smpl/ros/propagation_distance_field.h>
 #include <eigen_conversions/eigen_msg.h>
-#include <leatherman/print.h>
 #include <moveit_msgs/PlanningScene.h>
 #include <moveit_msgs/GetMotionPlan.h>
 

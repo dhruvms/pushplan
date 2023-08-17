@@ -142,6 +142,36 @@ void Agent::ComputeNGRComplement(
 	}
 }
 
+void Agent::InitTorch(
+	const std::shared_ptr<at::TensorOptions> &tensoroptions,
+	const std::shared_ptr<at::Tensor> &push_locs,
+	const std::shared_ptr<torch::jit::script::Module> &push_model,
+	double table_ox, double table_oy, double table_oz,
+	double table_sx, double table_sy)
+{
+	m_tensoroptions = tensoroptions;
+	m_push_locs = push_locs;
+	m_push_model = push_model;
+	m_table_ox = table_ox;
+	m_table_oy = table_oy;
+	m_table_oz = table_oz;
+	m_table_sx = table_sx;
+	m_table_sy = table_sy;
+
+	std::vector<double> obj_props =
+		{	(double)m_obj.Shape()/2,
+			m_obj_desc.x_size, m_obj_desc.y_size, m_obj_desc.z_size,
+			m_obj_desc.mass, m_obj_desc.mu
+		};
+	std::vector<int64_t> obj_props_size = {1, 6};
+	m_obj_props = torch::from_blob(obj_props.data(), at::IntList(obj_props_size), *m_tensoroptions);
+	m_obj_props = m_obj_props.toType(at::kFloat);
+	m_obj_props = m_obj_props.repeat( { m_push_locs->size(0), 1 } );
+
+	m_ph.getParam("mapf/cbs/disc_thresh", m_push_thresh);
+	m_thresh_vec = torch::ones({ m_push_locs->size(0), 1 }) * m_push_thresh;
+}
+
 void Agent::ResetInvalidPushes(
 	const std::vector<std::pair<Coord, Coord> >* invalids_G,
 	const std::map<Coord, int, coord_compare>* invalids_L)
@@ -180,6 +210,9 @@ bool Agent::SatisfyPath(
 	if (to_avoid != nullptr) {
 		m_lattice->AvoidAgents(*to_avoid);
 	}
+
+	// run learned model to compute cell costs
+	computeCellCosts();
 
 	std::vector<int> solution;
 	int solcost;
@@ -564,6 +597,38 @@ auto Agent::makePathVisualization()
 	}
 
 	return ma;
+}
+
+void Agent::computeCellCosts()
+{
+	std::vector<double> obj_pose =
+		{
+			m_obj_desc.o_x - m_table_ox,
+			m_obj_desc.o_y - m_table_oy,
+			m_obj_desc.o_z - m_table_oz,
+			std::atan2(std::sin(m_obj_desc.o_yaw), std::cos(m_obj_desc.o_yaw))
+		};
+	std::vector<int64_t> obj_pose_size = {1, 4};
+	at::Tensor obj_pose_t = torch::from_blob(obj_pose.data(), at::IntList(obj_pose_size), *m_tensoroptions);
+	obj_pose_t = obj_pose_t.toType(at::kFloat);
+	obj_pose_t = obj_pose_t.repeat( { m_push_locs->size(0), 1 } );
+
+	at::Tensor model_input = torch::cat( { obj_pose_t, m_obj_props }, -1);
+	model_input = torch::cat( { model_input, *m_push_locs }, -1);
+	model_input = torch::cat( { model_input, m_thresh_vec }, -1);
+
+	std::vector<torch::jit::IValue> inputs;
+	inputs.push_back(model_input);
+
+	// Execute the model and turn its output into a tensor.
+	at::Tensor output = m_push_model->forward(inputs).toTensor();
+
+	auto rows = torch::arange(0, output.size(0), torch::kLong);
+	auto cols = torch::ones(output.size(0));
+	cols = cols.toType(at::kLong);
+	at::Tensor cell_cost = (1 - output.index({rows, cols})) * (1 - output.index({rows, cols * 0})) * CELL_COST_FACTOR;
+
+	m_lattice->SetCellCosts(cell_cost, m_table_ox, m_table_oy, m_table_sx, m_table_sy);
 }
 
 } // namespace clutter

@@ -8,6 +8,7 @@
 #include <boost/geometry.hpp>
 #include <boost/geometry/geometries/point.hpp>
 #include <boost/geometry/index/rtree.hpp>
+#include <torch/script.h> // One-stop header.
 
 #include <vector>
 
@@ -37,6 +38,10 @@ public:
 	// const bgi::rtree<value, bgi::quadratic<8> >& GetInvalidPushes() const;
 	void AddHallucinatedConstraint(const Coord &c);
 	int InvalidPushCount(const Coord &c);
+	void SetCellCosts(
+		const at::Tensor &cell_costs,
+		double table_ox, double table_oy,
+		double table_sx, double table_sy);
 
 	void GetSuccs(
 		int state_id,

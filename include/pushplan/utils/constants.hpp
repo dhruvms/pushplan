@@ -109,6 +109,8 @@ extern int SAMPLES;
 
 extern double GRIPPER_WIDTH_2;
 
+extern int CELL_COST_FACTOR;
+
 } // namespace clutter
 
 

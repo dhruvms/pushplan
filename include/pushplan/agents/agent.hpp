@@ -11,6 +11,7 @@
 #include <smpl/distance_map/distance_map_interface.h>
 #include <smpl/occupancy_grid.h>
 #include <ros/ros.h>
+#include <torch/script.h> // One-stop header.
 
 #include <vector>
 #include <string>
@@ -53,6 +54,14 @@ public:
 	void ComputeNGRComplement(
 		double ox, double oy, double oz,
 		double sx, double sy, double sz, bool vis=false);
+
+	// libtorch
+	void InitTorch(
+		const std::shared_ptr<at::TensorOptions> &tensoroptions,
+		const std::shared_ptr<at::Tensor> &push_locs,
+		const std::shared_ptr<torch::jit::script::Module> &push_model,
+		double table_ox, double table_oy, double table_oz,
+		double table_sx, double table_sy);
 
 	void ResetInvalidPushes(
 		const std::vector<std::pair<Coord, Coord> >* invalids_G,
@@ -158,6 +167,16 @@ private:
 
 	auto makePathVisualization()
 		-> std::vector<smpl::visual::Marker>;
+
+	// libtorch
+	std::shared_ptr<at::TensorOptions> m_tensoroptions;
+	std::shared_ptr<at::Tensor> m_push_locs;
+	std::shared_ptr<torch::jit::script::Module> m_push_model;
+	at::Tensor m_obj_props, m_thresh_vec;
+	double m_table_ox, m_table_oy, m_table_oz, m_table_sx, m_table_sy;
+	double m_push_thresh;
+
+	void computeCellCosts();
 };
 
 } // namespace clutter
