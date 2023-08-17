@@ -147,6 +147,20 @@ int AgentLattice::InvalidPushCount(const Coord &c)
 	// }
 }
 
+void AgentLattice::SetCellCosts(
+	const at::Tensor &cell_costs,
+	double table_ox, double table_oy,
+	double table_sx, double table_sy)
+{
+	m_cell_costs = cell_costs;
+	m_table_ox = table_ox;
+	m_table_oy = table_oy;
+	m_table_sx = table_sx;
+	m_table_sy = table_sy;
+	m_x_offset = int((2 * m_table_sy)/RES);
+	m_use_push_model = true;
+}
+
 void AgentLattice::GetSuccs(
 	int state_id,
 	std::vector<int>* succ_ids,
@@ -452,9 +466,19 @@ unsigned int AgentLattice::cost(
 	const LatticeState* s1,
 	const LatticeState* s2)
 {
-	double dist = ManhattanDist(s1->coord, s2->coord);
-	dist = dist == 0.0 ? 1.0 : dist;
-	return dist;
+	unsigned int cost = ManhattanDist(s1->coord, s2->coord);
+	cost = cost == 0 ? 1 : cost;
+
+	if (m_use_push_model)
+	{
+		double x = s2->state.at(0) - m_table_ox + m_table_sx;
+		double y = s2->state.at(1) - m_table_oy + m_table_sy;
+		int idx = m_x_offset * int(x/RES) + int(y/RES);
+
+		cost += m_cell_costs[idx].item<double>();
+	}
+
+	return cost;
 }
 
 unsigned int AgentLattice::cost_gaussian_penalty(

@@ -71,6 +71,12 @@ private:
 	int m_cbs_id, m_max_time;
 	std::unordered_set<int> m_to_avoid;
 
+	// libtorch
+	double m_table_ox, m_table_oy, m_table_sx, m_table_sy;
+	int m_x_offset;
+	at::Tensor m_cell_costs;
+	bool m_use_push_model = false;
+
 	// std::set<Coord, coord_compare> m_invalid_pushes;
 	typedef bg::model::point<int, 2, bg::cs::cartesian> point;
 	typedef std::pair<point, int> value;
