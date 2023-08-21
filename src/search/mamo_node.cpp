@@ -174,7 +174,7 @@ bool MAMONode::tryPush(
 		PushResult push_failure;
 		std::tuple<State, State, int> debug_action;
 		double sim_time_push = 0.0;
-		if (m_robot->PlanPush(this->GetCurrentStartState(), m_agents.at(m_agent_map[moved.first]).get(), push, movable_obstacles, m_all_objects, 1.0, result, push_failure, debug_action, sim_time_push))
+		if (m_robot->PlanPush(this->GetCurrentStartState(), m_agents.at(m_agent_map[moved.first]).get(), push, movable_obstacles, m_all_objects, result, push_failure, debug_action, sim_time_push))
 		{
 			// valid push found!
 			MAMOAction action(MAMOActionType::PUSH, moved.first);

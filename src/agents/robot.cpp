@@ -2219,7 +2219,6 @@ bool Robot::PlanPush(
 	std::vector<double> *start_state,
 	Agent* object, const std::vector<double>& push,
 	const std::vector<Object*>& other_movables,	const comms::ObjectsPoses& curr_scene,
-	const double& push_frac,
 	comms::ObjectsPoses& result_scene,
 	PushResult& push_result,
 	std::tuple<State, State, int>& debug_action,
@@ -2394,8 +2393,8 @@ bool Robot::PlanPush(
 	trajectory_msgs::JointTrajectory push_action;
 	// 1. get push action trajectory via inverse kinematics to end point
 	// compute push action end pose
-	push_end_pose.translation().x() += std::cos(push_at_angle) * push_dist * push_frac + (m_distG(m_rng));
-	push_end_pose.translation().y() += std::sin(push_at_angle) * push_dist * push_frac + (m_distG(m_rng));
+	push_end_pose.translation().x() += std::cos(push_at_angle) * push_dist + (m_distG(m_rng));
+	push_end_pose.translation().y() += std::sin(push_at_angle) * push_dist + (m_distG(m_rng));
 	// SV_SHOW_INFO_NAMED("push_end_pose", smpl::visual::MakePoseMarkers(
 	// 	push_end_pose, m_grid_i->getReferenceFrame(), "push_end_pose"));
 	debug_action_end = { push_end_pose.translation().x(), push_end_pose.translation().y() };
@@ -4119,11 +4118,7 @@ bool Robot::SavePushDebugData(int scene_id)
 	STATS.close();
 }
 
-int Robot::getPushIdx(double push_frac)
-{
-	if (push_frac == 1.0) {
-		return 0;
-	}
+	STATS.close();
 }
 
 void Robot::addPushToDB(

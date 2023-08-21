@@ -117,7 +117,6 @@ public:
 		Agent* object, const std::vector<double>& push,
 		const std::vector<Object*>& other_movables,
 		const comms::ObjectsPoses& curr_scene,
-		const double& push_frac,
 		comms::ObjectsPoses& result_scene,
 		PushResult& push_result,
 		std::tuple<State, State, int> &debug_action,
@@ -435,7 +434,6 @@ private:
 		std::set<std::vector<double> >& spheres);
 	void voxeliseTrajectory();
 
-	int getPushIdx(double push_frac);
 	void addPushToDB(
 		Object* o, const Coord &goal,
 		const comms::ObjectsPoses &init_scene,
