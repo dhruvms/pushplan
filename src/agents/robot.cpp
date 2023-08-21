@@ -234,8 +234,12 @@ bool Robot::Setup()
 	m_ph.getParam("robot/pushing/plan_time", m_plan_push_time);
 	m_ph.param<double>("robot/pushing/control/dt", m_dt, 0.01);
 	m_ph.param<double>("robot/pushing/control/T", m_push_T, 3.0);
+
+	// moveit Profiling
 	m_ph.param<double>("robot/vel_scale", m_vel_scale, 0.05);
 	m_ph.param<double>("robot/acc_scale", m_acc_scale, 1.0);
+	robot_model_loader::RobotModelLoader robot_model_loader("/robot_description");
+	m_moveit_robot_model = robot_model_loader.getModel();
 
 	m_vis_pub = m_nh.advertise<visualization_msgs::Marker>( "/visualization_marker", 10);
 
@@ -1837,8 +1841,6 @@ PushResult Robot::computePushPath(
 
 void Robot::profileTrajectoryMoveIt(trajectory_msgs::JointTrajectory& traj)
 {
-	robot_model_loader::RobotModelLoader robot_model_loader("/robot_description");
-	m_moveit_robot_model = robot_model_loader.getModel();
 	m_moveit_robot_state.reset(new moveit::core::RobotState(m_moveit_robot_model));
 	m_moveit_trajectory_ptr.reset(new robot_trajectory::RobotTrajectory(m_moveit_robot_model, "right_arm"));
 
