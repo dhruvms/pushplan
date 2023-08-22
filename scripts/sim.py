@@ -752,6 +752,7 @@ class BulletSim:
 	def sim_pushes_job(self, sim_id, sim, retvals, params):
 		sim_data = self.sim_datas[sim_id]
 		robot_id = sim_data['robot_id']
+		table_id = sim_data['table_id']
 		req = params[0]
 
 		num_pushes = len(req.pushes)
@@ -859,6 +860,18 @@ class BulletSim:
 			self.holdPosition(sim_id, simulator=sim)
 
 			objs_curr = self.getObjects(sim_id, simulator=sim)
+			for obj_id in sim_data['objs']:
+				if obj_id in table_id or not sim_data['objs'][obj_id]['movable']:
+					continue
+
+				closest_pts = sim.getClosestPoints(obj_id, robot_id, PUSH_END_THRESH)
+				if len(closest_pts) > 0:
+					violation_flag = True
+					break
+
+			if (violation_flag):
+				continue # to next push
+
 			action_interactions = []
 			for i in range(2 * int(HZ)):
 				sim.stepSimulation()

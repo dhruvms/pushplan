@@ -15,6 +15,7 @@ HZ = 140.0
 FALL_POS_THRESH = 0.35 # float('inf')
 FALL_VEL_THRESH = 1.0 # float('inf')
 CONTACT_THRESH = 1e-9
+PUSH_END_THRESH = 0.02
 
 YCB_OBJECTS = {
 	2: '002_master_chef_can',
