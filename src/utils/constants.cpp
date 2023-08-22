@@ -69,4 +69,4 @@ int clutter::SAMPLES;
 
 double clutter::GRIPPER_WIDTH_2 = 0.045;
 
-int clutter::CELL_COST_FACTOR = 1000;
+int clutter::CELL_COST_FACTOR = 10;

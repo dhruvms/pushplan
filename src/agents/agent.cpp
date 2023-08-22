@@ -67,6 +67,9 @@ bool Agent::Init()
 {
 	m_init.t = 0;
 	m_init.hc = 0;
+	m_init.torch_cost = -1;
+	m_init.goal_cost = -1;
+	m_init.is_goal = false;
 	m_init.state.clear();
 	m_init.state = { 	m_obj_desc.o_x, m_obj_desc.o_y, m_obj_desc.o_z,
 						m_obj_desc.o_roll, m_obj_desc.o_pitch, m_obj_desc.o_yaw };
@@ -211,8 +214,8 @@ bool Agent::SatisfyPath(
 		m_lattice->AvoidAgents(*to_avoid);
 	}
 
-	// run learned model to compute cell costs
-	computeCellCosts();
+	// // run learned model to compute cell costs
+	// computeCellCosts();
 
 	std::vector<int> solution;
 	int solcost;
@@ -236,6 +239,9 @@ bool Agent::InitPP()
 	m_t = 0;
 	m_init.t = 0;
 	m_init.hc = 0;
+	m_init.torch_cost = -1;
+	m_init.goal_cost = -1;
+	m_init.is_goal = false;
 	m_init.state.clear();
 	m_init.state = { 	m_obj_desc.o_x, m_obj_desc.o_y, m_obj_desc.o_z,
 						m_obj_desc.o_roll, m_obj_desc.o_pitch, m_obj_desc.o_yaw };
@@ -626,7 +632,7 @@ void Agent::computeCellCosts()
 	auto rows = torch::arange(0, output.size(0), torch::kLong);
 	auto cols = torch::ones(output.size(0));
 	cols = cols.toType(at::kLong);
-	at::Tensor cell_cost = (1 - output.index({rows, cols})) * (1 - output.index({rows, cols * 0})) * CELL_COST_FACTOR;
+	at::Tensor cell_cost = (1 - (output.index({rows, cols}) * output.index({rows, cols * 0}))) * CELL_COST_FACTOR;
 
 	m_lattice->SetCellCosts(cell_cost, m_table_ox, m_table_oy, m_table_sx, m_table_sy);
 }

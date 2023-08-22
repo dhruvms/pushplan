@@ -76,6 +76,7 @@ private:
 	int m_x_offset;
 	at::Tensor m_cell_costs;
 	bool m_use_push_model = false;
+	void computeTorchCost(LatticeState* s);
 
 	// std::set<Coord, coord_compare> m_invalid_pushes;
 	typedef bg::model::point<int, 2, bg::cs::cartesian> point;
@@ -124,12 +125,18 @@ private:
 		const Coord& coord,
 		const State& state,
 		const int& t,
-		const int& hc);
+		const int& hc,
+		const int& torch_cost,
+		const int& goal_cost,
+		const bool& is_goal);
 	int getOrCreateState(
 		const Coord& coord,
 		const State& state,
 		const int& t,
-		const int& hc);
+		const int& hc,
+		const int& torch_cost,
+		const int& goal_cost,
+		const bool& is_goal);
 	int getOrCreateState(const LatticeState& s);
 	int getOrCreateState(const Coord& p);
 };

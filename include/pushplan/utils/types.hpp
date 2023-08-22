@@ -57,7 +57,8 @@ struct LatticeState
 {
 	Coord coord;
 	State state;
-	int t, hc;
+	int t, hc, torch_cost, goal_cost;
+	bool is_goal;
 };
 
 typedef std::vector<LatticeState> Trajectory;

@@ -203,22 +203,57 @@ bool AgentLattice::CheckGoalCost(
 	std::vector<int>* succ_ids,
 	std::vector<unsigned int>* costs)
 {
-	if (!this->IsGoal(state_id)) {
+	LatticeState* s = getHashEntry(state_id);
+	if (s->goal_cost < 0)
+	{
+		if (!this->IsGoal(state_id))
+		{
+			s->goal_cost = 0;
+			return false;
+		}
+		else {
+			s->is_goal = true;
+		}
+	}
+	else if (!s->is_goal) {
 		return false;
+	}
+
+	if (s->goal_cost >= 0)
+	{
+		succ_ids->push_back(m_goal_ids.back()); // pseudogoal
+		costs->push_back(s->goal_cost);
+		return true;
 	}
 
 	if (m_invalid_pushes.empty()) // state is a valid goal, and there are no invalid goals
 	{
+		unsigned int cost = 1;
+		if (m_use_push_model)
+		{
+			if (s->torch_cost < 0) {
+				computeTorchCost(s);
+			}
+			cost += s->torch_cost;
+		}
 		succ_ids->push_back(m_goal_ids.back()); // pseudogoal
-		costs->push_back(1);
+		costs->push_back(cost);
+		s->goal_cost = cost;
 	}
 	else
 	{
 		// need to compute pseudo-edge cost for valid goal state
-		LatticeState* s = getHashEntry(state_id);
 		unsigned int cost = checkNNCost(s->coord);
+		if (m_use_push_model)
+		{
+			if (s->torch_cost < 0) {
+				computeTorchCost(s);
+			}
+			cost += s->torch_cost;
+		}
 		succ_ids->push_back(m_goal_ids.back()); // pseudogoal
 		costs->push_back(cost);
+		s->goal_cost = cost;
 	}
 
 	return true;
@@ -411,9 +446,15 @@ int AgentLattice::generateSuccessor(
 	}
 
 	child.hc += conflictHeuristic(child);
+	child.torch_cost = -1;
+	child.goal_cost = -1;
+	child.is_goal = false;
 
 	int succ_state_id = getOrCreateState(child);
 	LatticeState* successor = getHashEntry(succ_state_id);
+	if (m_use_push_model && successor->torch_cost < 0) {
+		computeTorchCost(successor);
+	}
 
 	// For ECBS (the state of the object is collision checked with the state of all agents
 	// and the resulting number of collisions is used as part of the cost function
@@ -469,13 +510,8 @@ unsigned int AgentLattice::cost(
 	unsigned int cost = ManhattanDist(s1->coord, s2->coord);
 	cost = cost == 0 ? 1 : cost;
 
-	if (m_use_push_model)
-	{
-		double x = s2->state.at(0) - m_table_ox + m_table_sx;
-		double y = s2->state.at(1) - m_table_oy + m_table_sy;
-		int idx = m_x_offset * int(x/RES) + int(y/RES);
-
-		cost += m_cell_costs[idx].item<double>();
+	if (m_use_push_model) {
+		cost += s2->torch_cost;
 	}
 
 	return cost;
@@ -687,6 +723,13 @@ unsigned int AgentLattice::checkNNCost(const Coord& c)
 	// cost = std::max(std::min(20.0, cost), 2.0);
 	return std::ceil(cost);
 }
+void AgentLattice::computeTorchCost(LatticeState* s)
+{
+	double x = s->state.at(0) - m_table_ox + m_table_sx;
+	double y = s->state.at(1) - m_table_oy + m_table_sy;
+	int idx = m_x_offset * int(x/RES) + int(y/RES);
+	s->torch_cost = m_cell_costs[idx].item<double>();
+}
 
 // Return a pointer to the data for the input the state id
 // if it exists, else return nullptr
@@ -736,7 +779,10 @@ int AgentLattice::createHashEntry(
 	const Coord& coord,
 	const State& state,
 	const int& t,
-	const int& hc)
+	const int& hc,
+	const int& torch_cost,
+	const int& goal_cost,
+	const bool& is_goal)
 {
 	int state_id = reserveHashEntry();
 	LatticeState* entry = getHashEntry(state_id);
@@ -745,6 +791,9 @@ int AgentLattice::createHashEntry(
 	entry->state = state;
 	entry->t = t;
 	entry->hc = hc;
+	entry->torch_cost = torch_cost;
+	entry->goal_cost = goal_cost;
+	entry->is_goal = is_goal;
 
 	// map state -> state id
 	m_state_to_id[entry] = state_id;
@@ -756,24 +805,27 @@ int AgentLattice::getOrCreateState(
 	const Coord& coord,
 	const State& state,
 	const int& t,
-	const int& hc)
+	const int& hc,
+	const int& torch_cost,
+	const int& goal_cost,
+	const bool& is_goal)
 {
 	int state_id = getHashEntry(coord, t);
 	if (state_id < 0) {
-		state_id = createHashEntry(coord, state, t, hc);
+		state_id = createHashEntry(coord, state, t, hc, torch_cost, goal_cost, is_goal);
 	}
 	return state_id;
 }
 
 int AgentLattice::getOrCreateState(const LatticeState& s)
 {
-	return getOrCreateState(s.coord, s.state, s.t, s.hc);
+	return getOrCreateState(s.coord, s.state, s.t, s.hc, s.torch_cost, s.goal_cost, s.is_goal);
 }
 
 int AgentLattice::getOrCreateState(const Coord& p)
 {
 	State temp;
-	return getOrCreateState(p, temp, -1, -1);
+	return getOrCreateState(p, temp, -1, -1, -1, -1, false);
 }
 
 bool AgentLattice::ConvertPath(
