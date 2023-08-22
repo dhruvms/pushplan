@@ -176,6 +176,8 @@ bool MAMONode::tryPush(
 		double sim_time_push = 0.0;
 		if (m_robot->PlanPush(this->GetCurrentStartState(), m_agents.at(m_agent_map[moved.first]).get(), push, movable_obstacles, m_all_objects, result, push_failure, debug_action, sim_time_push))
 		{
+			*sim_time += sim_time_push;
+
 			// valid push found!
 			MAMOAction action(MAMOActionType::PUSH, moved.first);
 			action._params.clear();
@@ -187,12 +189,13 @@ bool MAMONode::tryPush(
 			if (samples == SAMPLES) {
 				m_successful_rearranges.push_back(std::make_pair(moved.first, moved.second.back().coord));
 			}
-
 			break;
 		}
 		else
 		{
-			assert(samples == SAMPLES);
+			*sim_time += sim_time_push;
+
+			// assert(samples == SAMPLES);
 			// SMPL_INFO("Tried pushing object %d. Return value = %d", moved.first, push_failure);
 			switch (push_failure)
 			{
@@ -216,7 +219,6 @@ bool MAMONode::tryPush(
 				break;
 			}
 		}
-		*sim_time += sim_time_push;
 	}
 
 	if (samples == SAMPLES) // this was a new push I was considering
