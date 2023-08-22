@@ -15,6 +15,7 @@ bool MAMOSearch::CreateRoot()
 	///////////
 
 	m_stats["expansions"] = 0.0;
+	m_stats["generated"] = 0.0;
 	m_stats["no_succs"] = 0.0;
 	m_stats["only_duplicate"] = 0.0;
 	m_stats["no_duplicate"] = 0.0;
@@ -60,6 +61,7 @@ bool MAMOSearch::Solve(double budget)
 	m_root_node->ComputePriorityFactors();
 	computeMAMOPriority(m_root_search);
 	m_root_search->m_OPEN_h = m_OPEN.push(m_root_search);
+	++m_stats["generated"];
 
 	while (!m_OPEN.empty())
 	{
@@ -119,14 +121,14 @@ void MAMOSearch::SaveStats()
 	if (!exists)
 	{
 		STATS << "UID,"
-				<< "Solved?,NumTrajs,SolveTime,MAPFTime,PushPlannerTime,SimTime"
-				<< "Expansions,OnlyDuplicate,NoDuplicate,NoSuccs\n";
+				<< "Solved?,NumTrajs,SolveTime,MAPFTime,PushPlannerTime,SimTime,"
+				<< "StatesGenerated,Expansions,OnlyDuplicate,NoDuplicate,NoSuccs\n";
 	}
 
 	STATS << m_planner->GetSceneID() << ','
 			<< (int)m_solved << ',' << (int)m_rearrangements.size() << ','
 			<< m_stats["total_time"] << ',' << m_stats["mapf_time"] << ',' << m_stats["push_planner_time"] << ',' << m_stats["sim_time"] << ','
-			<< m_stats["expansions"] << ',' << m_stats["only_duplicate"] << ',' << m_stats["no_duplicate"] << ','
+			<< m_stats["generated"] << ',' << m_stats["expansions"] << ',' << m_stats["only_duplicate"] << ',' << m_stats["no_duplicate"] << ','
 			<< m_stats["no_succs"] << '\n';
 	STATS.close();
 }
@@ -399,6 +401,7 @@ void MAMOSearch::createSuccs(
 					succ_search_state->m_OPEN_h = m_OPEN.push(succ_search_state);
 
 					SMPL_WARN("Generate %d, priority = %.2e", succ_id, succ_search_state->priority);
+					++m_stats["generated"];
 
 					std::stringstream reachable_str;
 					std::copy(reachable_ids.begin(), reachable_ids.end(), std::ostream_iterator<int>(reachable_str, ","));
