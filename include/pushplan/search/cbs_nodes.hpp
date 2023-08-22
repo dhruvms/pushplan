@@ -111,7 +111,7 @@ struct HighLevelNode
 	DAG m_priorities;
 
 	int m_flowtime = 0, m_makespan = 0, m_depth = 0, m_generate = 0, m_expand = 0;
-	unsigned int m_g = 0, m_h = 0, m_d = 0, m_c = 0;
+	int m_g = 0, m_h = 0, m_d = 0, m_c = 0;
 	bool m_h_computed = false;
 
 	boost::heap::fibonacci_heap<HighLevelNode*, boost::heap::compare<HighLevelNode::OPENCompare> >::handle_type m_OPEN_h;
@@ -127,8 +127,8 @@ struct HighLevelNode
 		m_conflicts.clear();
 		m_priorities.Clear();
 	};
-	unsigned int fval() const { return this->m_g + this->m_h; };
-	unsigned int fhatval() const { return this->m_flowtime + this->m_c; };
+	int fval() const { return this->m_flowtime + this->m_h; };
+	int fhatval() const { return this->m_flowtime + this->m_c; };
 
 	void recalcFlowtime();
 	void recalcMakespan();
@@ -138,7 +138,7 @@ struct HighLevelNode
 	void computeH();
 
 	void PrintDebug() {
-		SMPL_INFO("\tg = %u, h = %u, d = %u, c = %u", m_g, m_h, m_d, m_c);
+		SMPL_INFO("\tg = %d, h = %d, d = %d, c = %d", m_g, m_h, m_d, m_c);
 		SMPL_INFO("\t\tflowtime = %d, makespan = %d, depth = %d, generated = %d, expanded = %d", m_flowtime, m_makespan, m_depth, m_generate, m_expand);
 		SMPL_INFO("\t\t\tall_conflicts = %d, conflicts = %d", m_all_conflicts.size(), m_conflicts.size());
 	}

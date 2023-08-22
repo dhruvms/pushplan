@@ -214,6 +214,7 @@ void HighLevelNode::updateDistanceToGo()
 
 void HighLevelNode::updateCostToGo()
 {
+	m_c = std::max(0, fval() - fhatval());
 	if (fval() > fhatval()) {
 		m_c += fval() - fhatval();
 	}
@@ -222,7 +223,7 @@ void HighLevelNode::updateCostToGo()
 void HighLevelNode::computeH()
 {
 	m_h_computed = true;
-	unsigned int h = 0;
+	int h = 0;
 	switch (HLHC)
 	{
 		case HighLevelConflictHeuristic::ZERO:

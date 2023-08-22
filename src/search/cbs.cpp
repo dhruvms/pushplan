@@ -79,7 +79,7 @@ bool CBS::Solve()
 			int new_f_thresh = m_wf * m_soln_lb;
 			for (auto& n : m_OPEN)
 			{
-				if (n->m_flowtime > f_thresh && n->m_flowtime <= new_f_thresh) {
+				if (n->fval() > f_thresh && n->fval() <= new_f_thresh) {
 					n->m_FOCAL_h = m_FOCAL.push(n);
 				}
 			}
@@ -100,12 +100,14 @@ bool CBS::Solve()
 		if (!next->m_h_computed)
 		{
 			next->computeH();
-			// reinsert into OPEN because lowerbound changed?
-			if (next->m_flowtime > m_wf * m_soln_lb)
-			{
-				next->m_OPEN_h = m_OPEN.push(next);
-				continue;
+			next->updateCostToGo();
+
+			// reinsert into OPEN because recomputed heuristics
+			next->m_OPEN_h = m_OPEN.push(next);
+			if (next->fval() <= m_wf * m_soln_lb) {
+				next->m_FOCAL_h = m_FOCAL.push(next);
 			}
+			continue;
 		}
 
 		++m_ct_expanded;
@@ -234,7 +236,7 @@ void CBS::pushNode(HighLevelNode* node)
 	++m_ct_generated;
 	node->m_generate = m_ct_generated;
 	node->m_OPEN_h = m_OPEN.push(node);
-	if (node->m_flowtime <= m_wf * m_soln_lb) {
+	if (node->fval() <= m_wf * m_soln_lb) {
 		node->m_FOCAL_h = m_FOCAL.push(node);
 	}
 	m_nodes.push_back(node);
@@ -654,7 +656,7 @@ bool CBS::updateChild(HighLevelNode* parent, HighLevelNode* child)
 
 	findConflicts(*child);
 
-	child->m_h = std::max(0, int(parent->fval() - child->m_g)); // booooo
+	child->m_h = std::max(0, int(parent->fval() - child->m_flowtime));
 	child->m_h_computed = false;
 	child->updateDistanceToGo();
 	child->updateCostToGo();

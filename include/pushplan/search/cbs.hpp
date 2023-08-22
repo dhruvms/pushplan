@@ -47,7 +47,7 @@ protected:
 	std::vector<unsigned int> m_min_fs;
 
 	int m_ct_generated, m_ct_deadends, m_ct_expanded, m_ll_expanded, m_scene_id, m_soln_cost;
-	unsigned int m_soln_lb, m_wf;
+	int m_soln_lb, m_wf;
 	double m_search_time, m_time_limit, m_ll_time, m_conflict_time;
 	bool m_solved;
 	HighLevelNode* m_goal = nullptr;;
