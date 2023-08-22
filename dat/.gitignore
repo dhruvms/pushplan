@@ -1,5 +1,6 @@
 *.txt
 *.csv
+*.ods
 results/
 ycb/
 push_data/
