@@ -94,11 +94,22 @@ bool Robot::Setup()
 	m_debug_push_info["start_unreachable"] = 0;
 	m_debug_push_info["ik_fail"] = 0;
 	m_debug_push_info["ik_joint_limit"] = 0;
-	m_debug_push_info["obstacle_collision"] = 0;
-	m_debug_push_info["ik_ended_early"] = 0;
+	m_debug_push_info["ik_obstacle_collision"] = 0;
 	m_debug_push_info["sim_success"] = 0;
 	m_debug_push_info["no_collision_ooi"] = 0;
 	m_debug_push_info["sim_fail"] = 0;
+
+	m_debug_push_info["get_check_start_pose_time"] = 0.0;
+	m_debug_push_info["plan_to_start_pose_time"] = 0.0;
+	m_debug_push_info["compute_push_action_time"] = 0.0;
+	m_debug_push_info["collision_check_push_action_ooi_time"] = 0.0;
+	m_debug_push_info["send_push_to_sim_time"] = 0.0;
+	m_debug_push_info["identify_time"] = 0.0;
+
+	m_debug_push_info["plan_to_pose_calls"] = 0;
+	m_debug_push_info["plan_to_pose_plannings"] = 0;
+	m_debug_push_info["plan_to_pose_setup_time"] = 0.0;
+	m_debug_push_info["plan_to_pose_plan_time"] = 0.0;
 
 	/////////////////
 	// Robot Model //
@@ -1615,6 +1626,8 @@ bool Robot::planToPoseGoal(
 	bool path_constraints,
 	moveit_msgs::Constraints *goal)
 {
+	// ++m_debug_push_info["plan_to_pose_calls"];
+	// double timer = GetTime();
 	// create planning problem to push start pose
 	InitArmPlanner(false);
 
@@ -1672,13 +1685,20 @@ bool Robot::planToPoseGoal(
 	if (!m_planner->init_planner(planning_scene, req, res))
 	{
 		// ROS_ERROR("Failed to init planner!");
+		// m_debug_push_info["plan_to_pose_setup_time"] += GetTime() - timer;
 		return false;
 	}
+	// m_debug_push_info["plan_to_pose_setup_time"] += GetTime() - timer;
+	// timer = GetTime();
+
+	// ++m_debug_push_info["plan_to_pose_plannings"];
 	if (!m_planner->solve(req, res))
 	{
 		// ROS_ERROR("Failed to plan.");
+		// m_debug_push_info["plan_to_pose_plan_time"] += GetTime() - timer;
 		return false;
 	}
+	// m_debug_push_info["plan_to_pose_plan_time"] += GetTime() - timer;
 
 	push_traj = res.trajectory.joint_trajectory;
 	if (push_traj.points.size() <= 1) {
@@ -1712,7 +1732,7 @@ PushResult Robot::computePushStateIK(
 		if (!m_cc_i->isStateValid(solution))
 		{
 			result = PushResult::IK_OBSTACLE;
-			++m_debug_push_info["obstacle_collision"];
+			++m_debug_push_info["ik_obstacle_collision"];
 			// return false;
 			return result;
 		}
@@ -1903,6 +1923,7 @@ void Robot::IdentifyReachableMovables(
 	}
 
 	double time_taken = GetTime() - start_time;
+	// m_debug_push_info["identify_time"] += time_taken;
 	ROS_WARN("Robot::IdentifyReachableMovables took %f seconds", time_taken);
 }
 
@@ -2249,7 +2270,7 @@ bool Robot::PlanPush(
 	smpl::RobotState push_start_joints(push_start_state.joint_state.position.begin() + 1, push_start_state.joint_state.position.end());;
 	bool push_found = false;
 
-	double start_time = GetTime();
+	double start_time = GetTime(), mini_timer = GetTime();
 	++m_stats["plan_push_calls"];
 
 	comms::ObjectsPoses new_scene;
@@ -2346,6 +2367,8 @@ bool Robot::PlanPush(
 
 		failure = true;
 	}
+	m_debug_push_info["get_check_start_pose_time"] += GetTime() - mini_timer;
+	mini_timer = GetTime();
 
 	// plan path to push start pose with all other objects as obstacles
 	trajectory_msgs::JointTrajectory push_traj;
@@ -2358,6 +2381,8 @@ bool Robot::PlanPush(
 
 		failure = true;
 	}
+	m_debug_push_info["plan_to_start_pose_time"] += GetTime() - mini_timer;
+	mini_timer = GetTime();
 
 	// remove all movable objects from immovable collision space
 	ProcessObstacles(pushed_obj, true);
@@ -2414,6 +2439,8 @@ bool Robot::PlanPush(
 	// 					push,
 	// 					obj_traj,
 	// 					push_action);
+	m_debug_push_info["compute_push_action_time"] += GetTime() - mini_timer;
+	mini_timer = GetTime();
 
 	if (push_result != PushResult::IK_SUCCESS || push_action.points.empty())
 	{
@@ -2438,6 +2465,8 @@ bool Robot::PlanPush(
 				break;
 			}
 		}
+		m_debug_push_info["collision_check_push_action_ooi_time"] += GetTime() - mini_timer;
+		mini_timer = GetTime();
 
 		ProcessObstacles(pushed_obj, true);
 		if (!collides)
@@ -2491,6 +2520,10 @@ bool Robot::PlanPush(
 		return false;
 	}
 	m_stats["push_plan_time"] += GetTime() - start_time;
+
+
+	m_debug_push_info["send_push_to_sim_time"] += GetTime() - mini_timer;
+	mini_timer = GetTime();
 
 	start_time = GetTime();
 	int pidx, successes;
@@ -4088,37 +4121,65 @@ bool Robot::SavePushDebugData(int scene_id)
 	if (!exists)
 	{
 		STATS << "UID,"
-				<< "PlanPushCalls,PushStartPosesFound,PushActionsFoundToSim,"
-				<< "PushPlanTime,PushSimTime,PushSimSuccesses,"
-				<< "PushDBLookupTime,PushesFoundInDB,PushDBSuccesses,PushDBFails,PushDBTotalTime,"
-				<< "PushSuccessInSim,PushFailInSim,NoCollisionWithObject,"
-				<< "IKDidNotReachEnd,IKObstacleCollision,IKJointLimitViolation,"
-				<< "IKFail,PushStartPoseUnreachable,PushStartPoseInObstacle\n";
+				<< "PlanPushCalls,"
+				<< "PushStartPoseInObstacle,"
+				<< "PushStartPoseUnreachable,"
+				<< "PushStartPosesFound,"
+				<< "IKObstacleCollision,"
+				<< "IKJointLimitViolation,"
+				<< "IKCatchallFail,"
+				<< "NoCollisionWithObject,"
+				<< "PushActionsFoundToSim,"
+				<< "PushSuccessInSim,"
+				<< "PushFailInSim,"
+				<< "PushPlan(T),"
+				<< "PushSim(T),"
+				<< "StartPoseVerify(T),"
+				<< "PlanToStartPose(T),"
+				<< "ComputePushAction(T),"
+				<< "CollisionCheckWithObject(T),"
+				<< "SendPushToSim(T)\n";
+				// << "PushesFoundInDB,"
+				// << "PushDBSuccesses,"
+				// << "PushDBFails,"
+				// << "PushDBLookup(T),"
+				// << "PushDBTotal(T),"
+				// << "IdentifyMovables(T),"
+				// << "PlanToPoseCalls,"
+				// << "PlanToPosePlannings,"
+				// << "PlanToPoseSetup(T),"
+				// << "PlanToPosePlanning(T)\n";
 	}
 
 	STATS << scene_id << ','
 			<< m_stats["plan_push_calls"] << ','
+			<< m_debug_push_info["start_inside_obstacle"] << ','
+			<< m_debug_push_info["start_unreachable"] << ','
 			<< m_stats["push_start_poses_found"] << ','
-			<< m_stats["push_actions_found"] << ','
-			<< m_stats["push_plan_time"] << ','
-			<< m_stats["push_sim_time"] << ','
-			<< m_stats["push_sim_successes"] << ','
-			<< m_stats["push_db_lookup_time"] << ','
-			<< m_stats["push_found_in_db"] << ','
-			<< m_stats["push_db_successes"] << ','
-			<< m_stats["push_db_failures"] << ','
-			<< m_stats["push_db_total_time"] << ','
-			<< m_debug_push_info["sim_success"] << ','
-			<< m_debug_push_info["sim_fail"] << ','
-			<< m_debug_push_info["no_collision_ooi"] << ','
-			<< m_debug_push_info["ik_ended_early"] << ','
-			<< m_debug_push_info["obstacle_collision"] << ','
+			<< m_debug_push_info["ik_obstacle_collision"] << ','
 			<< m_debug_push_info["ik_joint_limit"] << ','
 			<< m_debug_push_info["ik_fail"] << ','
-			<< m_debug_push_info["start_unreachable"] << ','
-			<< m_debug_push_info["start_inside_obstacle"] << '\n';
-	STATS.close();
-}
+			<< m_debug_push_info["no_collision_ooi"] << ','
+			<< m_stats["push_actions_found"] << ','
+			<< m_debug_push_info["sim_success"] << ','
+			<< m_debug_push_info["sim_fail"] << ','
+			<< m_stats["push_plan_time"] << ','
+			<< m_stats["push_sim_time"] << ','
+			<< m_debug_push_info["get_check_start_pose_time"] << ','
+			<< m_debug_push_info["plan_to_start_pose_time"] << ','
+			<< m_debug_push_info["compute_push_action_time"] << ','
+			<< m_debug_push_info["collision_check_push_action_ooi_time"] << ','
+			<< m_debug_push_info["send_push_to_sim_time"] << '\n';
+			// << m_stats["push_found_in_db"] << ','
+			// << m_stats["push_db_successes"] << ','
+			// << m_stats["push_db_failures"] << ','
+			// << m_stats["push_db_lookup_time"] << ','
+			// << m_stats["push_db_total_time"] << ','
+			// << m_debug_push_info["identify_time"] << ','
+			// << m_debug_push_info["plan_to_pose_calls"] << ','
+			// << m_debug_push_info["plan_to_pose_plannings"] << ','
+			// << m_debug_push_info["plan_to_pose_setup_time"] << ','
+			// << m_debug_push_info["plan_to_pose_plan_time"] << '\n';
 
 	STATS.close();
 }
