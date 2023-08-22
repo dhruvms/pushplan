@@ -264,22 +264,22 @@ def DrawScene(filepath, objs, trajs, invalids, ngr, goals, pushes, alpha=1.0):
 	if (pushes):
 		cmap = cm.get_cmap('tab10')
 		push_debug_legend = []
-		failure_modes = {
-			0: 'sim fail',
-			1: 'no push-object collision',
-			2: 'sim success',
-			3: 'ik did not reach end',
-			4: 'ik obstacle collision',
-			5: 'ik joint limits',
-			6: 'ik inv vel fail',
-			7: 'push start unreachable',
-			8: 'push start in object'
+		push_results = {
+			0: 'start inside obstacle',
+			1: 'start unreachable',
+			2: 'ik success',
+			3: 'ik joint limit',
+			4: 'ik obstacle',
+			5: 'ik catchall fail',
+			6: 'no ooi collision',
+			7: 'fail in sim',
+			8: 'success in sim',
 		}
-		for i in failure_modes:
-			push_debug_legend.append(patches.Patch(color=cmap(i), label=failure_modes[i]))
+		for i in push_results:
+			push_debug_legend.append(patches.Patch(color=cmap(i), label=push_results[i]))
 
 		for p in pushes:
-			f = int(p[4]) + 2
+			f = int(p[4])
 			if (p[2] == -99 and p[3] == -99):
 				if (f == 8):
 					AX.scatter(p[0], p[1], c=[cmap(f)], zorder=24, marker='*', alpha=1)
@@ -303,8 +303,8 @@ def DrawScene(filepath, objs, trajs, invalids, ngr, goals, pushes, alpha=1.0):
 
 	# AX.set_xlim([0.0, 1.2])
 	# AX.set_ylim([-1.1, 0.0])
-	AX.set_xlim(TABLE[0] - TABLE_SIZE[0] - 0.01, TABLE[0] + TABLE_SIZE[0] + 0.01)
-	AX.set_ylim(TABLE[1] - TABLE_SIZE[1] - 0.01, TABLE[1] + TABLE_SIZE[1] + 0.01)
+	AX.set_xlim(TABLE[0] - TABLE_SIZE[0] - 0.05, TABLE[0] + TABLE_SIZE[0] + 0.05)
+	AX.set_ylim(TABLE[1] - TABLE_SIZE[1] - 0.05, TABLE[1] + TABLE_SIZE[1] + 0.05)
 	AX.set_xticks(())
 	AX.set_yticks(())
 	# AX.axis('equal')
