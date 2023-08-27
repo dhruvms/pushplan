@@ -2297,7 +2297,7 @@ bool Robot::PlanPush(
 		if (!m_cc_i->isStateValid(push_start_joints))
 		{
 			push_result = PushResult::START_INSIDE_OBSTACLE;
-			++m_debug_push_info["obstacle_collision"];
+			++m_debug_push_info["ik_obstacle_collision"];
 			debug_action = std::make_tuple(debug_action_start, debug_action_end, static_cast<int>(push_result));
 
 			success = false;

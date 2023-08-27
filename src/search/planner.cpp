@@ -923,8 +923,8 @@ bool Planner::SaveData()
 		STATS << "UID,"
 				<< "PlanSuccess,SimSuccess,SimResult,SimTime,"
 				<< "RobotPlanTime,MAPFTime,PushInputTime,PlanPushTime,"
-				<< "PlanPushCalls,PushSamplesFound,PushActionsFound,"
-				<< "PushPlanningTime,PushSimTime,PushSimSuccesses,"
+				<< "PlanPushCalls,PushActionsFound,"
+				<< "PushSimSuccesses,PushPlanningTime,PushSimTime,"
 				<< "CBSCalls,CBSSuccesses,CBSTime,"
 				<< "CTNodes,CTDeadends,CTExpansions,LLTime,ConflictDetectionTime\n";
 	}
@@ -934,9 +934,9 @@ bool Planner::SaveData()
 			<< m_violation << ',' << m_stats["sim_time"] << ','
 			<< m_stats["robot_planner_time"] << ',' << m_stats["mapf_time"] << ','
 			<< m_stats["push_input_time"] << ',' << m_stats["push_planner_time"] << ','
-			<< robot_stats["plan_push_calls"] << ',' << robot_stats["push_samples_found"] << ','
-			<< robot_stats["push_actions_found"] << ',' << robot_stats["push_plan_time"] << ','
-			<< robot_stats["push_sim_time"] << ',' << robot_stats["push_sim_successes"] << ','
+			<< robot_stats["plan_push_calls"] << ',' << robot_stats["push_actions_found"] << ','
+			<< robot_stats["push_sim_successes"] << ','
+			<< robot_stats["push_plan_time"] << ',' << robot_stats["push_sim_time"] << ','
 			<< m_cbs_stats["calls"] << ',' << m_cbs_stats["solved"] << ','
 			<< m_cbs_stats["search_time"] << ',' << m_cbs_stats["ct_nodes"] << ','
 			<< m_cbs_stats["ct_deadends"] << ',' << m_cbs_stats["ct_expanded"] << ','
