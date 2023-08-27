@@ -63,7 +63,7 @@ int main(int argc, const char* argv[]) {
 		auto rows = torch::arange(0, output.size(0), torch::kLong);
 		auto cols = torch::ones(output.size(0));
 		cols = cols.toType(at::kLong);
-		at::Tensor score = (1 - output.index({rows, cols})) * (1 - output.index({rows, cols * 0})) * 1000;
+		at::Tensor score = (1 - (output.index({rows, cols}) * output.index({rows, cols * 0}))) * 1000;
 
 		output = torch::cat({output, score.unsqueeze(1)}, -1);
 		std::cout << '\n' << "Threshold = " << t << '\n' << output << '\n';
