@@ -14,18 +14,81 @@ from helpers import *
 from constants import *
 from models import PushSuccessNet
 
-TEST_OBJ_GRID_NUM = 5
-FIGURE_IK, AX_IK = plt.subplots(TEST_OBJ_GRID_NUM, TEST_OBJ_GRID_NUM, figsize=(15,15))
-FIGURE_DISTS, AX_DISTS = plt.subplots(TEST_OBJ_GRID_NUM, TEST_OBJ_GRID_NUM, figsize=(15,15))
-FIGURE_COMBINED, AX_COMBINED = plt.subplots(TEST_OBJ_GRID_NUM, TEST_OBJ_GRID_NUM, figsize=(15,15))
-CB_IK = []
-CB_DISTS = []
-CB_COMBINED = []
+def draw_and_run_model(
+	model, obj_props,
+	figure_ik, figure_dists, figure_combined,
+	ax_ik, ax_dists, ax_combined,
+	cb_ik, cb_dists, cb_combined,
+	torch_device, threshold=0.05):
+
+	h = 0.01
+	xx, yy = np.meshgrid(np.arange(-TABLE_SIZE[0], TABLE_SIZE[0], h),
+						 np.arange(-TABLE_SIZE[1], TABLE_SIZE[1], h))
+	push_to_xy = np.c_[xx.ravel(), yy.ravel()]
+	num_test_pts = push_to_xy.shape[0]
+
+	draw_base_rect(ax_ik)
+	draw_base_rect(ax_dists)
+	draw_base_rect(ax_combined)
+	draw_object(ax_ik, obj_props, zorder=3)
+	draw_object(ax_dists, obj_props, zorder=3)
+	draw_object(ax_combined, obj_props, zorder=3)
+
+	delta_x_test = push_to_xy[:, 0]
+	delta_y_test = push_to_xy[:, 1]
+
+	obj_props_stack = np.repeat(obj_props, num_test_pts, axis=0)
+	# test_input = np.hstack([obj_props_stack, desired_dirs, desired_dists])
+	test_input = np.hstack([obj_props_stack, delta_x_test[:, None], delta_y_test[:, None], threshold * np.ones(obj_props_stack.shape[0])[:, None]])
+	test_input_torch = torch.tensor(test_input, dtype=torch.float32).to(torch_device)
+
+	preds = model(test_input_torch)
+	preds = preds.cpu().numpy()
+	ik_preds = preds[:, 0].reshape(xx.shape)
+	dist_preds = preds[:, 1].reshape(xx.shape)
+	combined_preds = 1 - (dist_preds * ik_preds)
+
+	contour_ik = ax_ik.contourf(xx, yy, ik_preds, cmap=plt.cm.Greens, alpha=.8)
+	ax_ik.set_xlim(-TABLE_SIZE[0] - 0.01, TABLE_SIZE[0] + 0.01)
+	ax_ik.set_ylim(-TABLE_SIZE[1] - 0.01, TABLE_SIZE[1] + 0.01)
+	ax_ik.set_xticks(())
+	ax_ik.set_yticks(())
+	ax_ik.set_aspect('equal')
+	divider_ik = make_axes_locatable(ax_ik)
+	cax_ik = divider_ik.append_axes('right', size='5%', pad=0.05)
+	cb_ik.append(figure_ik.colorbar(contour_ik, cax=cax_ik, orientation='vertical'))
+
+	contour_dists = ax_dists.contourf(xx, yy, dist_preds, cmap=plt.cm.YlOrRd, alpha=.8)
+	ax_dists.set_xlim(-TABLE_SIZE[0] - 0.01, TABLE_SIZE[0] + 0.01)
+	ax_dists.set_ylim(-TABLE_SIZE[1] - 0.01, TABLE_SIZE[1] + 0.01)
+	ax_dists.set_xticks(())
+	ax_dists.set_yticks(())
+	ax_dists.set_aspect('equal')
+	divider_dists = make_axes_locatable(ax_dists)
+	cax_dists = divider_dists.append_axes('right', size='5%', pad=0.05)
+	cb_dists.append(figure_dists.colorbar(contour_dists, cax=cax_dists, orientation='vertical'))
+
+	contour_combined = ax_combined.contourf(xx, yy, combined_preds, cmap=plt.cm.plasma, alpha=.8)
+	ax_combined.set_xlim(-TABLE_SIZE[0] - 0.01, TABLE_SIZE[0] + 0.01)
+	ax_combined.set_ylim(-TABLE_SIZE[1] - 0.01, TABLE_SIZE[1] + 0.01)
+	ax_combined.set_xticks(())
+	ax_combined.set_yticks(())
+	ax_combined.set_aspect('equal')
+	divider_combined = make_axes_locatable(ax_combined)
+	cax_combined = divider_combined.append_axes('right', size='5%', pad=0.05)
+	cb_combined.append(figure_combined.colorbar(contour_combined, cax=cax_combined, orientation='vertical'))
 
 def draw_checkpoint(model, model_name, epoch=None, suffix=None, threshold=0.05):
-	device = DEVICE if suffix is None else torch.device("cpu")
+	test_obj_grid_num = 5
+	figure_ik, ax_ik = plt.subplots(test_obj_grid_num, test_obj_grid_num, figsize=(15,15))
+	figure_dists, ax_dists = plt.subplots(test_obj_grid_num, test_obj_grid_num, figsize=(15,15))
+	figure_combined, ax_combined = plt.subplots(test_obj_grid_num, test_obj_grid_num, figsize=(15,15))
+	cb_ik = []
+	cb_dists = []
+	cb_combined = []
 
-	test_objs = TEST_OBJ_GRID_NUM**2
+	device = DEVICE if suffix is None else torch.device("cpu")
+	test_objs = test_obj_grid_num**2
 
 	h = 0.01
 	xx, yy = np.meshgrid(np.arange(-TABLE_SIZE[0], TABLE_SIZE[0], h),
@@ -36,64 +99,19 @@ def draw_checkpoint(model, model_name, epoch=None, suffix=None, threshold=0.05):
 	model.eval()
 	with torch.no_grad():
 		for o in range(test_objs):
-			ax_row = o//TEST_OBJ_GRID_NUM
-			ax_col = o % TEST_OBJ_GRID_NUM
+			ax_row = o//test_obj_grid_num
+			ax_col = o % test_obj_grid_num
 
 			pidx = np.random.randint(X_test.shape[0])
 			obj_props = X_test[pidx, :-3].cpu().numpy()[None, :]
 
-			draw_base_rect(AX_IK[ax_row, ax_col])
-			draw_base_rect(AX_DISTS[ax_row, ax_col])
-			draw_base_rect(AX_COMBINED[ax_row, ax_col])
-			draw_object(AX_IK[ax_row, ax_col], obj_props, zorder=3)
-			draw_object(AX_DISTS[ax_row, ax_col], obj_props, zorder=3)
-			draw_object(AX_COMBINED[ax_row, ax_col], obj_props, zorder=3)
-
-			# desired_dirs = np.arctan2(push_to_xy[:, 1] - obj_props[0, 1], push_to_xy[:, 0] - obj_props[0, 0])[:, None]
-			# desired_dists = np.linalg.norm(obj_props[0, :2] - push_to_xy, axis=1)[:, None]
-			delta_x_test = push_to_xy[:, 0]
-			delta_y_test = push_to_xy[:, 1]
-
-			obj_props_stack = np.repeat(obj_props, num_test_pts, axis=0)
-			# test_input = np.hstack([obj_props_stack, desired_dirs, desired_dists])
-			test_input = np.hstack([obj_props_stack, delta_x_test[:, None], delta_y_test[:, None], threshold * np.ones(obj_props_stack.shape[0])[:, None]])
-			test_input_torch = torch.tensor(test_input, dtype=torch.float32).to(device)
-
-			preds = model(test_input_torch)
-			preds = preds.cpu().numpy()
-			ik_preds = preds[:, 0].reshape(xx.shape)
-			dist_preds = preds[:, 1].reshape(xx.shape)
-			combined_preds = dist_preds * ik_preds
-
-			contour_ik = AX_IK[ax_row, ax_col].contourf(xx, yy, ik_preds, cmap=plt.cm.Greens, alpha=.8)
-			AX_IK[ax_row, ax_col].set_xlim(-TABLE_SIZE[0] - 0.01, TABLE_SIZE[0] + 0.01)
-			AX_IK[ax_row, ax_col].set_ylim(-TABLE_SIZE[1] - 0.01, TABLE_SIZE[1] + 0.01)
-			AX_IK[ax_row, ax_col].set_xticks(())
-			AX_IK[ax_row, ax_col].set_yticks(())
-			AX_IK[ax_row, ax_col].set_aspect('equal')
-			divider_ik = make_axes_locatable(AX_IK[ax_row, ax_col])
-			cax_ik = divider_ik.append_axes('right', size='5%', pad=0.05)
-			CB_IK.append(FIGURE_IK.colorbar(contour_ik, cax=cax_ik, orientation='vertical'))
-
-			contour_dists = AX_DISTS[ax_row, ax_col].contourf(xx, yy, dist_preds, cmap=plt.cm.YlOrRd, alpha=.8)
-			AX_DISTS[ax_row, ax_col].set_xlim(-TABLE_SIZE[0] - 0.01, TABLE_SIZE[0] + 0.01)
-			AX_DISTS[ax_row, ax_col].set_ylim(-TABLE_SIZE[1] - 0.01, TABLE_SIZE[1] + 0.01)
-			AX_DISTS[ax_row, ax_col].set_xticks(())
-			AX_DISTS[ax_row, ax_col].set_yticks(())
-			AX_DISTS[ax_row, ax_col].set_aspect('equal')
-			divider_dists = make_axes_locatable(AX_DISTS[ax_row, ax_col])
-			cax_dists = divider_dists.append_axes('right', size='5%', pad=0.05)
-			CB_DISTS.append(FIGURE_DISTS.colorbar(contour_dists, cax=cax_dists, orientation='vertical'))
-
-			contour_combined = AX_COMBINED[ax_row, ax_col].contourf(xx, yy, combined_preds, cmap=plt.cm.plasma, alpha=.8)
-			AX_COMBINED[ax_row, ax_col].set_xlim(-TABLE_SIZE[0] - 0.01, TABLE_SIZE[0] + 0.01)
-			AX_COMBINED[ax_row, ax_col].set_ylim(-TABLE_SIZE[1] - 0.01, TABLE_SIZE[1] + 0.01)
-			AX_COMBINED[ax_row, ax_col].set_xticks(())
-			AX_COMBINED[ax_row, ax_col].set_yticks(())
-			AX_COMBINED[ax_row, ax_col].set_aspect('equal')
-			divider_combined = make_axes_locatable(AX_COMBINED[ax_row, ax_col])
-			cax_combined = divider_combined.append_axes('right', size='5%', pad=0.05)
-			CB_COMBINED.append(FIGURE_COMBINED.colorbar(contour_combined, cax=cax_combined, orientation='vertical'))
+			draw_and_run_model(
+				model, obj_props,
+				figure_ik, figure_dists, figure_combined,
+				ax_ik[ax_row, ax_col], ax_dists[ax_row, ax_col], ax_combined[ax_row, ax_col],
+				cb_ik, cb_dists, cb_combined,
+				device, threshold=threshold
+			)
 
 		plt.tight_layout()
 		# plt.show()
@@ -103,20 +121,20 @@ def draw_checkpoint(model, model_name, epoch=None, suffix=None, threshold=0.05):
 		else:
 			checkpoint_filename += suffix
 
-		FIGURE_IK.savefig('posterior-nostart-maxfactor-ik-' + checkpoint_filename + '.png', bbox_inches='tight')
-		FIGURE_DISTS.savefig('posterior-nostart-maxfactor-dists-' + checkpoint_filename + '.png', bbox_inches='tight')
-		FIGURE_COMBINED.savefig('posterior-nostart-maxfactor-combined-' + checkpoint_filename + '.png', bbox_inches='tight')
-		for r in range(TEST_OBJ_GRID_NUM):
-			for c in range(TEST_OBJ_GRID_NUM):
-				AX_IK[r, c].cla()
-				AX_DISTS[r, c].cla()
-				AX_COMBINED[r, c].cla()
-		[cb.remove() for cb in CB_IK]
-		[cb.remove() for cb in CB_DISTS]
-		[cb.remove() for cb in CB_COMBINED]
-		del CB_IK[:]
-		del CB_DISTS[:]
-		del CB_COMBINED[:]
+		figure_ik.savefig('posterior-nostart-maxfactor-ik-' + checkpoint_filename + '.png', bbox_inches='tight')
+		figure_dists.savefig('posterior-nostart-maxfactor-dists-' + checkpoint_filename + '.png', bbox_inches='tight')
+		figure_combined.savefig('posterior-nostart-maxfactor-combined-' + checkpoint_filename + '.png', bbox_inches='tight')
+		for r in range(test_obj_grid_num):
+			for c in range(test_obj_grid_num):
+				ax_ik[r, c].cla()
+				ax_dists[r, c].cla()
+				ax_combined[r, c].cla()
+		[cb.remove() for cb in cb_ik]
+		[cb.remove() for cb in cb_dists]
+		[cb.remove() for cb in cb_combined]
+		del cb_ik[:]
+		del cb_dists[:]
+		del cb_combined[:]
 
 def model_train_multi_head(model, model_name, X_train, y_train, loss_mask_train, X_val, y_val, loss_mask_val, epochs=1000):
 	model = model.to(DEVICE)
@@ -298,12 +316,12 @@ if __name__ == '__main__':
 	# network params
 	in_dim = X.shape[1]-1
 	h_sizes = [
-				# [32, 32, 32],
+				[32, 32, 32],
 				# [256, 256, 256],
 				# [32, 256, 32],
 				# [128, 64, 32],
 				# [64, 32, 64]
-				[128, 256, 128],
+				# [128, 256, 128],
 			]
 	activation = 'relu'
 
@@ -317,3 +335,6 @@ if __name__ == '__main__':
 		loss = model_train_multi_head(model1, model_name, X_train, y_train, loss_mask_train, X_test, y_test, loss_mask_test)
 		# print(model1)
 		print("Final model1 loss: {:.2f}".format(loss))
+
+		# model1.load_state_dict(torch.load('models/' + model_name + '_best-double_prob.pth'))
+		# test_model(model1)
