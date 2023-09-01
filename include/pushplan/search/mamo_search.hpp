@@ -74,6 +74,7 @@ private:
 	unsigned int m_root_id;
 	HashManager<HashObjects, EqualsObjects> m_hashtable;
 	std::map<std::string, double> m_stats;
+	double m_timer;
 
 	std::vector<trajectory_msgs::JointTrajectory> m_rearrangements;
 	std::vector<MAMOAction> m_actions;

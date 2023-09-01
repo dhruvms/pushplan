@@ -53,7 +53,9 @@ public:
 		double *mapf_time, double *get_succs_time, double *sim_time);
 	unsigned int ComputeMAMOPriorityOrig();
 	void ComputePriorityFactors();
-	void SaveNode(unsigned int my_id,	unsigned int parent_id);
+	void SaveNode(
+		unsigned int my_id, unsigned int parent_id,
+		const std::string &suffix=std::string());
 
 	size_t GetObjectsHash() const;
 	void SetObjectsHash(const size_t& hash_val);
@@ -88,6 +90,8 @@ public:
 	bool has_mapf_soln() const;
 	const float& percent_ngr() const;
 	const std::vector<std::vector<double> >& obj_priority_data() const;
+
+	void ResetConstraints() { m_new_constraints = true; };
 
 private:
 	comms::ObjectsPoses m_all_objects; // all object poses at node

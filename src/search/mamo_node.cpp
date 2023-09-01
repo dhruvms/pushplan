@@ -629,7 +629,7 @@ void MAMONode::resetAgents()
 	m_all_object_states.clear();
 }
 
-void MAMONode::SaveNode(unsigned int my_id,	unsigned int parent_id)
+void MAMONode::SaveNode(unsigned int my_id, unsigned int parent_id, const std::string &suffix)
 {
 	// for (int tidx = 0; tidx < 1; tidx += 1)
 	{
@@ -654,7 +654,7 @@ void MAMONode::SaveNode(unsigned int my_id,	unsigned int parent_id)
 		ss << "_";
 		ss << std::setw(6) << std::setfill('0') << parent_id;
 		ss << "_";
-
+		ss << suffix;
 
 		std::string s = ss.str();
 

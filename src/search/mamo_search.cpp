@@ -54,7 +54,7 @@ bool MAMOSearch::CreateRoot()
 
 bool MAMOSearch::Solve(double budget)
 {
-	double t1 = GetTime();
+	m_timer = GetTime();
 	m_root_search->actions = 0;
 	m_root_search->noops = 0;
 	// m_root_search->priority = m_root_node->ComputeMAMOPriorityOrig();
@@ -65,7 +65,7 @@ bool MAMOSearch::Solve(double budget)
 
 	while (!m_OPEN.empty())
 	{
-		if (GetTime() - t1 > budget)
+		if (GetTime() - m_timer > budget)
 		{
 			SMPL_ERROR("MAMO Search took more than %f seconds!", budget);
 			break;
@@ -81,20 +81,20 @@ bool MAMOSearch::Solve(double budget)
 			double t2 = GetTime();
 			node->RunMAPF();
 			m_stats["mapf_time"] += GetTime() - t2;
-			node->SaveNode(next->state_id, next->bp == nullptr ? 0 : next->bp->state_id);
+			node->SaveNode(next->state_id, next->bp == nullptr ? 0 : next->bp->state_id, "TERMINATED");
 
 			m_solved_node = node;
 			m_solved_search = next;
 			m_solved = true;
 			extractRearrangements();
-			m_stats["total_time"] += GetTime() - t1;
+			m_stats["total_time"] += GetTime() - m_timer;
 
 			return true;
 		}
 		expand(next);
 		m_stats["expansions"] += 1;
 	}
-	m_stats["total_time"] += GetTime() - t1;
+	m_stats["total_time"] += GetTime() - m_timer;
 	return false;
 }
 
@@ -221,7 +221,11 @@ bool MAMOSearch::expand(MAMOSearchState *state)
 	}
 
 	createSuccs(node, state, &succ_object_centric_actions, &succ_objects, &succ_trajs, &debug_actions);
-	node->SaveNode(state->state_id, state->bp == nullptr ? 0 : state->bp->state_id);
+
+	double t_temp = GetTime();
+	node->SaveNode(state->state_id, state->bp == nullptr ? 0 : state->bp->state_id, "EXPANDED");
+	m_timer -= GetTime() - t_temp;
+
 	return true;
 }
 
@@ -403,9 +407,16 @@ void MAMOSearch::createSuccs(
 					SMPL_WARN("Generate %d, priority = %.2e", succ_id, succ_search_state->priority);
 					++m_stats["generated"];
 
-					std::stringstream reachable_str;
-					std::copy(reachable_ids.begin(), reachable_ids.end(), std::ostream_iterator<int>(reachable_str, ","));
-					SMPL_INFO("Movables reachable in NEW state %d : (%s)", succ_id, reachable_str.str().c_str());
+					double t_temp = GetTime();
+					auto node = m_hashtable.GetState(succ_id);
+					node->RunMAPF();
+					node->ResetConstraints();
+					node->SaveNode(succ_id, parent_search_state->state_id, "GENERATED");
+					m_timer -= GetTime() - t_temp;
+
+					// std::stringstream reachable_str;
+					// std::copy(reachable_ids.begin(), reachable_ids.end(), std::ostream_iterator<int>(reachable_str, ","));
+					// SMPL_INFO("Movables reachable in NEW state %d : (%s)", succ_id, reachable_str.str().c_str());
 				}
 				parent_node->AddChild(succ);
 				m_search_nodes.push_back(succ);
