@@ -706,11 +706,11 @@ bool BulletSim::setupPrimitiveObjects()
 		srv.request.o_yaw = m_distD(m_rng) * 2*M_PI;
 
 		srv.request.locked = false;
-		if (immov_added < m_num_immov) {
-			srv.request.movable = false;
+		if (mov_added < m_num_mov) {
+			srv.request.movable = true;
 		}
 		else {
-			srv.request.movable = true;
+			srv.request.movable = false;
 		}
 		srv.request.mass = 0.1 + m_distD(m_rng);
 		srv.request.mu = m_friction_min + (m_distD(m_rng) * (m_friction_max - m_friction_min));
@@ -734,19 +734,19 @@ bool BulletSim::setupPrimitiveObjects()
 											(double)srv.request.movable,
 											0.0 // flag for primitive object = false
 										};
-				if (immov_added < m_num_immov)
-				{
-					m_immov_ids.push_back(
-						std::make_pair(srv.response.id, srv.request.shape));
-					m_immov.push_back(data);
-					immov_added++;
-				}
-				else
+				if (mov_added < m_num_mov)
 				{
 					m_mov_ids.push_back(
 						std::make_pair(srv.response.id, srv.request.shape));
 					m_mov.push_back(data);
 					mov_added++;
+				}
+				else
+				{
+					m_immov_ids.push_back(
+						std::make_pair(srv.response.id, srv.request.shape));
+					m_immov.push_back(data);
+					immov_added++;
 				}
 			}
 
@@ -795,11 +795,11 @@ bool BulletSim::setupYCBObjects()
 		srv.request.o_p = 0.0;
 		srv.request.o_yaw = m_distD(m_rng) * 2*M_PI;
 
-		if (immov_added < m_num_immov) {
-			srv.request.movable = false;
+		if (mov_added < m_num_mov) {
+			srv.request.movable = true;
 		}
 		else {
-			srv.request.movable = true;
+			srv.request.movable = false;
 		}
 		srv.request.mu = m_friction_min + (m_distD(m_rng) * (m_friction_max - m_friction_min));
 
@@ -818,19 +818,19 @@ bool BulletSim::setupYCBObjects()
 											(double)srv.request.movable,
 											1.0 // YCB flag for YCB object = true
 										};
-				if (immov_added < m_num_immov)
-				{
-					m_immov_ids.push_back(
-						std::make_pair(srv.response.id, srv.request.obj_id));
-					m_immov.push_back(data);
-					immov_added++;
-				}
-				else
+				if (mov_added < m_num_mov)
 				{
 					m_mov_ids.push_back(
 						std::make_pair(srv.response.id, srv.request.obj_id));
 					m_mov.push_back(data);
 					mov_added++;
+				}
+				else
+				{
+					m_immov_ids.push_back(
+						std::make_pair(srv.response.id, srv.request.obj_id));
+					m_immov.push_back(data);
+					immov_added++;
 				}
 			}
 
