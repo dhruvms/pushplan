@@ -813,27 +813,59 @@ void Planner::read_solution()
 		while (!SOLUTION.eof())
 		{
 			getline(SOLUTION, line);
-			if (line.compare("GRASPAT") == 0)
-			{
-				getline(SOLUTION, line);
-				m_grasp_at = std::stoi(line);
-			}
-
-			else if (line.compare("SOLUTION") == 0)
+			if (line.compare("SOLUTION") == 0)
 			{
 				getline(SOLUTION, line);
 				int num_trajs = std::stoi(line);
 
-				// read all push trajs
+				// read all rearrangement trajs
 				m_rearrangements.clear();
-				for (int i = 0; i < num_trajs - 1; ++i)
+				for (int i = 0; i < num_trajs; ++i)
 				{
 					getline(SOLUTION, line);
-					if (line.compare("S") != 0)
+					if (line.compare("TRAJECTORY") != 0)
 					{
 						SMPL_ERROR("Did not find the start of a new solution trajectory where I expected!");
 						break;
 					}
+
+					// get MAMOAction params
+					getline(SOLUTION, line);
+					std::stringstream ssp_action(line);
+					std::string split_action;
+
+					MAMOAction action;
+					int count = 0;
+					while (ssp_action.good())
+					{
+						getline(ssp_action, split_action, ',');
+						int val = std::stoi(split_action);
+						switch (count)
+						{
+							case 0 : {
+								action._type = static_cast<MAMOActionType>(val);
+								break;
+							}
+							case 1 :
+							case 2 : {
+								if (val != -1) {
+									action._params.push_back(val);
+								}
+								break;
+							}
+							case 3 : {
+								if (val != -1) {
+									action._oid = val;
+								}
+								break;
+							}
+							default : {
+								break;
+							}
+						}
+						++count;
+					}
+					m_actions.push_back(std::move(action));
 
 					getline(SOLUTION, line);
 					int traj_points = std::stoi(line);
@@ -843,19 +875,19 @@ void Planner::read_solution()
 					for (int j = 0; j < traj_points; ++j)
 					{
 						getline(SOLUTION, line);
-						std::stringstream ssp(line);
-						std::string split;
+						std::stringstream ssp_wp(line);
+						std::string split_wp;
 
 						trajectory_msgs::JointTrajectoryPoint p;
 						int count = 0;
-						while (ssp.good())
+						while (ssp_wp.good())
 						{
-							getline(ssp, split, ',');
+							getline(ssp_wp, split_wp, ',');
 							if (count < 7) {
-								p.positions.push_back(std::stod(split));
+								p.positions.push_back(std::stod(split_wp));
 							}
 							else {
-								p.time_from_start = ros::Duration(std::stod(split));
+								p.time_from_start = ros::Duration(std::stod(split_wp));
 							}
 							++count;
 						}
@@ -863,42 +895,6 @@ void Planner::read_solution()
 						push_traj.points.push_back(std::move(p));
 					}
 					m_rearrangements.push_back(std::move(push_traj));
-				}
-
-				// read exec traj for OOI retrieval
-				getline(SOLUTION, line);
-				if (line.compare("S") != 0)
-				{
-					SMPL_ERROR("Did not find the start of a new solution trajectory where I expected!");
-					break;
-				}
-
-				getline(SOLUTION, line);
-				int traj_points = std::stoi(line);
-
-				m_exec.points.clear();
-				m_exec.joint_names = m_robot->RobotModel()->getPlanningJoints();
-				for (int j = 0; j < traj_points; ++j)
-				{
-					getline(SOLUTION, line);
-					std::stringstream ssp(line);
-					std::string split;
-
-					trajectory_msgs::JointTrajectoryPoint p;
-					int count = 0;
-					while (ssp.good())
-					{
-						getline(ssp, split, ',');
-						if (count < 7) {
-							p.positions.push_back(std::stod(split));
-						}
-						else {
-							p.time_from_start = ros::Duration(std::stod(split));
-						}
-						++count;
-					}
-
-					m_exec.points.push_back(std::move(p));
 				}
 			}
 		}
@@ -1364,26 +1360,35 @@ void Planner::writeState(const std::string& prefix)
 		}
 	}
 
-	if (!m_ngr.empty())
-	{
-		DATA << "NGR" << '\n';
-		DATA << m_ngr.size() << '\n';
-		for (const auto& p: m_ngr) {
-			DATA 	<< p.at(0) << ','
-					<< p.at(1) << '\n';
-		}
-	}
-
-	DATA << "GRASPAT" << '\n';
-	DATA << m_robot->GraspAt() << '\n';
 	DATA << "SOLUTION" << '\n';
 	DATA << m_rearrangements.size() + 1 << '\n';
-
-	for (const auto& traj: m_rearrangements)
+	for (size_t i = 0; i < m_rearrangements.size(); ++i)
 	{
-		DATA << 'S' << '\n';
-		DATA << traj.points.size() << '\n';
-		for (const auto& p: traj.points)
+		auto &action_params = m_actions.at(i);
+		int type = -1, pick_at = -1, place_at = -1, oid = -1;
+		type = static_cast<int>(action_params._type);
+
+		if (i < m_rearrangements.size() - 1)
+		{
+			// if any rearrangement traj execuction failed, m_violation == 1
+			if (action_params._type == MAMOActionType::PICKPLACE)
+			{
+				pick_at = action_params._params[0];
+				place_at = action_params._params[1];
+				oid = action_params._oid;
+			}
+		}
+		else
+		{
+			pick_at = action_params._params[0];
+			oid = m_ooi->GetID();
+		}
+
+		DATA << "TRAJECTORY" << '\n';
+		DATA << type << ',' << pick_at << ',' << place_at << ',' << oid << '\n';
+		DATA << m_rearrangements.at(i).points.size() << '\n';
+
+		for (const auto& p: m_rearrangements.at(i).points)
 		{
 			DATA 	<< p.positions[0] << ','
 					<< p.positions[1] << ','
@@ -1396,18 +1401,14 @@ void Planner::writeState(const std::string& prefix)
 		}
 	}
 
-	DATA << 'S' << '\n';
-	DATA << m_exec.points.size() << '\n';
-	for (const auto& p: m_exec.points)
+	if (!m_ngr.empty())
 	{
-		DATA 	<< p.positions[0] << ','
-				<< p.positions[1] << ','
-				<< p.positions[2] << ','
-				<< p.positions[3] << ','
-				<< p.positions[4] << ','
-				<< p.positions[5] << ','
-				<< p.positions[6] << ','
-				<< p.time_from_start.toSec() << '\n';
+		DATA << "NGR" << '\n';
+		DATA << m_ngr.size() << '\n';
+		for (const auto& p: m_ngr) {
+			DATA 	<< p.at(0) << ','
+					<< p.at(1) << '\n';
+		}
 	}
 
 	DATA.close();
