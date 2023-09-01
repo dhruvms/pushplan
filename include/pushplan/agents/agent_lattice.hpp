@@ -56,7 +56,6 @@ public:
 
 	unsigned int GetGoalHeuristic(int state_id);
 	unsigned int GetConflictHeuristic(int state_id);
-	unsigned int GetGoalHeuristic(const LatticeState& s);
 
 	bool ConvertPath(
 		const std::vector<int>& idpath);

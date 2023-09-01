@@ -358,16 +358,6 @@ unsigned int AgentLattice::GetConflictHeuristic(int state_id)
 	return s->hc;
 }
 
-unsigned int AgentLattice::GetGoalHeuristic(const LatticeState& s)
-{
-	return 0;
-	if (m_agent->PP()) {
-		return 0;
-	}
-	// TODO: RRA* informed backwards Dijkstra's heuristic
-	return ManhattanDist(s.coord, m_agent->Goal());
-}
-
 int AgentLattice::generateSuccessor(
 	const LatticeState* parent,
 	int dx, int dy,
