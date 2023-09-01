@@ -61,6 +61,7 @@ bool MAMONode::RunMAPF()
 		m_agents.at(i)->ResetInvalidPushes(
 			m_planner->GetGloballyInvalidPushes(),
 			m_planner->GetLocallyInvalidPushes(this->GetObjectsHash(), m_agents.at(i)->GetID()));
+		// m_agents.at(i)->UseLearnedCost(!m_expanded_once);
 	}
 
 	if (!m_new_constraints)

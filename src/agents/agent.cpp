@@ -160,6 +160,7 @@ void Agent::InitTorch(
 	m_table_oz = table_oz;
 	m_table_sx = table_sx;
 	m_table_sy = table_sy;
+	m_x_offset = int((2 * m_table_sy)/RES);
 
 	std::vector<double> obj_props =
 		{	(double)m_obj.Shape()/2,
@@ -197,6 +198,16 @@ int Agent::InvalidPushCount(const Coord &c)
 	return m_lattice->InvalidPushCount(c);
 }
 
+void Agent::UseLearnedCost(bool flag)
+{
+	if (flag) {
+		computeCellCosts();
+	}
+	else {
+		m_lattice->DisableLearnedModel();
+	}
+}
+
 bool Agent::SatisfyPath(
 	HighLevelNode* ct_node,
 	Trajectory** sol_path,
@@ -214,8 +225,8 @@ bool Agent::SatisfyPath(
 		m_lattice->AvoidAgents(*to_avoid);
 	}
 
-	// // run learned model to compute cell costs
-	// computeCellCosts();
+	// run learned model to compute cell costs
+	computeCellCosts();
 
 	std::vector<int> solution;
 	int solcost;
@@ -634,7 +645,38 @@ void Agent::computeCellCosts()
 	cols = cols.toType(at::kLong);
 	at::Tensor cell_cost = (1 - (output.index({rows, cols}) * output.index({rows, cols * 0}))) * CELL_COST_FACTOR;
 
+	// typedef Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> MatrixXf_rm; // row-major eigen matrix
+	// float* data_p = output.data_ptr<float>();
+	// Eigen::Map<MatrixXf_rm> output_eig(data_p, output.size(0), output.size(1));
+
+	// m_start_poses = output_eig.block(0, 2, output_eig.rows(), 9);
 	m_lattice->SetCellCosts(cell_cost, m_table_ox, m_table_oy, m_table_sx, m_table_sy);
+}
+
+void Agent::GetPushStartPose(Eigen::Affine3d &pose, const State &goal)
+{
+	double x = goal.at(0) - m_table_ox + m_table_sx;
+	double y = goal.at(1) - m_table_oy + m_table_sy;
+	int idx = m_x_offset * int(x/RES) + int(y/RES);
+
+	Eigen::VectorXf pose_vec = m_start_poses.row(idx);
+	Eigen::Vector3f c1, c2, c3;
+	c2 = pose_vec.tail(3);
+	c1 = pose_vec.segment(3, 3);
+
+	// Gram-Schmidt orthonormalisation
+	c1.normalize();
+	c2 = c2 - (c1.dot(c2) * c1);
+	c2.normalize();
+
+	Eigen::Matrix3f R;
+	R << c1, c2, c1.cross(c2);
+	Eigen::Quaternion<float> q(R);
+	Eigen::Affine3f pose_f = Eigen::Translation3f(pose_vec.head(3)) * q;
+	pose = pose_f.cast<double>();
+	pose.translation().x() += m_table_ox;
+	pose.translation().y() += m_table_oy;
+	pose.translation().z() += m_table_oz;
 }
 
 } // namespace clutter

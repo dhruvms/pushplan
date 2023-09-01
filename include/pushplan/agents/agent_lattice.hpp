@@ -42,6 +42,7 @@ public:
 		const at::Tensor &cell_costs,
 		double table_ox, double table_oy,
 		double table_sx, double table_sy);
+	void DisableLearnedModel();
 
 	void GetSuccs(
 		int state_id,

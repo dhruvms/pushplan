@@ -2352,6 +2352,11 @@ bool Robot::PlanPush(
 
 	// get push start pose
 	getPushStartPose(push, push_start_pose, input);
+
+	// object->GetPushStartPose(push_start_pose, obj_traj->back().state);
+	// SV_SHOW_INFO_NAMED("sampled_push_pose", smpl::visual::MakePoseMarkers(
+	// 	push_start_pose, m_grid_i->getReferenceFrame(), "sampled_push_pose"));
+
 	debug_action_start = { push_start_pose.translation().x(), push_start_pose.translation().y() };
 
 	bool failure = false;

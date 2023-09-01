@@ -69,6 +69,7 @@ public:
 	// const bgi::rtree<value, bgi::quadratic<8> >& GetInvalidPushes() const;
 	void AddHallucinatedConstraint(const Coord &c);
 	int InvalidPushCount(const Coord &c);
+	void UseLearnedCost(bool flag);
 
 	bool SatisfyPath(
 		HighLevelNode* ct_node,
@@ -94,6 +95,7 @@ public:
 	}
 
 	bool GetSE2Push(std::vector<double>& push, bool input=false);
+	void GetPushStartPose(Eigen::Affine3d &pose, const State &goal);
 	void GetVoxels(const ContPose& pose, std::set<Coord, coord_compare>& voxels);
 	const int& GetID() const { return m_obj.desc.id; };
 
@@ -173,8 +175,10 @@ private:
 	std::shared_ptr<at::Tensor> m_push_locs;
 	std::shared_ptr<torch::jit::script::Module> m_push_model;
 	at::Tensor m_obj_props, m_thresh_vec;
+	Eigen::MatrixXf m_start_poses;
 	double m_table_ox, m_table_oy, m_table_oz, m_table_sx, m_table_sy;
 	double m_push_thresh;
+	int m_x_offset;
 
 	void computeCellCosts();
 };

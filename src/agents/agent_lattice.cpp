@@ -161,6 +161,11 @@ void AgentLattice::SetCellCosts(
 	m_use_push_model = true;
 }
 
+void AgentLattice::DisableLearnedModel()
+{
+	m_use_push_model = false;
+}
+
 void AgentLattice::GetSuccs(
 	int state_id,
 	std::vector<int>* succ_ids,
@@ -723,6 +728,7 @@ unsigned int AgentLattice::checkNNCost(const Coord& c)
 	// cost = std::max(std::min(20.0, cost), 2.0);
 	return std::ceil(cost);
 }
+
 void AgentLattice::computeTorchCost(LatticeState* s)
 {
 	double x = s->state.at(0) - m_table_ox + m_table_sx;
