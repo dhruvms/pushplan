@@ -920,6 +920,9 @@ bool Robot::attachAndCheckOOI(const smpl::RobotState& state)
 		// object attached, but are we collision free with it grasped?
 		if (!m_cc_i->isStateValid(state))
 		{
+			auto markers = m_cc_i->getCollisionRobotVisualization(state);
+			SV_SHOW_INFO(markers);
+
 			ROS_ERROR("Robot state is in collision with attached object.");
 			return false;
 		}
@@ -1488,57 +1491,36 @@ bool Robot::SatisfyPath(HighLevelNode* ct_node, Trajectory** sol_path, int& expa
 }
 
 bool Robot::ComputeGrasps(
-	const std::vector<double>& pregrasp_goal)
+	const std::vector<Eigen::Affine3d> &pregrasps)
 {
 	m_home_state.clear();
 	m_home_state.insert(m_home_state.begin(),
 		m_start_state.joint_state.position.begin() + 1, m_start_state.joint_state.position.end());
 	m_home_pose = m_rm->computeFK(m_home_state);
 
-	m_pregrasp_state.clear();
-	m_grasp_state.clear();
-	m_postgrasp_state.clear();
-
-	bool success = false;
-	UpdateKDLRobot(0);
-
-	smpl::RobotState ee_state;
-	m_grasp_z = m_table_z + ((m_distD(m_rng) * 0.05) + 0.025);
-	Eigen::Affine3d ee_pose = Eigen::Translation3d(m_ooi.desc.o_x + 0.025 * std::cos(pregrasp_goal[5]), m_ooi.desc.o_y + 0.025 * std::sin(pregrasp_goal[5]), m_grasp_z) *
-								Eigen::AngleAxisd(pregrasp_goal[5], Eigen::Vector3d::UnitZ()) *
-								Eigen::AngleAxisd(0.0, Eigen::Vector3d::UnitY()) *
-								Eigen::AngleAxisd(0.0, Eigen::Vector3d::UnitX());
-
-	auto* vis_name = "grasp_pose";
-	SV_SHOW_INFO_NAMED(vis_name, smpl::visual::MakePoseMarkers(
-		ee_pose, m_grid_i->getReferenceFrame(), vis_name));
-
-	if (!getStateNearPose(ee_pose, ee_state, m_grasp_state, 1)) {
-		return false;
-	}
-	m_grasp_pose = m_rm->computeFK(m_grasp_state);
-
-	// vis_name = "grasp_state";
-	// auto markers = m_cc_i->getCollisionModelVisualization(m_grasp_state);
-	// for (auto& marker : markers) {
-	// 	marker.ns = vis_name;
-	// }
-	// SV_SHOW_INFO_NAMED(vis_name, markers);
-
-	// SMPL_INFO("Found grasp state!!");
-
-	// compute pregrasp state
-	ee_pose = m_rm->computeFK(m_grasp_state);
-	ee_pose.translation().x() = pregrasp_goal[0];
-	ee_pose.translation().y() = pregrasp_goal[1];
-
-	vis_name = "pregrasp_pose";
-	SV_SHOW_INFO_NAMED(vis_name, smpl::visual::MakePoseMarkers(
-		ee_pose, m_grid_i->getReferenceFrame(), vis_name));
-
-	if (getStateNearPose(ee_pose, m_grasp_state, m_pregrasp_state, 1))
+	for (const auto &pregrasp : pregrasps)
 	{
+		m_pregrasp_state.clear();
+		m_grasp_state.clear();
+		m_postgrasp_state.clear();
+
+		UpdateKDLRobot(0);
+
+		smpl::RobotState ee_state;
+		Eigen::Affine3d ee_pose = pregrasp;
+		m_grasp_z = m_table_z + ((m_distD(m_rng) * 0.05) + 0.025);
+		ee_pose.translation().z() = m_grasp_z;
+
+		auto* vis_name = "pregrasp_pose";
+		SV_SHOW_INFO_NAMED(vis_name, smpl::visual::MakePoseMarkers(
+			ee_pose, m_grid_i->getReferenceFrame(), vis_name));
+
+		if (!getStateNearPose(ee_pose, ee_state, m_pregrasp_state, 1, "compute_pregrasp")) {
+			continue;
+		}
 		m_pregrasp_pose = m_rm->computeFK(m_pregrasp_state);
+		m_grasp_z = m_pregrasp_pose.translation().z();
+
 		// vis_name = "pregrasp_state";
 		// auto markers = m_cc_i->getCollisionModelVisualization(m_pregrasp_state);
 		// for (auto& marker : markers) {
@@ -1546,38 +1528,60 @@ bool Robot::ComputeGrasps(
 		// }
 		// SV_SHOW_INFO_NAMED(vis_name, markers);
 
-		// SMPL_INFO("Found pregrasp state!");
-		ee_pose = m_rm->computeFK(m_grasp_state);
-		ee_pose.translation().z() += m_grasp_lift;
+		// SMPL_INFO("Found pregrasp state!!");
 
-		// vis_name = "postgrasp_pose";
-		// SV_SHOW_INFO_NAMED(vis_name, smpl::visual::MakePoseMarkers(
-		// 	ee_pose, m_grid_i->getReferenceFrame(), vis_name));
+		// compute grasp state
+		ee_pose = m_pregrasp_pose;
+		ee_pose.translation().x() = m_ooi.desc.o_x;
+		ee_pose.translation().y() = m_ooi.desc.o_y;
 
-		// compute postgrasp state
-		if (getStateNearPose(ee_pose, m_grasp_state, m_postgrasp_state, 1))
+		vis_name = "grasp_pose";
+		SV_SHOW_INFO_NAMED(vis_name, smpl::visual::MakePoseMarkers(
+			ee_pose, m_grid_i->getReferenceFrame(), vis_name));
+
+		if (getStateNearPose(ee_pose, m_pregrasp_state, m_grasp_state, 1, "compute_grasp"))
 		{
-			m_postgrasp_pose = m_rm->computeFK(m_postgrasp_state);
-			// vis_name = "postgrasp_state";
-			// auto markers = m_cc_i->getCollisionModelVisualization(m_postgrasp_state);
+			m_grasp_pose = m_rm->computeFK(m_grasp_state);
+			// vis_name = "grasp_state";
+			// auto markers = m_cc_i->getCollisionModelVisualization(m_grasp_state);
 			// for (auto& marker : markers) {
 			// 	marker.ns = vis_name;
 			// }
 			// SV_SHOW_INFO_NAMED(vis_name, markers);
 
-			// SMPL_INFO("Found postgrasp state!!!");
+			// SMPL_INFO("Found grasp state!");
+			ee_pose = m_grasp_pose;
+			ee_pose.translation().z() += m_grasp_lift;
 
-			if (!attachAndCheckOOI(m_postgrasp_state)) {
+			// vis_name = "postgrasp_pose";
+			// SV_SHOW_INFO_NAMED(vis_name, smpl::visual::MakePoseMarkers(
+			// 	ee_pose, m_grid_i->getReferenceFrame(), vis_name));
+
+			// compute postgrasp state
+			if (getStateNearPose(ee_pose, m_grasp_state, m_postgrasp_state, 1, "compute_postgrasp"))
+			{
+				m_postgrasp_pose = m_rm->computeFK(m_postgrasp_state);
+				// vis_name = "postgrasp_state";
+				// auto markers = m_cc_i->getCollisionModelVisualization(m_postgrasp_state);
+				// for (auto& marker : markers) {
+				// 	marker.ns = vis_name;
+				// }
+				// SV_SHOW_INFO_NAMED(vis_name, markers);
+
+				// SMPL_INFO("Found postgrasp state!!!");
+
+				if (!attachAndCheckOOI(m_postgrasp_state)) {
+					detachObject();
+					continue;
+				}
 				detachObject();
-				return false;
-			}
-			detachObject();
 
-			success = true;
+				return true;
+			}
 		}
 	}
 
-	return success;
+	return false;
 }
 
 bool Robot::UpdateKDLRobot(int mode)

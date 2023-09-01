@@ -89,7 +89,7 @@ public:
 	bool SatisfyPath(HighLevelNode* ct_node, Trajectory** sol_path, int& expands, int& min_f);
 
 	bool ComputeGrasps(
-		const std::vector<double>& pregrasp_goal);
+		const std::vector<Eigen::Affine3d> &pregrasps);
 	void ConvertTraj(
 		const Trajectory& traj_in,
 		trajectory_msgs::JointTrajectory& traj_out);
