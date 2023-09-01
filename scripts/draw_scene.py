@@ -25,6 +25,7 @@ def ParseFile(filepath, saving=True):
 	ngr = []
 	goals = []
 	pushes = []
+	ooi_id = None
 	with open(filepath, 'r') as f:
 		done = False
 		while not done:
@@ -104,6 +105,13 @@ def ParseFile(filepath, saving=True):
 						invalid_g = [float(val) for val in line.split(',')]
 						invalid.append(invalid_g)
 					invalids[obj_id] = invalid
+
+			if line == 'ooi':
+				line = f.readline()[:-1]
+				ooi_id = int(line)
+
+	if ooi_id is not None:
+		objs[999] = objs.pop(ooi_id)
 
 	return objs, trajs, invalids, ngr, goals, pushes
 
