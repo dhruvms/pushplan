@@ -895,66 +895,63 @@ void Object::updatePoseGoal()
 
 void Object::initPregrasps()
 {
-	if (this->Graspable())
+	double half_xs, half_ys;
+	if (!this->desc.ycb)
 	{
-		double half_xs, half_ys;
-		if (!this->desc.ycb)
-		{
-			half_xs = this->desc.x_size;
-			half_ys = this->desc.y_size;
-		}
-		else
-		{
-			auto obj = YCB_OBJECT_DIMS.find(this->desc.shape);
-			half_xs = obj->second[0];
-			half_ys = obj->second[1];
-		}
+		half_xs = this->desc.x_size;
+		half_ys = this->desc.y_size;
+	}
+	else
+	{
+		auto obj = YCB_OBJECT_DIMS.find(this->desc.shape);
+		half_xs = obj->second[0];
+		half_ys = obj->second[1];
+	}
 
-		if (m_shape == 0)
+	if (m_shape == 0)
+	{
+		std::vector<std::pair<int, int> > dirs = { {-1, 0}, {1, 0}, {0, -1}, {0, 1}};
+		for (const auto &d : dirs)
 		{
-			std::vector<std::pair<int, int> > dirs = { {-1, 0}, {1, 0}, {0, -1}, {0, 1}};
-			for (const auto &d : dirs)
+			double x = 0, y = 0, yaw = 0;
+			bool add = false;
+			if (d.first != 0 && half_ys < GRIPPER_WIDTH_2)
 			{
-				double x = 0, y = 0, yaw = 0;
-				bool add = false;
-				if (d.first != 0 && half_ys < GRIPPER_WIDTH_2)
-				{
-					x += d.first * (half_xs + 0.05);
-					yaw -= M_PI * (d.first > 0);
-					add = true;
-				}
-				else if (d.second != 0 && half_xs < GRIPPER_WIDTH_2)
-				{
-					y += d.second * (half_ys + 0.05);
-					yaw += M_PI_2 * d.second * -1;
-					add = true;
-				}
-
-				if (add)
-				{
-					Eigen::Affine3d pose = Eigen::Translation3d(x, y, -(this->desc.z_size)/2.0) *
-											Eigen::AngleAxisd(yaw, Eigen::Vector3d::UnitZ()) *
-											Eigen::AngleAxisd(0.0, Eigen::Vector3d::UnitY()) *
-											Eigen::AngleAxisd(0.0, Eigen::Vector3d::UnitX());
-					m_pregrasps.push_back(std::move(pose));
-				}
+				x += d.first * (half_xs + 0.05);
+				yaw -= M_PI * (d.first > 0);
+				add = true;
 			}
-		}
-		else
-		{
-			double r = 0.05 + half_xs;
-			for (int i = 0; i < 8; ++i)
+			else if (d.second != 0 && half_xs < GRIPPER_WIDTH_2)
 			{
-				double yaw = 0.0 + i * M_PI_4;
-				double x = r * std::cos(yaw);
-				double y = r * std::sin(yaw);
+				y += d.second * (half_ys + 0.05);
+				yaw += M_PI_2 * d.second * -1;
+				add = true;
+			}
 
-				Eigen::Affine3d pose = Eigen::Translation3d(x, y, -(this->desc.z_size)/4.0) *
-										Eigen::AngleAxisd(yaw + M_PI, Eigen::Vector3d::UnitZ()) *
+			if (add)
+			{
+				Eigen::Affine3d pose = Eigen::Translation3d(x, y, -(this->desc.z_size)/2.0) *
+										Eigen::AngleAxisd(yaw, Eigen::Vector3d::UnitZ()) *
 										Eigen::AngleAxisd(0.0, Eigen::Vector3d::UnitY()) *
 										Eigen::AngleAxisd(0.0, Eigen::Vector3d::UnitX());
 				m_pregrasps.push_back(std::move(pose));
 			}
+		}
+	}
+	else
+	{
+		double r = 0.05 + half_xs;
+		for (int i = 0; i < 8; ++i)
+		{
+			double yaw = 0.0 + i * M_PI_4;
+			double x = r * std::cos(yaw);
+			double y = r * std::sin(yaw);
+
+			Eigen::Affine3d pose = Eigen::Translation3d(x, y, -(this->desc.z_size)/4.0) *
+									Eigen::AngleAxisd(yaw + M_PI, Eigen::Vector3d::UnitZ()) *
+									Eigen::AngleAxisd(0.0, Eigen::Vector3d::UnitY()) *
+									Eigen::AngleAxisd(0.0, Eigen::Vector3d::UnitX());
+			m_pregrasps.push_back(std::move(pose));
 		}
 	}
 }
