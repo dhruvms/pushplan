@@ -141,6 +141,7 @@ def model_train_multi_head(model, model_name, X_train, y_train, loss_mask_train,
 	# loss function and optimizer
 	bce = nn.BCELoss(reduction='none')  # binary cross entropy
 	mse = nn.MSELoss(reduction='none')
+	mae = nn.L1Loss(reduction='none')
 	optimizer = optim.Adam(model.parameters(), lr=0.0001)
 
 	N = X_train.shape[0]
@@ -169,11 +170,17 @@ def model_train_multi_head(model, model_name, X_train, y_train, loss_mask_train,
 				combined_pred = model(X_batch)
 				bce_loss_ik = bce(combined_pred[:, 0], y_batch[:, 0])
 				bce_loss_ik = bce_loss_ik * loss_mask_batch[:, 0]
-				# mse_loss = mse(combined_pred[:, 1], y_batch[:, 1])
-				# mse_loss = mse_loss * loss_mask_batch[:, 1]
 				bce_loss_disc = bce(combined_pred[:, 1], y_batch[:, 1])
 				bce_loss_disc = bce_loss_disc * loss_mask_batch[:, 1]
-				loss = bce_loss_ik + bce_loss_disc
+
+				mse_loss_pose_xyz = mse(combined_pred[:, 2:5], y_batch[:, 2:5])
+				mse_loss_pose_xyz = mse_loss_pose_xyz * loss_mask_batch[:, 2:5]
+				mse_loss_pose_xyz = mse_loss_pose_xyz.sum(dim=1)
+				mae_loss_pose_rot = mae(combined_pred[:, 5:], y_batch[:, 5:])
+				mae_loss_pose_rot = mae_loss_pose_rot * loss_mask_batch[:, 5:]
+				mae_loss_pose_rot = mae_loss_pose_rot.sum(dim=1)
+
+				loss = bce_loss_ik + bce_loss_disc + mse_loss_pose_xyz + mae_loss_pose_rot
 				loss = loss.mean()
 
 				# backward pass
@@ -188,7 +195,10 @@ def model_train_multi_head(model, model_name, X_train, y_train, loss_mask_train,
 			combined_pred_eval = model(X_val)
 			eval_ik_loss = F.binary_cross_entropy(combined_pred_eval[:, 0], y_val[:, 0], reduction='none') * loss_mask_val[:, 0]
 			eval_disc_loss = F.binary_cross_entropy(combined_pred_eval[:, 1], y_val[:, 1], reduction='none') * loss_mask_val[:, 1]
-			eval_loss = eval_ik_loss + eval_disc_loss
+			eval_pose_loss = F.mse_loss(combined_pred_eval[:, 2:], y_val[:, 2:], reduction='none') * loss_mask_val[:, 2:]
+			eval_pose_loss = eval_pose_loss.sum(dim=1)
+
+			eval_loss = eval_ik_loss + eval_disc_loss + eval_pose_loss
 			eval_loss = eval_loss.mean().cpu().numpy()
 			if eval_loss < best_eval_loss:
 				# print('\tAccuracy improved at epoch {}'.format(epoch))
@@ -206,12 +216,12 @@ def model_train_multi_head(model, model_name, X_train, y_train, loss_mask_train,
 	model.eval()
 	model.to(torch.device("cpu"))
 	with torch.no_grad():
-		draw_checkpoint(model1, model_name, epoch=-1, suffix='-double_prob-end-test')
-		torch.save(model.state_dict(), 'models/' + model_name + '_end-double_prob.pth')
+		draw_checkpoint(model1, model_name, epoch=-1, suffix='-triple_task_GSON-end-test')
+		torch.save(model.state_dict(), 'models/' + model_name + '_end-triple_task_GSON.pth')
 
 		model.load_state_dict(best_weights)
-		torch.save(model.state_dict(), 'models/' + model_name + '_best-double_prob.pth')
-		draw_checkpoint(model1, model_name, epoch=-1, suffix='-double_prob-best-test')
+		torch.save(model.state_dict(), 'models/' + model_name + '_best-triple_task_GSON.pth')
+		draw_checkpoint(model1, model_name, epoch=-1, suffix='-triple_task_GSON-best-test')
 
 		x_sample = X_val[0].unsqueeze(0).to(torch.device("cpu"))
 		print()
@@ -222,11 +232,11 @@ def model_train_multi_head(model, model_name, X_train, y_train, loss_mask_train,
 
 		# Use torch.jit.trace to generate a torch.jit.ScriptModule via tracing.
 		traced_model = torch.jit.trace(model, (x_sample))
-		torch.jit.save(traced_model, 'models/' + model_name + '_best_traced-double_prob.pth')
+		torch.jit.save(traced_model, 'models/' + model_name + '_best_traced-triple_task_GSON.pth')
 
-		model.load_state_dict(torch.load('models/' + model_name + '_end-double_prob.pth'))
+		model.load_state_dict(torch.load('models/' + model_name + '_end-triple_task_GSON.pth'))
 		traced_model = torch.jit.trace(model, (x_sample))
-		torch.jit.save(traced_model, 'models/' + model_name + '_end_traced-double_prob.pth')
+		torch.jit.save(traced_model, 'models/' + model_name + '_end_traced-triple_task_GSON.pth')
 
 	return best_eval_loss
 
@@ -244,18 +254,18 @@ if __name__ == '__main__':
 	delta_y = X.loc[:, 'o_oy'] + np.sin(X.loc[:, 'm_dir_des']) * X.loc[:, 'm_dist_des']
 	X.insert(loc=10, column='delta_x', value=delta_x)
 	X.insert(loc=11, column='delta_y', value=delta_y)
-	# make binary labels
-	y = copy.deepcopy(all_data.iloc[:, [i for i in list(range(24, 26)) + [-1]]])
+	y = copy.deepcopy(all_data.iloc[:, [i for i in list(range(24, 26)) + [-1] + list(range(10, 19))]])
+
 	# binarise ik success labels
 	y.loc[y['r'] > 0, 'r'] = 2 # push IK failed => temporarily class 2
 	y.loc[y['r'] <= 0, 'r'] = 1 # push IK succeeded => class 1
 	y.loc[y['r'] == 2, 'r'] = 0 # push IK failed => class 0
 
-	# compute distance between desired and achieved poses in polar coordinates
-	final_pose_rot = all_data.iloc[:, 29:38].values.reshape(all_data.shape[0], 3, 3).transpose(0, 2, 1)
-	_, _, yaws = get_euler_from_R_tensor(final_pose_rot)
-	yaw_discrepancy = shortest_angle_dist(yaws, all_data.loc[:, 'o_oyaw'].values)
-	yaw_discrepancy[all_data['r'] != 0] = 0.0
+	# # compute distance between desired and achieved poses in polar coordinates
+	# final_pose_rot = all_data.iloc[:, 29:38].values.reshape(all_data.shape[0], 3, 3).transpose(0, 2, 1)
+	# _, _, yaws = get_euler_from_R_tensor(final_pose_rot)
+	# yaw_discrepancy = shortest_angle_dist(yaws, all_data.loc[:, 'o_oyaw'].values)
+	# yaw_discrepancy[all_data['r'] != 0] = 0.0
 
 	ang_dist = shortest_angle_dist(y.loc[:, 'm_dir_ach'], X.loc[:, 'm_dir_des'])
 	polar_dist = y.loc[:, 'm_dist_ach']**2 + X.loc[:, 'm_dist_des']**2 - 2*y.loc[:, 'm_dist_ach']*X.loc[:, 'm_dist_des']*np.cos(ang_dist)
@@ -281,7 +291,7 @@ if __name__ == '__main__':
 	y_disc_aug = None
 	for l in disc_levels:
 		y_new = (y_disc.iloc[:, 1] < l).astype(int)
-		y_new = np.hstack([y_disc.iloc[:, 0].values[:, None], y_new.values[:, None]])
+		y_new = np.hstack([y_disc.iloc[:, 0].values[:, None], y_new.values[:, None], y_disc.iloc[:, 2:].values])
 		X_new = np.hstack([X_disc, l * np.ones(X_disc.shape[0])[:, None]])
 
 		if X_disc_aug is None:
@@ -297,31 +307,33 @@ if __name__ == '__main__':
 	X_all = np.vstack([X_disc_aug, X_no_disc_new_col])
 	y_all = np.vstack([y_disc_aug, y_no_disc])
 
-	# compute loss mask - task 2 (distance/discrepancy prediction) is only if we sucessfully simulated
+	# compute loss mask - task 2 and 3 (distance/discrepancy and push start pose prediction) is only if we sucessfully simulated
 	loss_mask = np.ones(y_all.shape)
 	loss_mask[X_disc.shape[0]:X_disc_aug.shape[0], 0] = 0.0
-	loss_mask[X_disc_aug.shape[0]:, 1] = 0.0
+	loss_mask[X_disc.shape[0]:X_disc_aug.shape[0], 2:] = 0.0
+	loss_mask[X_disc_aug.shape[0]:, 1:] = 0.0
 	y_all = np.hstack([y_all, loss_mask])
+	tasks_coord_dims = 1 + 1 + 9
 
 	# Convert to 2D PyTorch tensors
 	X_torch = torch.tensor(X_all, dtype=torch.float32).to(DEVICE)
 	y_torch = torch.tensor(y_all, dtype=torch.float32).to(DEVICE)
 	# train-test split: Hold out the test set for final model evaluation
 	X_train, X_test, y_train, y_test = train_test_split(X_torch, y_torch, train_size=0.75, shuffle=True)
-	loss_mask_train = y_train[:, -2:]
-	y_train = y_train[:, :-2]
-	loss_mask_test = y_test[:, -2:]
-	y_test = y_test[:, :-2]
+	loss_mask_train = y_train[:, tasks_coord_dims:]
+	y_train = y_train[:, :tasks_coord_dims]
+	loss_mask_test = y_test[:, tasks_coord_dims:]
+	y_test = y_test[:, :tasks_coord_dims]
 
 	# network params
 	in_dim = X.shape[1]-1
 	h_sizes = [
-				[32, 32, 32],
+				# [32, 32, 32],
 				# [256, 256, 256],
 				# [32, 256, 32],
 				# [128, 64, 32],
 				# [64, 32, 64]
-				# [128, 256, 128],
+				[64, 128, 256, 128, 64],
 			]
 	activation = 'relu'
 
@@ -331,9 +343,9 @@ if __name__ == '__main__':
 
 		layers = len(h_sizes[H]) + 1
 		model1 = PushSuccessNet(threshold=True)
-		model1.initialise(in_dim, activation=activation, layers=layers, h_sizes=h_sizes[H])
+		model1.initialise(in_dim, activation=activation, layers=layers, h_sizes=h_sizes[H], pose=True)
 		loss = model_train_multi_head(model1, model_name, X_train, y_train, loss_mask_train, X_test, y_test, loss_mask_test)
-		# print(model1)
+		print(model1)
 		print("Final model1 loss: {:.2f}".format(loss))
 
 		# model1.load_state_dict(torch.load('models/' + model_name + '_best-double_prob.pth'))

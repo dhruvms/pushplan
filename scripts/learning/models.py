@@ -17,10 +17,10 @@ activations = nn.ModuleDict([
 				['tanh', nn.Tanh()],
 			])
 
-def one_layer(in_f, out_f, activation='relu', *args, **kwargs):
+def one_layer(in_f, out_f, activation='relu'):
 
 	return nn.Sequential(
-		nn.Linear(in_f, out_f, *args, **kwargs),
+		nn.Linear(in_f, out_f),
 		activations[activation]
 	)
 
@@ -38,8 +38,8 @@ class BCNet(nn.Module):
 			assert len(h_sizes) == layers-1
 			self.h_sizes = [in_dim] + copy.deepcopy(h_sizes)
 
-			self.layers = nn.Sequential(*[one_layer(self.h_sizes[i-1], self.h_sizes[i], activation=activation, *args, **kwargs) for i in range(1, layers)])
-			self.output = nn.Linear(self.h_sizes[-1], out_dim, *args, **kwargs)
+			self.layers = nn.Sequential(*[one_layer(self.h_sizes[i-1], self.h_sizes[i], activation=activation) for i in range(1, layers)])
+			self.output = nn.Linear(self.h_sizes[-1], out_dim)
 		else:
 			self.layers = one_layer(in_dim, in_dim, activation)
 			self.output = nn.Linear(in_dim, out_dim)
@@ -67,29 +67,46 @@ class PushSuccessNet(nn.Module):
 			self.in_dim += 1 if self.threshold else 0
 			self.h_sizes = [self.in_dim] + copy.deepcopy(h_sizes)
 
-			self.layers = nn.Sequential(*[one_layer(self.h_sizes[i-1], self.h_sizes[i], activation=activation, *args, **kwargs) for i in range(1, layers)])
-			self.ik_task = nn.Linear(self.h_sizes[-1], 1, *args, **kwargs)
+			self.layers = nn.Sequential(*[one_layer(self.h_sizes[i-1], self.h_sizes[i], activation=activation) for i in range(1, layers)])
+			self.ik_task = nn.Linear(self.h_sizes[-1], 1)
 
 			if self.threshold:
 				self.dist_task = nn.Sequential(
-									nn.Linear(self.h_sizes[-1]+1, self.h_sizes[-1], *args, **kwargs),
+									nn.Linear(self.h_sizes[-1]+1, self.h_sizes[-1]//2),
 									nn.ReLU(),
-									nn.Linear(self.h_sizes[-1], 1, *args, **kwargs)
+									nn.Linear(self.h_sizes[-1]//2, 1)
 								)
 			else:
-				self.dist_task = nn.Linear(self.h_sizes[-1], 1, *args, **kwargs)
+				self.dist_task = nn.Linear(self.h_sizes[-1], 1)
+
+			if (kwargs['pose']):
+				self.pred_pose = True
+
+				p = [self.h_sizes[-1], 32, 16, 9]
+				self.pose_task = nn.Sequential(
+									nn.Linear(self.h_sizes[-1], 32),
+									nn.ReLU(),
+									nn.Linear(32, 16),
+									nn.ReLU(),
+									nn.Linear(16, 9)
+								)
 		else:
 			self.layers = one_layer(self.in_dim, self.in_dim, activation)
-			self.ik_task = nn.Linear(self.in_dim, 1, *args, **kwargs)
+			self.ik_task = nn.Linear(self.in_dim, 1)
 
 			if self.threshold:
 				self.dist_task = nn.Sequential(
-									nn.Linear(self.in_dim+1, self.in_dim, *args, **kwargs),
+									nn.Linear(self.in_dim+1, self.in_dim//2),
 									nn.ReLU(),
-									nn.Linear(self.in_dim, 1, *args, **kwargs)
+									nn.Linear(self.in_dim//2, 1)
 								)
 			else:
-				self.dist_task = nn.Linear(self.in_dim, 1, *args, **kwargs)
+				self.dist_task = nn.Linear(self.in_dim, 1)
+
+			if (kwargs['pose']):
+				self.pred_pose = True
+
+				self.pose_task = nn.Linear(self.h_sizes[-1], 9)
 
 		self.sigmoid = nn.Sigmoid() # for the IK success probability head
 		self.relu = nn.ReLU() # for the distance between achieved and desired poses
@@ -99,10 +116,19 @@ class PushSuccessNet(nn.Module):
 	def forward(self, x):
 		ik = None
 		dist = None
+		pose = None
 		if self.threshold:
 			out = x[:, :-1]
 			out = self.layers(out)
 			ik = self.sigmoid(self.ik_task(out))
+
+			if self.pred_pose:
+				pose = self.pose_task(out)
+
+				# Gram-Schmidt orthonormalisation
+				c1 = F.normalize(pose[:, -6:-3], p=2, dim=1)
+				c2 = F.normalize(pose[:, -3:] - (torch.sum(c1 * pose[:, -3:], dim=-1).unsqueeze(-1) * c1), p=2, dim=1)
+				pose = torch.cat([pose[:, :-6], c1, c2], 1)
 
 			out = torch.cat([out, x[:, -1].unsqueeze(-1)], 1)
 			dist = self.sigmoid(self.dist_task(out))
@@ -110,7 +136,20 @@ class PushSuccessNet(nn.Module):
 			ik = self.sigmoid(self.ik_task(self.layers(x)))
 			dist = self.relu(self.dist_task(self.layers(x)))
 
-		output = torch.cat([ik, dist], 1)
+			if self.pred_pose:
+				pose = self.pose_task(self.layers(x))
+
+				# Gram-Schmidt orthonormalisation
+				c1 = F.normalize(pose[:, -6:-3], p=2, dim=1)
+				c2 = F.normalize(pose[:, -3:] - (torch.sum(c1 * pose[:, -3:], dim=-1).unsqueeze(-1) * c1), p=2, dim=1)
+				pose = torch.cat([pose[:, :-6], c1, c2], 1)
+
+		output = None
+		if pose is not None:
+			output = torch.cat([ik, dist, pose], 1)
+		else:
+			output = torch.cat([ik, dist], 1)
+
 		return output
 
 class CVAE(nn.Module):
@@ -130,17 +169,17 @@ class CVAE(nn.Module):
 
 		# encode
 		self.h_sizes.insert(0, in_dim + cond_dim)
-		self.encoder = nn.Sequential(*[one_layer(self.h_sizes[i-1], self.h_sizes[i], activation=activation, *args, **kwargs) for i in range(1, self.layers)])
-		self.z_mu = nn.Linear(self.h_sizes[-1], latent_dim, *args, **kwargs)
-		self.z_logvar = nn.Linear(self.h_sizes[-1], latent_dim, *args, **kwargs)
+		self.encoder = nn.Sequential(*[one_layer(self.h_sizes[i-1], self.h_sizes[i], activation=activation) for i in range(1, self.layers)])
+		self.z_mu = nn.Linear(self.h_sizes[-1], latent_dim)
+		self.z_logvar = nn.Linear(self.h_sizes[-1], latent_dim)
 
 		# decode
 		self.h_sizes.pop(0)
 		self.h_sizes.reverse()
 		self.h_sizes.insert(0, latent_dim + cond_dim)
-		self.decoder = nn.Sequential(*[one_layer(self.h_sizes[i-1], self.h_sizes[i], activation=activation, *args, **kwargs) for i in range(1, self.layers)])
-		self.x_mu = nn.Linear(self.h_sizes[-1], in_dim, *args, **kwargs)
-		self.x_logvar = nn.Linear(self.h_sizes[-1], in_dim, *args, **kwargs)
+		self.decoder = nn.Sequential(*[one_layer(self.h_sizes[i-1], self.h_sizes[i], activation=activation) for i in range(1, self.layers)])
+		self.x_mu = nn.Linear(self.h_sizes[-1], in_dim)
+		self.x_logvar = nn.Linear(self.h_sizes[-1], in_dim)
 
 		self.initialised = True
 
