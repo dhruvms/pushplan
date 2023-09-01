@@ -130,7 +130,7 @@ private:
 	std::vector<std::shared_ptr<Agent> > m_agents;
 	std::shared_ptr<Agent> m_ooi;
 	std::unordered_map<int, size_t> m_agent_map;
-	std::vector<double> m_goal;
+	std::vector<Eigen::Affine3d> m_ooi_pregrasps;
 
 	trajectory_msgs::JointTrajectory m_exec;
 	std::vector<trajectory_msgs::JointTrajectory> m_rearrangements;
@@ -163,7 +163,7 @@ private:
 	bool animateSolution();
 
 	int cleanupLogs();
-	void init_agents(
+	bool init_agents(
 		bool ycb, std::vector<Object>& obstacles);
 	void parse_scene(std::vector<Object>& obstacles);
 	void read_solution();

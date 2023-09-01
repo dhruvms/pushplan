@@ -32,7 +32,9 @@ namespace clutter
 
 Planner::~Planner()
 {
-	m_cc->ReleaseRobot();
+	if (m_cc) {
+		m_cc->ReleaseRobot();
+	}
 	if (m_mamo_search)
 	{
 		m_cbs->ReleaseRobot();
@@ -76,8 +78,14 @@ bool Planner::Init(const std::string& scene_file, int scene_id, bool ycb)
 	m_ooi = std::make_shared<Agent>();
 
 	std::vector<Object> all_obstacles;
-	if (m_scene_id < 0)	{ // init agents from simulator
-		init_agents(ycb, all_obstacles);
+	if (m_scene_id < 0)
+	{
+		// init agents from simulator
+		if (!init_agents(ycb, all_obstacles))
+		{
+			SMPL_ERROR("No immovable obstacle is graspable - OOI not set!");
+			return false;
+		}
 	}
 	else {
 		parse_scene(all_obstacles); // TODO: relax ycb = false assumption
@@ -108,17 +116,31 @@ bool Planner::Init(const std::string& scene_file, int scene_id, bool ycb)
 	// Ready OOI
 	if (m_ooi->Set())
 	{
+		setupSim(m_sim.get(), m_robot->GetStartState()->joint_state, m_ooi->GetID());
+
 		m_cc->AddObstacle(m_ooi->GetObject());
 		m_ooi->SetCC(m_cc);
 		m_robot->SetOOI(m_ooi->GetObject());
 		m_robot->SetMovables(m_agents);
 
 		// Compute robot grasping states and plan path through them
+		// if (m_robot->ComputeGrasps(m_ooi_pregrasps))
+		// {
+		// 	if (!SetupNGR())
+		// 	{
+		// 		SMPL_ERROR("Robot failed to plan path through grasp states!");
+		// 		return false;
+		// 	}
+		// }
+		// else {
+		// 	SMPL_ERROR("Robot failed to compute grasp states!");
+		// 	return false;
+		// }
 		int t = 0, grasp_tries;
 		m_ph.getParam("robot/grasping/tries", grasp_tries);
 		for (; t < grasp_tries; ++t)
 		{
-			if (m_robot->ComputeGrasps(m_goal))
+			if (m_robot->ComputeGrasps(m_ooi_pregrasps))
 			{
 				if (SetupNGR()) {
 					break;
@@ -453,15 +475,15 @@ std::uint32_t Planner::RunSolution()
 
 std::uint32_t Planner::RunSim(bool save)
 {
-	m_timer = GetTime();
-	if (!runSim()) {
-		SMPL_ERROR("Simulation failed!");
-	}
-	m_stats["sim_time"] += GetTime() - m_timer;
-
-	// if (save) {
-	// 	writeState("SOLUTION");
+	// m_timer = GetTime();
+	// if (!runSim()) {
+	// 	SMPL_ERROR("Simulation failed!");
 	// }
+	// m_stats["sim_time"] += GetTime() - m_timer;
+
+	if (save) {
+		writeState("SOLUTION");
+	}
 
 	return m_violation;
 }
@@ -550,7 +572,7 @@ int Planner::cleanupLogs()
 	return system(command.c_str());
 }
 
-void Planner::init_agents(
+bool Planner::init_agents(
 	bool ycb, std::vector<Object>& obstacles)
 {
 	auto mov_objs = m_sim->GetMovableObjs();
@@ -601,24 +623,26 @@ void Planner::init_agents(
 		o.desc.movable = false;
 		o.desc.locked = i < tables ? true : false;
 
-		if (!ooi_set && i >= tables)
-		{
-			m_ooi->SetObject(o);
-			m_goal.clear();
-
-			double xdisp = std::cos(o.desc.o_yaw) * 0.1;
-			double ydisp = std::sin(o.desc.o_yaw) * 0.1;
-			m_goal = {o.desc.o_x - xdisp, o.desc.o_y - ydisp, obstacles.at(0).desc.o_z + obstacles.at(0).desc.z_size + 0.05, 0.0, 0.0, -o.desc.o_yaw};
-
-			ooi_set = true;
-			continue;
-		}
-
 		o.SetupGaussianCost();
 		o.CreateCollisionObjects();
 		o.CreateSMPLCollisionObject();
 		o.GenerateCollisionModels();
 		o.InitProperties();
+
+		if (!ooi_set && i >= tables && o.Graspable())
+		{
+			Eigen::Affine3d ooi_T = Eigen::Translation3d(o.desc.o_x, o.desc.o_y, o.desc.o_z) *
+										Eigen::AngleAxisd(o.desc.o_yaw, Eigen::Vector3d::UnitZ()) *
+										Eigen::AngleAxisd(o.desc.o_pitch, Eigen::Vector3d::UnitY()) *
+										Eigen::AngleAxisd(o.desc.o_roll, Eigen::Vector3d::UnitX());
+			o.SetTransform(ooi_T);
+			m_ooi_pregrasps.clear();
+			o.GetPregrasps(m_ooi_pregrasps);
+
+			m_ooi->SetObject(o);
+			ooi_set = true;
+			continue;
+		}
 
 		obstacles.push_back(o);
 	}
@@ -670,6 +694,8 @@ void Planner::init_agents(
 		m_agents.push_back(std::move(movable));
 		m_agent_map[o.desc.id] = m_agents.size() - 1;
 	}
+
+	return ooi_set;
 }
 
 void Planner::parse_scene(std::vector<Object>& obstacles)
@@ -757,6 +783,14 @@ void Planner::parse_scene(std::vector<Object>& obstacles)
 				{
 					if (itr->desc.id == ooi_idx)
 					{
+						Eigen::Affine3d ooi_T = Eigen::Translation3d(itr->desc.o_x, itr->desc.o_y, itr->desc.o_z) *
+													Eigen::AngleAxisd(itr->desc.o_yaw, Eigen::Vector3d::UnitZ()) *
+													Eigen::AngleAxisd(itr->desc.o_pitch, Eigen::Vector3d::UnitY()) *
+													Eigen::AngleAxisd(itr->desc.o_roll, Eigen::Vector3d::UnitX());
+						itr->SetTransform(ooi_T);
+						m_ooi_pregrasps.clear();
+						itr->GetPregrasps(m_ooi_pregrasps);
+
 						m_ooi->SetObject(*itr);
 						obstacles.erase(itr);
 						break;
@@ -764,27 +798,27 @@ void Planner::parse_scene(std::vector<Object>& obstacles)
 				}
 			}
 
-			else if (line.compare("G") == 0)
-			{
-				getline(SCENE, line);
+			// else if (line.compare("G") == 0)
+			// {
+			// 	getline(SCENE, line);
 
-				std::stringstream ss(line);
-				std::string split;
-				while (ss.good())
-				{
-					getline(ss, split, ',');
-					m_goal.push_back(std::stod(split));
-				}
+			// 	std::stringstream ss(line);
+			// 	std::string split;
+			// 	while (ss.good())
+			// 	{
+			// 		getline(ss, split, ',');
+			// 		m_goal_vec.push_back(std::stod(split));
+			// 	}
 
-				std::swap(m_goal[3], m_goal[5]);
-				if (std::fabs(m_goal[3]) >= 1e-4)
-				{
-					m_goal[3] = 0.0;
-					m_goal[4] = 0.0;
-					m_goal[5] = smpl::angles::normalize_angle(m_goal[5] + M_PI);
-				}
-				SMPL_INFO("Goal (x, y, z, yaw): (%f, %f, %f, %f)", m_goal[0], m_goal[1], m_goal[2], m_goal[5]);
-			}
+			// 	std::swap(m_goal_vec[3], m_goal_vec[5]);
+			// 	if (std::fabs(m_goal_vec[3]) >= 1e-4)
+			// 	{
+			// 		m_goal_vec[3] = 0.0;
+			// 		m_goal_vec[4] = 0.0;
+			// 		m_goal_vec[5] = smpl::angles::normalize_angle(m_goal_vec[5] + M_PI);
+			// 	}
+			// 	SMPL_INFO("Goal (x, y, z, yaw): (%f, %f, %f, %f)", m_goal_vec[0], m_goal_vec[1], m_goal_vec[2], m_goal_vec[5]);
+			// }
 		}
 	}
 
