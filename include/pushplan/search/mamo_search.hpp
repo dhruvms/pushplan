@@ -24,21 +24,21 @@ struct MAMOSearchState
 
 	struct OPENCompare
 	{
-		// return true if p goes before q
+		// return true if q goes before p
 		bool operator()(const MAMOSearchState *p, const MAMOSearchState *q) const
 		{
-			if (p->priority == q->priority)
+			if (p->actions == q->actions)
 			{
-				if (p->actions == q->actions)
+				if (p->noops == q->noops)
 				{
-					if (p->noops == q->noops) {
+					if (p->priority == q->priority) {
 						return rand() % 2;
 					}
-					return p->noops < q->noops;
+					return p->priority < q->priority;
 				}
-				return p->actions < q->actions;
+				return p->noops > q->noops;
 			}
-			return p->priority < q->priority;
+			return p->actions < q->actions;
 		}
 	};
 	boost::heap::fibonacci_heap<MAMOSearchState*, boost::heap::compare<MAMOSearchState::OPENCompare> >::handle_type m_OPEN_h;

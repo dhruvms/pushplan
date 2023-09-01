@@ -388,7 +388,7 @@ void MAMOSearch::createSuccs(
 					// prev_search_state->noops = succ_noops;
 					// // priority update unaffected by visiting the same state as before
 					// computeMAMOPriority(prev_search_state);
-					// m_OPEN.update(prev_search_state->m_OPEN_h);
+					m_OPEN.update(prev_search_state->m_OPEN_h);
 					// SMPL_WARN("Update %d, priority = %.2e ", old_id, prev_search_state->priority);
 				}
 				else
