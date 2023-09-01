@@ -1,7 +1,10 @@
 #include <torch/script.h> // One-stop header.
+#include <Eigen/Dense>
 
 #include <iostream>
 #include <memory>
+
+typedef Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> MatrixXf_rm;
 
 int main(int argc, const char* argv[]) {
 	// if (argc != 2) {
@@ -12,7 +15,7 @@ int main(int argc, const char* argv[]) {
 	torch::jit::script::Module module;
 	try {
 		// Deserialize the ScriptModule from a file using torch::jit::load().
-		module = torch::jit::load("/home/dhruv/work/code/ros/sbpl/src/pushplan/scripts/learning/models/[128,256,128]_best_traced-double_prob.pth");
+		module = torch::jit::load("/home/dhruv/work/code/ros/sbpl/src/pushplan/scripts/learning/models/[64,128,256,128,64]_best_traced-triple_task.pth");
 	}
 	catch (const c10::Error& e) {
 		std::cerr << "error loading the model\n";
@@ -24,7 +27,8 @@ int main(int argc, const char* argv[]) {
 
 	at::TensorOptions options(at::ScalarType::Double);
 
-	std::vector<double> x_sample{-0.1212, 0.0775, 0.0750, -0.6107, 1.0000, 0.0426, 0.0426, 0.1500, 0.8804, 0.8205};
+	// -0.0659, 0.0761, 0.3979
+	std::vector<double> x_sample{-0.0809, 0.1866, 0.0750, 0.3310, 1.0000, 0.0300, 0.0300, 0.1500, 0.3631, 0.8550};
 	std::vector<int64_t> x_size = {1, 10};
 	at::Tensor x_vec = torch::from_blob(x_sample.data(), at::IntList(x_size), options);
 	x_vec = x_vec.toType(at::kFloat);
@@ -49,9 +53,9 @@ int main(int argc, const char* argv[]) {
 
 	auto push_params = x_vec.repeat({(int)push_to.size()/2, 1});
 	push_params = torch::cat({push_params, push_to_vec}, -1);
-	std::cout << push_params << std::endl;
+	// std::cout << push_params << std::endl;
 
-	for (float t = 0.0; t <= 0.2; t += 0.01)
+	for (float t = 0.01; t <= 0.05; t += 0.04)
 	{
 		auto x_in = torch::cat({push_params, t * torch::ones({(int)push_to.size()/2, 1})}, -1);
 		std::vector<torch::jit::IValue> inputs;
@@ -63,10 +67,43 @@ int main(int argc, const char* argv[]) {
 		auto rows = torch::arange(0, output.size(0), torch::kLong);
 		auto cols = torch::ones(output.size(0));
 		cols = cols.toType(at::kLong);
-		at::Tensor score = (1 - (output.index({rows, cols}) * output.index({rows, cols * 0}))) * 1000;
+		at::Tensor score = (1 - (output.index({rows, cols}) * output.index({rows, cols * 0}))) * 100;
 
 		output = torch::cat({output, score.unsqueeze(1)}, -1);
 		std::cout << '\n' << "Threshold = " << t << '\n' << output << '\n';
+
+		float* data = output.data_ptr<float>();
+		Eigen::Map<MatrixXf_rm> E(data, output.size(0), output.size(1));
+		std::cout << '\n' << E << '\n' << '\n';
+
+		Eigen::MatrixXf poses = E.block(0, 2, E.rows(), 9);
+		Eigen::VectorXf pose3 = poses.row(3);
+		std::cout << '\n' << "pose3 = " << pose3 << '\n';
+
+		Eigen::Vector3f c1, c2, c3;
+		c2 = pose3.tail(3);
+		c1 = pose3.segment(3, 3);
+		std::cout << '\n' << "c1 = " << c1 << '\n';
+		std::cout << '\n' << "c2 = " << c2 << '\n';
+
+		c1.normalize();
+		c2 = c2 - (c1.dot(c2) * c1);
+		c2.normalize();
+		std::cout << '\n' << "c1 = " << c1 << '\n';
+		std::cout << '\n' << "c2 = " << c2 << '\n';
+		Eigen::Matrix3f R;
+		R << c1, c2, c1.cross(c2);
+		Eigen::Quaternion<float> q(R);
+		std::cout << '\n' << "R = " << R << '\n';
+		std::cout << '\n' << "q = " << q.x() << ", " << q.y() << ", " << q.z() << ", " << q.w() << '\n';
+
+		Eigen::Affine3f pose = Eigen::Translation3f(pose3.head(3)) * q;
+		std::cout << '\n' << "pose = " << pose.matrix() << '\n';
+		Eigen::Affine3d B = pose.cast<double>();
+		std::cout << '\n' << "B = " << B.matrix() << '\n';
+
+		// at::Tensor pose3 = poses.index({torch::tensor(3).toType(at::kLong)});
+
 
 		// double x = 0.0, y = 0.0;
 		// int idx = x_offset * int((x + 0.3)/res) + int((y + 0.4)/res);
