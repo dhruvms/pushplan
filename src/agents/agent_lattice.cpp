@@ -234,13 +234,13 @@ bool AgentLattice::CheckGoalCost(
 	if (m_invalid_pushes.empty()) // state is a valid goal, and there are no invalid goals
 	{
 		unsigned int cost = 1;
-		if (m_use_push_model)
-		{
-			if (s->torch_cost < 0) {
-				computeTorchCost(s);
-			}
-			cost += s->torch_cost;
-		}
+		// if (m_use_push_model)
+		// {
+		// 	if (s->torch_cost < 0) {
+		// 		computeTorchCost(s);
+		// 	}
+		// 	cost += s->torch_cost;
+		// }
 		succ_ids->push_back(m_goal_ids.back()); // pseudogoal
 		costs->push_back(cost);
 		s->goal_cost = cost;
@@ -249,13 +249,13 @@ bool AgentLattice::CheckGoalCost(
 	{
 		// need to compute pseudo-edge cost for valid goal state
 		unsigned int cost = checkNNCost(s->coord);
-		if (m_use_push_model)
-		{
-			if (s->torch_cost < 0) {
-				computeTorchCost(s);
-			}
-			cost += s->torch_cost;
-		}
+		// if (m_use_push_model)
+		// {
+		// 	if (s->torch_cost < 0) {
+		// 		computeTorchCost(s);
+		// 	}
+		// 	cost += s->torch_cost;
+		// }
 		succ_ids->push_back(m_goal_ids.back()); // pseudogoal
 		costs->push_back(cost);
 		s->goal_cost = cost;
@@ -327,7 +327,7 @@ bool AgentLattice::IsGoal(int state_id)
 
 unsigned int AgentLattice::GetGoalHeuristic(int state_id)
 {
-	return 0;
+	// return 0;
 	if (state_id == m_goal_ids.back() || m_agent->PP()) {
 		return 0;
 	}
@@ -336,6 +336,12 @@ unsigned int AgentLattice::GetGoalHeuristic(int state_id)
 	assert(state_id >= 0);
 	LatticeState* s = getHashEntry(state_id);
 	assert(s);
+
+	if (m_use_push_model && s->torch_cost < 0)
+	{
+		computeTorchCost(s);
+		return s->torch_cost;
+	}
 
 	return ManhattanDist(s->coord, m_agent->Goal());
 }
@@ -515,9 +521,9 @@ unsigned int AgentLattice::cost(
 	unsigned int cost = ManhattanDist(s1->coord, s2->coord);
 	cost = cost == 0 ? 1 : cost;
 
-	if (m_use_push_model) {
-		cost += s2->torch_cost;
-	}
+	// if (m_use_push_model) {
+	// 	cost += s2->torch_cost;
+	// }
 
 	return cost;
 }

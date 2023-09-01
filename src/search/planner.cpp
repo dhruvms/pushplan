@@ -134,7 +134,7 @@ bool Planner::Init(const std::string& scene_file, int scene_id, bool ycb)
 	}
 	m_robot->VizCC();
 
-	// setupTorch();
+	setupTorch();
 
 	setupSim(m_sim.get(), m_robot->GetStartState()->joint_state, m_ooi->GetID());
 	m_violation = 0x00000008;

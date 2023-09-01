@@ -105,6 +105,7 @@ private:
 	std::list<std::pair<int, Coord> > m_successful_rearranges, m_successful_rearranges_invalidated;
 	std::vector<int> m_relevant_ids;
 	bool m_new_constraints = true;
+	bool m_expanded_once = false;
 
 	Planner *m_planner;
 	std::shared_ptr<CBS> m_cbs;

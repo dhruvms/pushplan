@@ -333,6 +333,10 @@ void MAMONode::GetSuccs(
 	if (!something_moved) {
 		SMPL_WARN("Nothing moved in the MAPF solution, so why did we expand the state?");
 	}
+
+	if (!m_expanded_once) {
+		m_expanded_once = true;
+	}
 }
 
 unsigned int MAMONode::ComputeMAMOPriorityOrig()
