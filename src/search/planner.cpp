@@ -788,13 +788,13 @@ void Planner::parse_scene(std::vector<Object>& obstacles)
 				{
 					if (itr->desc.id == ooi_idx)
 					{
-						Eigen::Affine3d ooi_T = Eigen::Translation3d(itr->desc.o_x, itr->desc.o_y, itr->desc.o_z) *
-													Eigen::AngleAxisd(itr->desc.o_yaw, Eigen::Vector3d::UnitZ()) *
-													Eigen::AngleAxisd(itr->desc.o_pitch, Eigen::Vector3d::UnitY()) *
-													Eigen::AngleAxisd(itr->desc.o_roll, Eigen::Vector3d::UnitX());
-						itr->SetTransform(ooi_T);
-						m_ooi_pregrasps.clear();
-						itr->GetPregrasps(m_ooi_pregrasps);
+						// Eigen::Affine3d ooi_T = Eigen::Translation3d(itr->desc.o_x, itr->desc.o_y, itr->desc.o_z) *
+						// 							Eigen::AngleAxisd(itr->desc.o_yaw, Eigen::Vector3d::UnitZ()) *
+						// 							Eigen::AngleAxisd(itr->desc.o_pitch, Eigen::Vector3d::UnitY()) *
+						// 							Eigen::AngleAxisd(itr->desc.o_roll, Eigen::Vector3d::UnitX());
+						// itr->SetTransform(ooi_T);
+						// m_ooi_pregrasps.clear();
+						// itr->GetPregrasps(m_ooi_pregrasps);
 
 						m_ooi->SetObject(*itr);
 						obstacles.erase(itr);
@@ -803,27 +803,34 @@ void Planner::parse_scene(std::vector<Object>& obstacles)
 				}
 			}
 
-			// else if (line.compare("G") == 0)
-			// {
-			// 	getline(SCENE, line);
+			else if (line.compare("G") == 0)
+			{
+				getline(SCENE, line);
 
-			// 	std::stringstream ss(line);
-			// 	std::string split;
-			// 	while (ss.good())
-			// 	{
-			// 		getline(ss, split, ',');
-			// 		m_goal_vec.push_back(std::stod(split));
-			// 	}
+				std::stringstream ss(line);
+				std::string split;
+				std::vector<double> pregrasp_goal;
+				while (ss.good())
+				{
+					getline(ss, split, ',');
+					pregrasp_goal.push_back(std::stod(split));
+				}
 
-			// 	std::swap(m_goal_vec[3], m_goal_vec[5]);
-			// 	if (std::fabs(m_goal_vec[3]) >= 1e-4)
-			// 	{
-			// 		m_goal_vec[3] = 0.0;
-			// 		m_goal_vec[4] = 0.0;
-			// 		m_goal_vec[5] = smpl::angles::normalize_angle(m_goal_vec[5] + M_PI);
-			// 	}
-			// 	SMPL_INFO("Goal (x, y, z, yaw): (%f, %f, %f, %f)", m_goal_vec[0], m_goal_vec[1], m_goal_vec[2], m_goal_vec[5]);
-			// }
+				std::swap(pregrasp_goal[3], pregrasp_goal[5]);
+				if (std::fabs(pregrasp_goal[3]) >= 1e-4)
+				{
+					pregrasp_goal[3] = 0.0;
+					pregrasp_goal[4] = 0.0;
+					pregrasp_goal[5] = smpl::angles::normalize_angle(pregrasp_goal[5] + M_PI);
+				}
+				SMPL_INFO("Goal (x, y, z, yaw): (%f, %f, %f, %f)", pregrasp_goal[0], pregrasp_goal[1], pregrasp_goal[2], pregrasp_goal[5]);
+
+				Eigen::Affine3d ooi_T = Eigen::Translation3d(pregrasp_goal[0], pregrasp_goal[1], pregrasp_goal[2]) *
+											Eigen::AngleAxisd(pregrasp_goal[5], Eigen::Vector3d::UnitZ()) *
+											Eigen::AngleAxisd(0.0, Eigen::Vector3d::UnitY()) *
+											Eigen::AngleAxisd(0.0, Eigen::Vector3d::UnitX());
+				m_ooi_pregrasps.push_back(std::move(ooi_T));
+			}
 		}
 	}
 
