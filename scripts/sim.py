@@ -749,8 +749,9 @@ class BulletSim:
 
 			# count successful simulations
 			succ_count = 0
+			print()
 			for sim_id, sim_result in retvals:
-				print("\tThread {} result: successes, idx, valid_groups = {}, {}, [{}]".format(sim_id, sim_result[1].successes, sim_result[1].idx, ', '.join(map(str, sim_result[0]))))
+				print(bcolors.BLUE + "Sim ID {} result: successes, push_idx, valid_groups = {}, {}, [{}]".format(sim_id, sim_result[1].successes, sim_result[1].idx, ', '.join(map(str, sim_result[0]))) + bcolors.ENDC)
 				if sim_result[1].idx >= 0:
 					succ_count += len(sim_result[0])
 
@@ -759,10 +760,11 @@ class BulletSim:
 			for sim_id, sim_result in retvals:
 				if response is None:
 					if success and sim_result[1].idx >= 0:
-						print('\t\tSelect thread {} SUCCESS result!'.format(sim_id))
+						print(bcolors.GREEN + '\tSelect Sim ID {} SUCCESS result!'.format(sim_id) + bcolors.ENDC)
 						response = sim_result
 						break
 					elif not success and sim_result[1].idx < 0:
+						print(bcolors.GREEN + '\tSelect Sim ID {} FAIL result!'.format(sim_id) + bcolors.ENDC)
 						response = sim_result
 						break
 
@@ -779,6 +781,7 @@ class BulletSim:
 		return response[1]
 
 	def sim_pushes_job(self, sim_id, sim, retvals, params):
+		print()
 		sim_data = self.sim_datas[sim_id]
 		robot_id = sim_data['robot_id']
 		table_id = sim_data['table_id']
@@ -867,12 +870,24 @@ class BulletSim:
 
 					if not violation_flag:
 						violation_flag = self.checkTableCollision(sim_id, simulator=sim)
+					else:
+						print(bcolors.PINK + "\tPush hit immovable obstacle!" + bcolors.ENDC)
+						break
+
 					if not violation_flag:
 						violation_flag = self.checkPoseConstraints(sim_id, simulator=sim)
+					else:
+						print(bcolors.PINK + "\tPush hit table!" + bcolors.ENDC)
+						break
+
 					if not violation_flag:
 						violation_flag = self.checkVelConstraints(sim_id, simulator=sim)
+					else:
+						print(bcolors.PINK + "\tPush violated movable object pose constraints!" + bcolors.ENDC)
+						break
 
 					if (violation_flag):
+						print(bcolors.PINK + "\tPush violated movable object velocity constraints!" + bcolors.ENDC)
 						break
 
 				if (violation_flag):
@@ -912,12 +927,24 @@ class BulletSim:
 
 				if not violation_flag:
 					violation_flag = self.checkTableCollision(sim_id, simulator=sim)
+				else:
+					print(bcolors.PINK + "\tPush hit immovable obstacle (during hold)???" + bcolors.ENDC)
+					break
+
 				if not violation_flag:
 					violation_flag = self.checkPoseConstraints(sim_id, simulator=sim)
+				else:
+					print(bcolors.PINK + "\tPush hit table (during hold)???" + bcolors.ENDC)
+					break
+
 				if not violation_flag:
 					violation_flag = self.checkVelConstraints(sim_id, simulator=sim)
+				else:
+					print(bcolors.PINK + "\tPush violated movable object pose constraints (during hold)!" + bcolors.ENDC)
+					break
 
 				if (violation_flag):
+					print(bcolors.PINK + "\tPush violated movable object velocity constraints (during hold)!" + bcolors.ENDC)
 					break
 
 			if (violation_flag):
@@ -960,6 +987,8 @@ class BulletSim:
 					if (np.linalg.norm(np.asarray(start_objs[i].xyz) - np.asarray(object.xyz)) > 0.01):
 						relevant_ids.append(object.id)
 
+		print("\tsim_pushes_job result (sim_id, successes, push_idx, valid_groups): ", sim_id, successes, best_idx, sim_data['valid_groups'])
+
 		output = SimPushesResponse()
 		output.res = res
 		output.idx = best_idx
@@ -1000,6 +1029,7 @@ class BulletSim:
 		return response[1]
 
 	def sim_pick_place_job(self, sim_id, sim, retvals, params):
+		print()
 		sim_data = self.sim_datas[sim_id]
 		robot_id = sim_data['robot_id']
 		req = params[0]
@@ -1098,12 +1128,24 @@ class BulletSim:
 
 				if not violation_flag:
 					violation_flag = self.checkTableCollision(sim_id, simulator=sim)
+				else:
+					print(bcolors.PINK + "\tPick-Place hit immovable obstacle (during pick)!" + bcolors.ENDC)
+					break
+
 				if not violation_flag:
 					violation_flag = self.checkPoseConstraints(sim_id, grasp_at=pick_at, ooi=picked_obj, simulator=sim)
+				else:
+					print(bcolors.PINK + "\tPick-Place hit table (during pick)!" + bcolors.ENDC)
+					break
+
 				if not violation_flag:
 					violation_flag = self.checkVelConstraints(sim_id, grasp_at=pick_at, ooi=picked_obj, simulator=sim)
+				else:
+					print(bcolors.PINK + "\tPick-Place violated movable object pose constraints (during pick)!" + bcolors.ENDC)
+					break
 
 				if (violation_flag):
+					print(bcolors.PINK + "\tPick-Place violated movable object velocity constraints (during pick)!" + bcolors.ENDC)
 					break
 
 			del action_interactions[:]
@@ -1512,7 +1554,11 @@ class BulletSim:
 				if (copy_num+1 in groups_to_remove):
 					sim.setCollisionFilterGroupMask(obj_copy_id, -1, self.no_collision_group, self.no_collision_group)
 
-		[sim_data['valid_groups'].remove(group) for group in groups_to_remove]
+		if (groups_to_remove):
+			print(bcolors.YELLOW + "\t\tcheckPoseConstraints valid_groups (before), groups_to_remove: [{}], [{}]".format(', '.join(map(str, sim_data['valid_groups'])), ', '.join(map(str, groups_to_remove))) + bcolors.ENDC)
+			[sim_data['valid_groups'].remove(group) for group in groups_to_remove]
+			print(bcolors.YELLOW + "\t\tcheckPoseConstraints valid_groups (after): [{}]".format(', '.join(map(str, sim_data['valid_groups']))) + bcolors.ENDC)
+
 		return len(sim_data['valid_groups']) == 0
 
 	def checkTableCollision(self, sim_id, simulator=None):
@@ -1559,7 +1605,11 @@ class BulletSim:
 				if (copy_num+1 in groups_to_remove):
 					sim.setCollisionFilterGroupMask(obj_copy_id, -1, self.no_collision_group, self.no_collision_group)
 
-		[sim_data['valid_groups'].remove(group) for group in groups_to_remove]
+		if (groups_to_remove):
+			print(bcolors.YELLOW + "\t\tcheckPoseConstraints valid_groups (before), groups_to_remove: [{}], [{}]".format(', '.join(map(str, sim_data['valid_groups'])), ', '.join(map(str, groups_to_remove))) + bcolors.ENDC)
+			[sim_data['valid_groups'].remove(group) for group in groups_to_remove]
+			print(bcolors.YELLOW + "\t\tcheckPoseConstraints valid_groups (after): [{}]".format(', '.join(map(str, sim_data['valid_groups']))) + bcolors.ENDC)
+
 		return len(sim_data['valid_groups']) == 0
 
 	def holdPosition(self, sim_id, simulator=None):

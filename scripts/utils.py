@@ -346,3 +346,16 @@ def drawAABB(aabb, sim=None):
 	f = [aabbMax[0], aabbMax[1], aabbMax[2]]
 	t = [aabbMax[0], aabbMax[1], aabbMin[2]]
 	sim.addUserDebugLine(f, t, [1, 1, 1])
+
+class bcolors:
+	PINK = '\033[95m'
+	BLUE = '\033[94m'
+	CYAN = '\033[96m'
+	GREEN = '\033[92m'
+	YELLOW = '\033[93m'
+	RED = '\033[91m'
+	ENDC = '\033[0m'
+	BOLD = '\033[1m'
+	UNDERLINE = '\033[4m'
+	HIGHLIGHT = '\033[7m'
+	STRIKE = '\033[9m'
