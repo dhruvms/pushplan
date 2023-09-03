@@ -47,15 +47,15 @@ class BulletSim:
 
 		if self.gui:
 			self.cpu_count = 1
+			succ_frac = rospy.get_param("~sim/succ_frac", 1.0)
+			self.succ_needed = max(1, math.floor(succ_frac * self.cpu_count * self.obj_copies))
 
 			sim, info = self.setupSim(shadows)
 			self.sims.append(sim)
 			self.sim_datas[0] = info
-			self.succ_needed = 1
 		else:
 			cpus = rospy.get_param("~sim/cpus", 0)
 			self.cpu_count = cpus if cpus > 0 else mp.cpu_count() - 1
-
 			succ_frac = rospy.get_param("~sim/succ_frac", 1.0)
 			self.succ_needed = max(1, math.floor(succ_frac * self.cpu_count * self.obj_copies))
 
@@ -159,11 +159,16 @@ class BulletSim:
 				if obj_id in table_id:
 					mu = friction_min
 
-				sim.changeDynamics(obj_id, -1, lateralFriction=mu)
 				sim_data['objs'][obj_id]['mu'] = mu
 				sim_data['objs'][obj_id]['movable'] = req.movable
 				sim_data['objs'][obj_id]['copies'] = []
 				sim_data['num_objs'] += 1
+
+				true_mass = sim_data['objs'][obj_id]['mass']
+				true_mu = sim_data['objs'][obj_id]['mu']
+				new_mass = np.minimum(2*true_mass, np.maximum(true_mass/2, np.random.normal(true_mass, scale=0.2*true_mass)))
+				new_mu = np.minimum(2*true_mu, np.maximum(true_mu/2, np.random.normal(true_mu, scale=0.2*true_mu)))
+				sim.changeDynamics(obj_id, -1, mass=new_mass, lateralFriction=new_mu)
 
 				if req.movable:
 					sim.setCollisionFilterGroupMask(obj_id, -1, 1, 1)
@@ -416,13 +421,16 @@ class BulletSim:
 
 						# add object copies
 						for copy_num in range(2, self.obj_copies + 1):
-							req.mass = sim_data['objs'][obj_id]['mass'] * copy_num
+							true_mass = sim_data['objs'][obj_id]['mass']
+							req.mass = np.minimum(2*true_mass, np.maximum(true_mass/2, np.random.normal(true_mass, scale=0.2*true_mass)))
 							if (req.shape == 0):
 								obj_copy_id = self.addBoxDuplicate(req, sim_id, obj_id)
 							elif (req.shape == 2):
 								obj_copy_id = self.addCylinderDuplicate(req, sim_id, obj_id)
 
-							sim.changeDynamics(obj_copy_id, -1, lateralFriction=sim_data['objs'][obj_id]['mu']/copy_num)
+							true_mu = sim_data['objs'][obj_id]['mu']
+							new_mu = np.minimum(2*true_mu, np.maximum(true_mu/2, np.random.normal(true_mu, scale=0.2*true_mu)))
+							sim.changeDynamics(obj_copy_id, -1, lateralFriction=new_mu)
 							sim.setCollisionFilterGroupMask(obj_copy_id, -1, \
 											2**(copy_num - 1), 2**(copy_num - 1))
 
@@ -526,6 +534,10 @@ class BulletSim:
 		# ee_link = link_from_name(sim_data['robot_id'], 'r_gripper_finger_dummy_planning_link')
 
 		self.disableCollisionsWithObjects(sim_id, simulator=sim)
+
+		# reset back to true mass and friction
+		for obj_id in sim_data['objs']:
+			sim.changeDynamics(obj_id, -1, mass=sim_data['objs'][obj_id]['mass'], lateralFriction=sim_data['objs'][obj_id]['mu'])
 
 		if (len(req.objects.poses) != 0):
 			self.resetObjects(sim_id, req.objects.poses, simulator=sim)
