@@ -246,13 +246,18 @@ bool Planner::Plan(bool& done)
 {
 	done = false;
 	bool result = m_mamo_search->Solve(m_total_budget);
-	m_mamo_search->SaveStats();
-	m_robot->SavePushDebugData(m_scene_id);
+	bool exec_success = false;
 	if (result)
 	{
 		m_mamo_search->GetRearrangements(m_rearrangements, m_actions);
+		exec_success = runSim();
 		done = true;
+		if (SAVE) {
+			writeState("SOLUTION");
+		}
 	}
+	m_mamo_search->SaveStats((int)exec_success);
+	m_robot->SavePushDebugData(m_scene_id);
 
 	return done;
 }
@@ -475,15 +480,15 @@ std::uint32_t Planner::RunSolution()
 
 std::uint32_t Planner::RunSim(bool save)
 {
-	// m_timer = GetTime();
-	// if (!runSim()) {
-	// 	SMPL_ERROR("Simulation failed!");
-	// }
-	// m_stats["sim_time"] += GetTime() - m_timer;
-
-	if (save) {
-		writeState("SOLUTION");
+	m_timer = GetTime();
+	if (!runSim()) {
+		SMPL_ERROR("Simulation failed!");
 	}
+	m_stats["sim_time"] += GetTime() - m_timer;
+
+	// if (save) {
+	// 	writeState("SOLUTION");
+	// }
 
 	return m_violation;
 }

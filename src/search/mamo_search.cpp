@@ -109,7 +109,7 @@ void MAMOSearch::GetRearrangements(
 	actions = m_actions;
 }
 
-void MAMOSearch::SaveStats()
+void MAMOSearch::SaveStats(int exec_success)
 {
 	std::string filename(__FILE__);
 	auto found = filename.find_last_of("/\\");
@@ -121,12 +121,12 @@ void MAMOSearch::SaveStats()
 	if (!exists)
 	{
 		STATS << "UID,"
-				<< "Solved?,NumTrajs,SolveTime,MAPFTime,PushPlannerTime,SimTime,"
+				<< "Solved?,ExecSuccess?,NumTrajs,SolveTime,MAPFTime,PushPlannerTime,SimTime,"
 				<< "StatesGenerated,Expansions,OnlyDuplicate,NoDuplicate,NoSuccs\n";
 	}
 
 	STATS << m_planner->GetSceneID() << ','
-			<< (int)m_solved << ',' << (int)m_rearrangements.size() << ','
+			<< (int)m_solved << ',' << exec_success << ',' << (int)m_rearrangements.size() << ','
 			<< m_stats["total_time"] << ',' << m_stats["mapf_time"] << ',' << m_stats["push_planner_time"] << ',' << m_stats["sim_time"] << ','
 			<< m_stats["generated"] << ',' << m_stats["expansions"] << ',' << m_stats["only_duplicate"] << ',' << m_stats["no_duplicate"] << ','
 			<< m_stats["no_succs"] << '\n';

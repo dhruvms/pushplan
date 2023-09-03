@@ -57,7 +57,7 @@ public:
 	void GetRearrangements(
 		std::vector<trajectory_msgs::JointTrajectory> &rearrangements,
 		std::vector<MAMOAction> &actions);
-	void SaveStats();
+	void SaveStats(int exec_success=-1);
 	void SaveNBData();
 	void Cleanup();
 
