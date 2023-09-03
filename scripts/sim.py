@@ -516,8 +516,16 @@ class BulletSim:
 				if response is None:
 					if success and not sim_result[1].violation:
 						response = sim_result
+						break
 					elif not success and sim_result[1].violation:
 						response = sim_result
+						break
+
+		if (response is None and not success):
+			response = retvals[0][1]
+			response[1].violation = True
+			response[1].interactions = []
+			response[1].objects = req.objects
 
 		return response[1]
 
@@ -753,12 +761,21 @@ class BulletSim:
 					if success and sim_result[1].idx >= 0:
 						print('\t\tSelect thread {} SUCCESS result!'.format(sim_id))
 						response = sim_result
+						break
 					elif not success and sim_result[1].idx < 0:
 						response = sim_result
-						print('\t\tSelect thread {} FAIL result!'.format(sim_id))
+						break
 
 			elapsed = time.time() - start
-			print('\tSimPushes took {:.3f} seconds'.format(elapsed))
+			print('SimPushes took {:.3f} seconds'.format(elapsed))
+
+		if (response is None and not success):
+			response = retvals[0][1]
+			response[1].res = False
+			response[1].idx = -1
+			response[1].successes = 0
+			response[1].objects = req.objects
+
 		return response[1]
 
 	def sim_pushes_job(self, sim_id, sim, retvals, params):
