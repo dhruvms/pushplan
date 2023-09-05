@@ -1531,9 +1531,11 @@ bool Robot::ComputeGrasps(
 		// SMPL_INFO("Found pregrasp state!!");
 
 		// compute grasp state
+		double yaw, pitch, roll;
+		smpl::angles::get_euler_zyx(m_pregrasp_pose.rotation(), yaw, pitch, roll);
 		ee_pose = m_pregrasp_pose;
-		ee_pose.translation().x() = m_ooi.desc.o_x;
-		ee_pose.translation().y() = m_ooi.desc.o_y;
+		ee_pose.translation().x() = m_ooi.desc.o_x + std::cos(yaw) * 0.025;
+		ee_pose.translation().y() = m_ooi.desc.o_y + std::sin(yaw) * 0.025;
 
 		vis_name = "grasp_pose";
 		SV_SHOW_INFO_NAMED(vis_name, smpl::visual::MakePoseMarkers(
@@ -2545,6 +2547,7 @@ bool Robot::PlanPush(
 	}
 	m_stats["push_sim_time"] += GetTime() - start_time;
 	sim_time += GetTime() - start_time;
+	ROS_ERROR("SimPushes took %f seconds!", sim_time);
 
 	push_result = pidx == -1 ? PushResult::FAIL_IN_SIM : PushResult::SUCCESS_IN_SIM;
 	debug_action = std::make_tuple(debug_action_start, debug_action_end, static_cast<int>(push_result));
