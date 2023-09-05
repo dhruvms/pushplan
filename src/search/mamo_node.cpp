@@ -101,6 +101,12 @@ bool MAMONode::RunMAPF()
 	return result;
 }
 
+void MAMONode::ResetConstraints()
+{
+	m_new_constraints = true;
+	m_mapf_solution.clear();
+}
+
 bool MAMONode::tryPickPlace(
 	std::vector<MAMOAction> *succ_object_centric_actions,
 	std::vector<comms::ObjectsPoses> *succ_objects,

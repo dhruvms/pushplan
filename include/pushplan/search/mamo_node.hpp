@@ -91,7 +91,7 @@ public:
 	const float& percent_ngr() const;
 	const std::vector<std::vector<double> >& obj_priority_data() const;
 
-	void ResetConstraints() { m_new_constraints = true; };
+	void ResetConstraints();
 
 private:
 	comms::ObjectsPoses m_all_objects; // all object poses at node
