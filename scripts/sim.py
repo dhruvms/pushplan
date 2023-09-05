@@ -157,19 +157,20 @@ class BulletSim:
 				friction_min = rospy.get_param("~objects/friction_min", 0.5)
 				friction_max = rospy.get_param("~objects/friction_max", 1.2)
 				mu = np.random.uniform(friction_min, friction_max) if req.mu < friction_min else req.mu
+
 				if obj_id in table_id:
 					mu = friction_min
+				else:
+					mass = sim_data['objs'][obj_id]['mass']
+					new_mass = np.minimum(2*mass, np.maximum(mass/2, np.random.normal(mass, scale=0.2*mass)))
+					new_mu = np.minimum(2*mu, np.maximum(mu/2, np.random.normal(mu, scale=mu/2)))
+					sim.changeDynamics(obj_id, -1, mass=new_mass, lateralFriction=new_mu)
+					print(bcolors.BOLD + 'Object {} parameters | true (mass, mu): ({:.3f}, {:.3f}) | sampled (mass, mu): ({:.3f}, {:.3f})'.format(obj_id, mass, mu, new_mass, new_mu) + bcolors.ENDC)
 
 				sim_data['objs'][obj_id]['mu'] = mu
 				sim_data['objs'][obj_id]['movable'] = req.movable
 				sim_data['objs'][obj_id]['copies'] = []
 				sim_data['num_objs'] += 1
-
-				true_mass = sim_data['objs'][obj_id]['mass']
-				true_mu = sim_data['objs'][obj_id]['mu']
-				new_mass = np.minimum(2*true_mass, np.maximum(true_mass/2, np.random.normal(true_mass, scale=0.2*true_mass)))
-				new_mu = np.minimum(2*true_mu, np.maximum(true_mu/2, np.random.normal(true_mu, scale=0.2*true_mu)))
-				sim.changeDynamics(obj_id, -1, mass=new_mass, lateralFriction=new_mu)
 
 				if req.movable:
 					sim.setCollisionFilterGroupMask(obj_id, -1, 1, 1)
