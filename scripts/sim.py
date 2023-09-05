@@ -523,11 +523,11 @@ class BulletSim:
 						response = sim_result
 						break
 
-		if (response is None and not success):
-			response = retvals[0][1]
-			response[1].violation = True
-			response[1].interactions = []
-			response[1].objects = req.objects
+			if (response is None and not success):
+				response = retvals[0][1]
+				response[1].violation = True
+				response[1].interactions = []
+				response[1].objects = req.objects
 
 		return response[1]
 
@@ -773,12 +773,12 @@ class BulletSim:
 			elapsed = time.time() - start
 			print('SimPushes took {:.3f} seconds'.format(elapsed))
 
-		if (response is None and not success):
-			response = retvals[0][1]
-			response[1].res = False
-			response[1].idx = -1
-			response[1].successes = 0
-			response[1].objects = req.objects
+			if (response is None and not success):
+				response = retvals[0][1]
+				response[1].res = False
+				response[1].idx = -1
+				response[1].successes = 0
+				response[1].objects = req.objects
 
 		return response[1]
 
@@ -1027,6 +1027,12 @@ class BulletSim:
 						response = sim_result
 					elif not success and sim_result[1].violation:
 						response = sim_result
+
+			if (response is None and not success):
+				response = retvals[0][1]
+				response[1].violation = True
+				response[1].interactions = []
+				response[1].objects = req.objects
 
 		return response[1]
 
