@@ -435,6 +435,7 @@ class BulletSim:
 							sim.changeDynamics(obj_copy_id, -1, lateralFriction=new_mu)
 							sim.setCollisionFilterGroupMask(obj_copy_id, -1, \
 											2**(copy_num - 1), 2**(copy_num - 1))
+							print(bcolors.BOLD + 'Object {} parameters | true (mass, mu): ({:.3f}, {:.3f}) | sampled (mass, mu): ({:.3f}, {:.3f})'.format(obj_id, true_mass, true_mu, req.mass, new_mu) + bcolors.ENDC)
 
 				for copy_num, obj_copy_id in enumerate(sim_data['objs'][obj_id]['copies']):
 					sim.resetBasePositionAndOrientation(obj_copy_id,
@@ -548,6 +549,7 @@ class BulletSim:
 		# reset back to true mass and friction
 		for obj_id in sim_data['objs']:
 			sim.changeDynamics(obj_id, -1, mass=sim_data['objs'][obj_id]['mass'], lateralFriction=sim_data['objs'][obj_id]['mu'])
+			print(bcolors.BOLD + 'Object {} reset parameters | (mass, mu): ({:.3f}, {:.3f})'.format(obj_id, sim_data['objs'][obj_id]['mass'], sim_data['objs'][obj_id]['mu']) + bcolors.ENDC)
 
 		if (len(req.objects.poses) != 0):
 			self.resetObjects(sim_id, req.objects.poses, simulator=sim)
@@ -574,6 +576,7 @@ class BulletSim:
 		place_at = req.place_at
 		violation_flag = False
 		all_interactions = []
+		print(bcolors.UNDERLINE + '(pick_at, place_at, ooi) = ({}, {}, {})'.format(pick_at, place_at, req.ooi) + bcolors.ENDC)
 		for pidx, point in enumerate(req.traj.points[1:]):
 			if (pick_at >= 0):
 				# this is either the OOI retrieval trajectory
@@ -1238,14 +1241,28 @@ class BulletSim:
 					action_interactions += interactions
 					action_interactions = list(np.unique(np.array(action_interactions)))
 					action_interactions[:] = [idx for idx in action_interactions if idx != picked_obj]
+					violation_flag = any([not sim_data['objs'][x]['movable'] for x in action_interactions])
 
-					topple = self.checkPoseConstraints(sim_id, grasp_at=pick_at, ooi=picked_obj, simulator=sim)
-					immovable = any([not sim_data['objs'][x]['movable'] for x in action_interactions])
-					table = self.checkTableCollision(sim_id, simulator=sim)
-					velocity = self.checkVelConstraints(sim_id, grasp_at=pick_at, ooi=picked_obj, simulator=sim)
+					if not violation_flag:
+						violation_flag = self.checkTableCollision(sim_id, simulator=sim)
+					else:
+						print(bcolors.PINK + "\tPick-Place hit immovable obstacle (during place)!" + bcolors.ENDC)
+						break
 
-					violation_flag = topple or immovable or table or velocity
+					if not violation_flag:
+						violation_flag = self.checkPoseConstraints(sim_id, grasp_at=pick_at, ooi=picked_obj, simulator=sim)
+					else:
+						print(bcolors.PINK + "\tPick-Place hit table (during place)!" + bcolors.ENDC)
+						break
+
+					if not violation_flag:
+						violation_flag = self.checkVelConstraints(sim_id, grasp_at=pick_at, ooi=picked_obj, simulator=sim)
+					else:
+						print(bcolors.PINK + "\tPick-Place violated movable object pose constraints (during place)!" + bcolors.ENDC)
+						break
+
 					if (violation_flag):
+						print(bcolors.PINK + "\tPick-Place violated movable object velocity constraints (during place)!" + bcolors.ENDC)
 						break
 
 				del action_interactions[:]
@@ -1284,12 +1301,24 @@ class BulletSim:
 
 				if not violation_flag:
 					violation_flag = self.checkTableCollision(sim_id, simulator=sim)
+				else:
+					print(bcolors.PINK + "\tPick-Place hit immovable obstacle (during hold)???" + bcolors.ENDC)
+					break
+
 				if not violation_flag:
 					violation_flag = self.checkPoseConstraints(sim_id, simulator=sim)
+				else:
+					print(bcolors.PINK + "\tPick-Place hit table (during hold)???" + bcolors.ENDC)
+					break
+
 				if not violation_flag:
 					violation_flag = self.checkVelConstraints(sim_id, simulator=sim)
+				else:
+					print(bcolors.PINK + "\tPick-Place violated movable object pose constraints (during hold)!" + bcolors.ENDC)
+					break
 
 				if (violation_flag):
+					print(bcolors.PINK + "\tPick-Place violated movable object velocity constraints (during hold)!" + bcolors.ENDC)
 					break
 
 			del action_interactions[:]
