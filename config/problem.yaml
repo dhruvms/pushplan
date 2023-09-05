@@ -53,6 +53,9 @@ robot:
   replay: false
   vel_scale: 0.025
   acc_scale: 1.0
+  soln:
+    suffix: "parallel_"
+    num: 1
 
 mapf:
   res: 0.01

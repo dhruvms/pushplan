@@ -252,8 +252,9 @@ bool Planner::Plan(bool& done)
 		m_mamo_search->GetRearrangements(m_rearrangements, m_actions);
 		exec_success = runSim();
 		done = true;
+		ROS_ERROR("Execution success: %d", exec_success);
 		if (SAVE) {
-			writeState("SOLUTION");
+			writeState("SOLUTION_onesample");
 		}
 	}
 	m_mamo_search->SaveStats((int)exec_success);
@@ -474,8 +475,19 @@ bool Planner::TryExtract()
 
 std::uint32_t Planner::RunSolution()
 {
-	read_solution();
-	return RunSim(false);
+	std::string soln_suffix;
+	int soln_num;
+	m_ph.getParam("robot/soln/suffix", soln_suffix);
+	m_ph.getParam("robot/soln/num", soln_num);
+	for (int i = 1; i <= soln_num; ++i)
+	{
+		std::string suffix = soln_suffix;
+		suffix += std::to_string(i);
+		read_solution(suffix);
+		RunSim(false);
+	}
+	// read_solution(soln_suffix);
+	// return RunSim(false);
 }
 
 std::uint32_t Planner::RunSim(bool save)
@@ -837,7 +849,7 @@ void Planner::parse_scene(std::vector<Object>& obstacles)
 	SCENE.close();
 }
 
-void Planner::read_solution()
+void Planner::read_solution(const std::string &suffix)
 {
 	std::string filename(__FILE__);
 	auto found = filename.find_last_of("/\\");
@@ -845,6 +857,8 @@ void Planner::read_solution()
 
 	std::stringstream ss;
 	ss << "SOLUTION" << "_" << m_scene_id;
+	ss << "_";
+	ss << suffix;
 	std::string s = ss.str();
 
 	filename += s;
@@ -866,6 +880,7 @@ void Planner::read_solution()
 
 				// read all rearrangement trajs
 				m_rearrangements.clear();
+				m_actions.clear();
 				for (int i = 0; i < num_trajs; ++i)
 				{
 					getline(SOLUTION, line);
@@ -1407,7 +1422,7 @@ void Planner::writeState(const std::string& prefix)
 	}
 
 	DATA << "SOLUTION" << '\n';
-	DATA << m_rearrangements.size() + 1 << '\n';
+	DATA << m_rearrangements.size() << '\n';
 	for (size_t i = 0; i < m_rearrangements.size(); ++i)
 	{
 		auto &action_params = m_actions.at(i);
