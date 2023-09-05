@@ -166,7 +166,7 @@ private:
 	bool init_agents(
 		bool ycb, std::vector<Object>& obstacles);
 	void parse_scene(std::vector<Object>& obstacles);
-	void read_solution();
+	void read_solution(const std::string &suffix=std::string());
 
 	// For PP
 	std::vector<size_t> m_priorities;

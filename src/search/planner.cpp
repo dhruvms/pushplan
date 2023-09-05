@@ -281,6 +281,7 @@ bool Planner::FinalisePlan(
 	if (!m_robot->PlanRetrieval(movable_obstacles, true, start_state))
 	{
 		m_stats["robot_planner_time"] += GetTime() - m_timer;
+		m_robot->ProcessObstacles({ m_ooi->GetObject() });
 		return false;
 	}
 	ROS_WARN("Planner::FinalisePlan > Robot::PlanRetrieval took %f seconds!", GetTime() - m_timer);
@@ -305,13 +306,14 @@ bool Planner::PlanToHomeState(
 		movable_obstacles.push_back(m_agents.at(m_agent_map[pose.id()])->GetObject());
 	}
 
-	m_robot->ProcessObstacles({ m_ooi->GetObject() }, true);
+	// m_robot->ProcessObstacles({ m_ooi->GetObject() }, true);
 	if (!m_robot->PlanToHomeState(movable_obstacles, start_state))
 	{
 		m_stats["robot_planner_time"] += GetTime() - m_timer;
+		// m_robot->ProcessObstacles({ m_ooi->GetObject() });
 		return false;
 	}
-	m_robot->ProcessObstacles({ m_ooi->GetObject() });
+	// m_robot->ProcessObstacles({ m_ooi->GetObject() });
 	solution = m_robot->GetLastPlanProfiled();
 
 	m_stats["robot_planner_time"] += GetTime() - m_timer;
