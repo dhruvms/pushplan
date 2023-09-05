@@ -94,6 +94,7 @@ class BulletSim:
 		self.ResetSimulation(-1)
 
 	def ResetSimulation(self, req):
+		np.random.seed(seed=0)
 		for i, sim in enumerate(self.sims):
 			sim_data = self.sim_datas[i]
 
