@@ -512,7 +512,7 @@ class BulletSim:
 				if not sim_result[1].violation:
 					succ_count += len(sim_result[0])
 
-			success = succ_count >= self.succ_needed
+			success = succ_count > 0
 			# pick one simulation result to return, reset all
 			for sim_id, sim_result in retvals:
 				if response is None:
