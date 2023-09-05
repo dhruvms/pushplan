@@ -19,7 +19,7 @@ struct MAMOSearchState
 	// unsigned int g, h, f;
 	unsigned int actions, noops;
 	double priority;
-	bool closed, try_finalise;
+	bool closed, try_finalise, force_done;
 	MAMOSearchState *bp;
 
 	struct OPENCompare
@@ -78,7 +78,7 @@ private:
 
 	std::vector<trajectory_msgs::JointTrajectory> m_rearrangements;
 	std::vector<MAMOAction> m_actions;
-	trajectory_msgs::JointTrajectory m_exec_traj;
+	trajectory_msgs::JointTrajectory m_exec_traj, m_home_traj;
 
 	bool expand(MAMOSearchState *state);
 	bool done(MAMOSearchState *state);

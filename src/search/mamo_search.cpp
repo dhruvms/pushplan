@@ -256,6 +256,10 @@ bool MAMOSearch::done(MAMOSearchState *state)
 		}
 	}
 
+	if (state->force_done) {
+		return true;
+	}
+
 	if (state->try_finalise) {
 		return false;
 	}
@@ -267,15 +271,26 @@ bool MAMOSearch::done(MAMOSearchState *state)
 
 void MAMOSearch::extractRearrangements()
 {
+	if (m_exec_traj.points.empty()) {
+		SMPL_ERROR("Found MAMO solution without retrieval traj?");
+	}
+
 	m_rearrangements.clear();
 	m_rearrangements.push_back(std::move(m_exec_traj));
 	MAMOAction action(MAMOActionType::RETRIEVEOOI, m_planner->GetOoIID());
 	action._params.push_back(m_planner->GetRobot()->GraspAt());
 	m_actions.push_back(action);
 
-	if (m_exec_traj.points.empty()) {
-		SMPL_ERROR("Found MAMO solution without retrieval traj?");
+	if (!m_home_traj.points.empty())
+	{
+		m_rearrangements.push_back(std::move(m_home_traj));
+
+		action._params.clear();
+		action._type = MAMOActionType::PUSH;
+		action._oid = m_planner->GetOoIID();
+		m_actions.push_back(action);
 	}
+
 	SMPL_WARN("Solution path state ids (from goal to start):");
 	for (MAMOSearchState *state = m_solved_search; state; state = state->bp)
 	{
@@ -303,8 +318,18 @@ void MAMOSearch::createSuccs(
 	if (num_succs == 0)
 	{
 		m_stats["no_succs"] += 1;
-		parent_search_state->closed = true;
-		m_OPEN.erase(parent_search_state->m_OPEN_h);
+		// parent_search_state->closed = true;
+		// m_OPEN.erase(parent_search_state->m_OPEN_h);
+
+		parent_search_state->actions = std::numeric_limits<unsigned int>::max();
+		parent_search_state->force_done = true;
+
+		auto node = m_hashtable.GetState(parent_search_state->state_id);
+		auto start_state = node->GetCurrentStartState();
+		m_planner->PlanToHomeState(node->kall_object_states(), start_state, m_home_traj);
+		m_exec_traj = m_planner->GetFirstTraj();
+
+		m_OPEN.update(parent_search_state->m_OPEN_h);
 		return;
 	}
 	bool duplicate_successor = false;
@@ -453,6 +478,7 @@ void MAMOSearch::initSearchState(MAMOSearchState *state)
 	state->noops = -1;
 	state->closed = false;
 	state->try_finalise = false;
+	state->force_done = false;
 	state->bp = nullptr;
 }
 
