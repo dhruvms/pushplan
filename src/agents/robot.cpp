@@ -946,7 +946,6 @@ bool Robot::planApproach(
 
 	detachObject();
 	UpdateKDLRobot(0);
-	// setGripper(false); // closed
 	InitArmPlanner(false);
 	bool goal_collides = !m_cc_i->isStateValid(m_pregrasp_state);
 
@@ -1035,9 +1034,10 @@ bool Robot::planRetract(
 {
 	bool have_obs = !movable_obstacles.empty();
 
-	// setGripper(true); // open
+	setGripper(true); // open
 	if (!attachAndCheckOOI(m_postgrasp_state)) {
 		detachObject();
+		setGripper(false); // closed
 		return false;
 	}
 	InitArmPlanner(false);
@@ -1083,6 +1083,7 @@ bool Robot::planRetract(
 	{
 		// ROS_ERROR("Failed to init planner!");
 		m_start_state = orig_start;
+		setGripper(false); // closed
 		return false;
 	}
 
@@ -1106,8 +1107,10 @@ bool Robot::planRetract(
 			ProcessObstacles(movable_obstacles, true);
 			ProcessFCLObstacles(movable_obstacles, true);
 		}
+		setGripper(false); // closed
 		return false;
 	}
+	setGripper(false); // closed
 	// SMPL_INFO("Robot found extraction plan! # wps = %d", res.trajectory.joint_trajectory.points.size());
 	if (have_obs && finalise) {
 		// remove from immovable collision checker
@@ -1129,9 +1132,12 @@ void Robot::getTrajSpheres(
 	m_sim->GetShelfParams(ox, oy, oz, sx, sy, sz);
 
 	spheres.clear();
-	// setGripper(true);
+	int wp_count = 0;
 	for (const auto &wp: traj.points)
 	{
+		if (wp_count == m_grasp_at) {
+			setGripper(true);
+		}
 		auto markers = m_cc_i->getCollisionModelVisualization(wp.positions);
 		for (auto& marker : markers)
 		{
@@ -1159,8 +1165,9 @@ void Robot::getTrajSpheres(
 					std::ceil(mz * 100.0) / 100.0,
 					std::ceil(mr * 100.0) / 100.0 });
 		}
+		++wp_count;
 	}
-	// setGripper(false);
+	setGripper(false);
 }
 
 void Robot::voxeliseTrajectory()
