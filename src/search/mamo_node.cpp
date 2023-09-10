@@ -13,6 +13,11 @@ void MAMONode::InitAgents(
 	const comms::ObjectsPoses& all_objects,
 	const std::vector<int> &reachable_ids)
 {
+	m_agents.clear();
+	m_agent_map.clear();
+	m_object_states.clear();
+	m_all_object_states.clear();
+
 	m_all_objects = all_objects;
 	for (size_t i = 0; i < agents.size(); ++i)
 	{
