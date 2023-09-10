@@ -171,7 +171,7 @@ private:
 	// For PP
 	std::vector<size_t> m_priorities;
 	void prioritise();
-	void writeState(const std::string& prefix);
+	void writeState(const std::string& prefix, const std::string& suffix=std::string());
 
 	// torch things
 	std::shared_ptr<at::TensorOptions> m_tensoroptions;

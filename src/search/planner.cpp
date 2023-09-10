@@ -254,7 +254,7 @@ bool Planner::Plan(bool& done)
 		done = true;
 		ROS_ERROR("Execution success: %d", exec_success);
 		if (SAVE) {
-			writeState("SOLUTION_onesample");
+			writeState("SOLUTION", "lazystats");
 		}
 	}
 	m_mamo_search->SaveStats((int)exec_success);
@@ -1336,14 +1336,14 @@ void Planner::prioritise()
 		[&dists](size_t i1, size_t i2) { return dists[i1] < dists[i2]; });
 }
 
-void Planner::writeState(const std::string& prefix)
+void Planner::writeState(const std::string& prefix, const std::string& suffix)
 {
 	std::string filename(__FILE__);
 	auto found = filename.find_last_of("/\\");
 	filename = filename.substr(0, found + 1) + "../../dat/txt/";
 
 	std::stringstream ss;
-	ss << prefix << "_" << m_scene_id << "_";
+	ss << prefix << "_" << m_scene_id << "_" << suffix << "_";
 	auto t = std::time(nullptr);
 	auto tm = *std::localtime(&t);
 	ss << std::put_time(&tm, "%d-%m-%Y-%H-%M-%S");
