@@ -164,7 +164,8 @@ class BulletSim:
 					mass = sim_data['objs'][obj_id]['mass']
 					new_mass = np.minimum(2*mass, np.maximum(mass/2, np.random.normal(mass, scale=0.2*mass)))
 					new_mu = np.minimum(2*mu, np.maximum(mu/2, np.random.normal(mu, scale=mu/2)))
-					sim.changeDynamics(obj_id, -1, mass=new_mass, lateralFriction=new_mu)
+					# sim.changeDynamics(obj_id, -1, mass=new_mass, lateralFriction=new_mu)
+					sim.changeDynamics(obj_id, -1, mass=mass, lateralFriction=mu)
 					print(bcolors.BOLD + 'Object {} parameters | true (mass, mu): ({:.3f}, {:.3f}) | sampled (mass, mu): ({:.3f}, {:.3f})'.format(obj_id, mass, mu, new_mass, new_mu) + bcolors.ENDC)
 
 				sim_data['objs'][obj_id]['mu'] = mu
