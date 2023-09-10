@@ -27,6 +27,9 @@ bool MAMOSearch::CreateRoot()
 	createDists();
 
 	double t1 = GetTime();
+	m_root_search = getSearchStateForceful();
+	m_root_id = m_root_search->state_id;
+
 	m_root_node = new MAMONode;
 	m_root_node->SetPlanner(m_planner);
 	m_root_node->SetCBS(m_planner->GetCBS());
@@ -40,8 +43,7 @@ bool MAMOSearch::CreateRoot()
 	// m_planner->GetRobot()->IdentifyReachableMovables(m_planner->GetAllAgents(), m_planner->GetStartObjects(), reachable_ids);
 	m_root_node->InitAgents(m_planner->GetAllAgents(), m_planner->GetStartObjects(), reachable_ids); // inits required fields for hashing
 
-	m_root_id = m_hashtable.GetStateIDForceful(m_root_node);
-	m_root_search = getSearchState(m_root_id);
+	m_hashtable.InsertState(m_root_node, m_root_id);
 	m_search_nodes.push_back(m_root_node);
 	m_stats["total_time"] += GetTime() - t1;
 
@@ -57,9 +59,10 @@ bool MAMOSearch::Solve(double budget)
 	m_timer = GetTime();
 	m_root_search->actions = 0;
 	m_root_search->noops = 0;
-	// m_root_search->priority = m_root_node->ComputeMAMOPriorityOrig();
-	m_root_node->ComputePriorityFactors();
-	computeMAMOPriority(m_root_search);
+	m_root_search->true_cost = true;
+	m_root_search->priority = m_root_node->ComputeMAMOPriorityOrig();
+	// m_root_node->ComputePriorityFactors();
+	// computeMAMOPriority(m_root_search);
 	m_root_search->m_OPEN_h = m_OPEN.push(m_root_search);
 	++m_stats["generated"];
 
@@ -73,14 +76,12 @@ bool MAMOSearch::Solve(double budget)
 
 		auto next = m_OPEN.top();
 		SMPL_WARN("Select %d, priority = %.2e", next->state_id, next->priority);
-		if (done(next))
+		if (next->true_cost && done(next))
 		{
 			SMPL_INFO("Final plan found OR NGR cleared!");
 
 			auto node = m_hashtable.GetState(next->state_id);
-			double t2 = GetTime();
 			node->RunMAPF();
-			m_stats["mapf_time"] += GetTime() - t2;
 			node->SaveNode(next->state_id, next->bp == nullptr ? 0 : next->bp->state_id, "TERMINATED");
 
 			m_solved_node = node;
@@ -91,8 +92,17 @@ bool MAMOSearch::Solve(double budget)
 
 			return true;
 		}
-		expand(next);
-		m_stats["expansions"] += 1;
+
+		if (next->true_cost)
+		{
+			expand(next);
+			m_stats["expansions"] += 1;
+		}
+		else
+		{
+			evaluate(next);
+			m_stats["evaluations"] += 1;
+		}
 	}
 	m_stats["total_time"] += GetTime() - m_timer;
 	return false;
@@ -490,6 +500,7 @@ void MAMOSearch::initSearchState(MAMOSearchState *state)
 	state->closed = false;
 	state->try_finalise = false;
 	state->force_done = false;
+	state->true_cost = false;
 	state->bp = nullptr;
 }
 
