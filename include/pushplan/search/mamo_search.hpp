@@ -91,6 +91,7 @@ private:
 		std::vector<trajectory_msgs::JointTrajectory> *succ_trajs,
 		std::vector<std::tuple<State, State, int> > *debug_pushes);
 
+	MAMOSearchState *getSearchStateForceful();
 	MAMOSearchState *getSearchState(unsigned int state_id);
 	MAMOSearchState *createSearchState(unsigned int state_id);
 	void initSearchState(MAMOSearchState *state);
