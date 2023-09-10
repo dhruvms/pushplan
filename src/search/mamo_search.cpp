@@ -22,6 +22,7 @@ bool MAMOSearch::CreateRoot()
 	m_stats["mapf_time"] = 0.0;
 	m_stats["push_planner_time"] = 0.0;
 	m_stats["sim_time"] = 0.0;
+	m_stats["finalise_time"] = 0.0;
 	m_stats["total_time"] = 0.0;
 
 	createDists();
@@ -122,12 +123,14 @@ void MAMOSearch::SaveStats(int exec_success)
 	{
 		STATS << "UID,"
 				<< "Solved?,ExecSuccess?,NumTrajs,SolveTime,MAPFTime,PushPlannerTime,SimTime,"
+				<< "FinaliseTime,"
 				<< "StatesGenerated,Expansions,OnlyDuplicate,NoDuplicate,NoSuccs\n";
 	}
 
 	STATS << m_planner->GetSceneID() << ','
 			<< (int)m_solved << ',' << exec_success << ',' << (int)m_rearrangements.size() << ','
 			<< m_stats["total_time"] << ',' << m_stats["mapf_time"] << ',' << m_stats["push_planner_time"] << ',' << m_stats["sim_time"] << ','
+			<< m_stats["finalise_time"] << ','
 			<< m_stats["generated"] << ',' << m_stats["expansions"] << ',' << m_stats["only_duplicate"] << ',' << m_stats["no_duplicate"] << ','
 			<< m_stats["no_succs"] << '\n';
 	STATS.close();
@@ -264,9 +267,12 @@ bool MAMOSearch::done(MAMOSearchState *state)
 		return false;
 	}
 
+	double timer = GetTime();
 	auto start_state = node->GetCurrentStartState();
 	state->try_finalise = true;
-	return m_planner->FinalisePlan(node->kall_object_states(), start_state, m_exec_traj);
+	bool done = m_planner->FinalisePlan(node->kall_object_states(), start_state, m_exec_traj);
+	m_stats["finalise_time"] += GetTime() - timer;
+	return done;
 }
 
 void MAMOSearch::extractRearrangements()
