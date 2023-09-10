@@ -26,6 +26,7 @@ struct MAMOAction
 	MAMOActionType _type;
 	int _oid;
 	std::vector<int> _params;
+	Trajectory _traj;
 
 	MAMOAction() {};
 	MAMOAction(MAMOActionType t, int o) : _type(t), _oid(o) {};
@@ -44,6 +45,17 @@ public:
 		const std::vector<int> &reachable_ids);
 	std::vector<double>* GetCurrentStartState();
 	bool RunMAPF();
+
+	void GetSuccsLazy(
+		std::vector<MAMOAction> *lazy_succ_object_centric_actions,
+		std::vector<int> *lazy_succ_costs,
+		bool *close, double *mapf_time);
+	bool GetSuccsTrue(
+		const MAMOAction &action,
+		MAMOAction *succ_action, comms::ObjectsPoses *succ_objects,
+		trajectory_msgs::JointTrajectory *succ_traj,
+		std::vector<std::tuple<State, State, int> > *debug_actions,
+		double *get_succs_time, double *sim_time);
 	void GetSuccs(
 		std::vector<MAMOAction> *succ_object_centric_actions,
 		std::vector<comms::ObjectsPoses> *succ_objects,
@@ -51,6 +63,7 @@ public:
 		std::vector<std::tuple<State, State, int> > *debug_actions,
 		bool *close,
 		double *mapf_time, double *get_succs_time, double *sim_time);
+
 	unsigned int ComputeMAMOPriorityOrig();
 	void ComputePriorityFactors();
 	void SaveNode(
@@ -90,6 +103,8 @@ public:
 	bool has_mapf_soln() const;
 	const float& percent_ngr() const;
 	const std::vector<std::vector<double> >& obj_priority_data() const;
+
+	const ObjectState& get_object_state(int id) { return m_object_states.at(m_agent_map[id]); };
 
 	void ResetConstraints();
 

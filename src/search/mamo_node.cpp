@@ -255,6 +255,222 @@ bool MAMONode::tryPush(
 	return success;
 }
 
+void MAMONode::GetSuccsLazy(
+	std::vector<MAMOAction> *lazy_succ_object_centric_actions,
+	std::vector<int> *lazy_succ_costs,
+	bool *close, double *mapf_time)
+{
+	*close = false;
+	*mapf_time = GetTime();
+	if (!this->RunMAPF() && m_successful_rearranges.empty())
+	{
+		*mapf_time = GetTime() - *mapf_time;
+		// I have no more possible successors, please CLOSE me
+		*close = true;
+		return;
+	}
+	*mapf_time = GetTime() - *mapf_time;
+
+	for (size_t i = 0; i < m_mapf_solution.size(); ++i)
+	{
+		const auto& moved = m_mapf_solution.at(i);
+		// if (std::find(m_relevant_ids.begin(), m_relevant_ids.end(), m_agents.at(m_agent_map[moved.first])->GetID()) == m_relevant_ids.end())
+		// {
+		// 	// if something the robot cannot currently reach moved in the MAPF solution,
+		// 	// ignore and move on, i.e. no successor generated since the scene cannot and should not change
+		// 	continue;
+		// }
+
+		// agent does not move in MAPF solution
+		if (moved.second.size() == 1 || moved.second.front().coord == moved.second.back().coord) {
+			continue;
+		}
+
+		int cost = m_agents.at(m_agent_map[moved.first])->GetTorchCost(moved.second.back());
+
+		MAMOAction action(MAMOActionType::LAZY_PUSH, moved.first);
+		action._params.clear();
+		action._traj = moved.second;
+		lazy_succ_object_centric_actions->push_back(action);
+		lazy_succ_costs->push_back(cost);
+
+		// bool graspable = m_agents.at(m_agent_map[moved.first])->GetObject()->Graspable();
+		// if (graspable)
+		// {
+		// 	action._type = MAMOActionType::LAZY_PICKPLACE;
+		// 	lazy_succ_object_centric_actions->push_back(action);
+		// 	lazy_succ_costs->push_back(cost * 2);
+		// }
+	}
+}
+
+bool MAMONode::GetSuccsTrue(
+	const MAMOAction &action,
+	MAMOAction *succ_action, comms::ObjectsPoses *succ_objects,
+	trajectory_msgs::JointTrajectory *succ_traj,
+	std::vector<std::tuple<State, State, int> > *debug_actions,
+	double *get_succs_time, double *sim_time)
+{
+	*get_succs_time = GetTime();
+	std::vector<Object*> movable_obstacles;
+	for (size_t i = 0; i < m_agents.size(); ++i)
+	{
+		m_agents.at(i)->SetObjectPose(m_object_states.at(i).cont_pose());
+		if (m_agents.at(i)->GetID() == action._oid)
+		{
+			m_agents.at(i)->SetSolveTraj(action._traj);
+
+			m_agents.at(i)->ResetInvalidPushes(
+				m_planner->GetGloballyInvalidPushes(),
+				m_planner->GetLocallyInvalidPushes(this->GetObjectsHash(), action._oid));
+			continue; // selected object cannot be obstacle
+		}
+		movable_obstacles.push_back(m_agents.at(i)->GetObject());
+	}
+
+	bool valid_edge = true;
+	if (action._type == MAMOActionType::LAZY_PUSH)
+	{
+		// check if we have seen this push before
+		int samples = m_agents.at(m_agent_map[action._oid])->InvalidPushCount(action._traj.back().coord);
+		if (samples >= SAMPLES)
+		{
+			*get_succs_time = GetTime() - *get_succs_time;
+			return true; // known invalid push, do not compute
+		}
+		// else if (samples == 0) {
+		// 	samples = SAMPLES; // never before seen push, must compute
+		// }
+		else {
+			// samples = 1; // seen valid push before, lookup from DB
+			samples = SAMPLES - samples;
+		}
+
+		// get push location
+		std::vector<double> push;
+		m_agents.at(m_agent_map[action._oid])->GetSE2Push(push);
+
+		int p = 0;
+		bool globally_invalid = false;
+		for (; p < samples; ++p)
+		{
+			comms::ObjectsPoses result;
+			PushResult push_failure;
+			std::tuple<State, State, int> debug_action;
+			double sim_time_push = 0.0;
+			bool success = m_robot->PlanPush(
+							this->GetCurrentStartState(),
+							m_agents.at(m_agent_map[action._oid]).get(), push,
+							movable_obstacles, m_all_objects,
+							result, push_failure, debug_action, sim_time_push);
+			*sim_time += sim_time_push;
+
+			if (success)
+			{
+				// valid push found!
+				succ_action->_type = MAMOActionType::PUSH;
+				succ_action->_oid = action._oid;
+				succ_action->_params.clear();
+				succ_action->_traj.clear();
+
+				*succ_objects = result;
+				*succ_traj = m_robot->GetLastPlan();
+				debug_actions->push_back(std::move(debug_action));
+
+				m_successful_rearranges.push_back(std::make_pair(action._oid, action._traj.back().coord));
+				break;
+			}
+			else
+			{
+				// assert(samples == SAMPLES);
+				// SMPL_INFO("Tried pushing object %d. Return value = %d", moved.first, push_failure);
+				switch (push_failure)
+				{
+					case PushResult::IK_CATCHALL_FAIL : // SMPL_ERROR("Something went wrong in IK."); break;
+					case PushResult::IK_JOINT_LIMIT : // SMPL_ERROR("IK hit joint limits."); break;
+					case PushResult::IK_OBSTACLE : // SMPL_ERROR("IK hit static obstacle."); break;
+					{
+						m_planner->AddGloballyInvalidPush(std::make_pair(action._traj.front().coord, action._traj.back().coord));
+						globally_invalid = true;
+						break;
+					}
+					// case PushResult::START_INSIDE_OBSTACLE : // SMPL_ERROR("Push start inside object."); break;
+					// case PushResult::START_UNREACHABLE : // SMPL_ERROR("Failed to reach push start."); break;
+					// case PushResult::NO_OOI_COLLISION : // SMPL_ERROR("Push action did not collide with intended object."); break;
+					// case PushResult::FAIL_IN_SIM : // SMPL_ERROR("Valid push failed in simulation!"); break;
+					// case PushResult::SUCCESS_IN_SIM : // SMPL_INFO("Push succeeded in simulation!"); break;
+					// default: // SMPL_WARN("Unknown push failure cause.");
+				}
+				debug_actions->push_back(std::move(debug_action));
+				if (globally_invalid) {
+					break;
+				}
+			}
+		}
+
+		// if (samples == SAMPLES) // this was a new push I was considering
+		{
+			if (globally_invalid) {
+				p = SAMPLES * 2; // automatic maximum penalty
+			}
+			if (p >= SAMPLES)
+			{
+				valid_edge = false; // failed to find a push, must add new constraint to this state
+				m_new_constraints = true;
+			}
+			if (p > 0)
+			{
+				// treat this action to have p invalid samples
+				m_planner->AddLocallyInvalidPush(
+					this->GetObjectsHash(),
+					action._oid,
+					action._traj.back().coord,
+					p);
+			}
+		}
+	}
+	// else if (action._type == MAMOActionType::LAZY_PICKPLACE)
+	// {
+	// 	comms::ObjectsPoses result;
+	// 	int pick_at, place_at;
+	// 	double plan_time = 0.0, sim_time_pickplace = 0.0;
+	// 	std::tuple<State, State, int> debug_action;
+
+	// 	bool success = m_robot->PlanPickPlace(
+	// 					this->GetCurrentStartState(),
+	// 					m_agents.at(m_agent_map[action._oid]).get(),
+	// 					movable_obstacles, m_all_objects,
+	// 					result, pick_at, place_at,
+	// 					plan_time, sim_time_pickplace, debug_action);
+	// 	*sim_time += sim_time_pickplace;
+
+	// 	if (success)
+	// 	{
+	// 		// pick-and-place succeeded!
+	// 		succ_action->_type = MAMOActionType::PICKPLACE;
+	// 		succ_action->_oid = action._oid;
+	// 		succ_action->_params.clear();
+	// 		succ_action->_params.push_back(pick_at);
+	// 		succ_action->_params.push_back(place_at);
+	// 		succ_action->_traj.clear();
+
+	// 		*succ_objects = result;
+	// 		*succ_traj = m_robot->GetLastPlan();
+	// 		debug_actions->push_back(std::move(debug_action));
+
+	// 		m_successful_rearranges.push_back(std::make_pair(action._oid, action._traj.back().coord));
+	// 	}
+	// 	else
+	// 	{
+	// 		valid_edge = false;
+	// 		debug_actions->push_back(std::move(debug_action));
+	// 	}
+	// }
+
+	*get_succs_time = GetTime() - *get_succs_time;
+	return valid_edge;
+}
+
 void MAMONode::GetSuccs(
 	std::vector<MAMOAction> *succ_object_centric_actions,
 	std::vector<comms::ObjectsPoses> *succ_objects,
