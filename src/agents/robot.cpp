@@ -3825,6 +3825,9 @@ void Robot::createMultiPoseGoalConstraint(
 	for (size_t g = 0; g < poses.size(); ++g)
 	{
 		createPoseGoalConstraint(poses[g]);
+		m_goal.position_constraints[0].constraint_region.primitives[0].dimensions[0] = 0.01;
+		m_goal.position_constraints[0].constraint_region.primitives[0].dimensions[1] = 0.01;
+		m_goal.position_constraints[0].constraint_region.primitives[0].dimensions[2] = 0.01;
 		m_goal.orientation_constraints[0].absolute_x_axis_tolerance = DEG5;
 		req.goal_constraints[g] = m_goal;
 	}
@@ -3833,7 +3836,9 @@ void Robot::createMultiPoseGoalConstraint(
 void Robot::createPoseGoalConstraint(
 	const Eigen::Affine3d& pose)
 {
+	m_goal.position_constraints.clear();
 	m_goal.position_constraints.resize(1);
+	m_goal.orientation_constraints.clear();
 	m_goal.orientation_constraints.resize(1);
 	m_goal.position_constraints[0].header.frame_id = m_planning_frame;
 
