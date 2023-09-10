@@ -16,11 +16,11 @@ namespace clutter
 struct MAMOSearchState
 {
 	unsigned int state_id;
-	// unsigned int g, h, f;
 	unsigned int actions, noops;
 	double priority;
-	bool closed, try_finalise, force_done;
+	bool closed, try_finalise, force_done, true_cost;
 	MAMOSearchState *bp;
+	MAMOAction action_to_me;
 
 	struct OPENCompare
 	{
@@ -29,14 +29,14 @@ struct MAMOSearchState
 		{
 			if (p->actions == q->actions)
 			{
-				if (p->noops == q->noops)
+				if (p->priority == q->priority)
 				{
-					if (p->priority == q->priority) {
+					if (p->noops == q->noops) {
 						return rand() % 2;
 					}
-					return p->priority < q->priority;
+					return p->noops > q->noops;
 				}
-				return p->noops > q->noops;
+				return p->priority > q->priority;
 			}
 			return p->actions < q->actions;
 		}
