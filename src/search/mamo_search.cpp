@@ -15,13 +15,17 @@ bool MAMOSearch::CreateRoot()
 	///////////
 
 	m_stats["expansions"] = 0.0;
-	m_stats["generated"] = 0.0;
+	m_stats["evaluations"] = 0.0;
+	m_stats["lazy_generated"] = 0.0;
+	m_stats["true_generated"] = 0.0;
 	m_stats["no_succs"] = 0.0;
 	m_stats["only_duplicate"] = 0.0;
 	m_stats["no_duplicate"] = 0.0;
 	m_stats["mapf_time"] = 0.0;
 	m_stats["push_planner_time"] = 0.0;
 	m_stats["sim_time"] = 0.0;
+	m_stats["search_ops_time"] = 0.0;
+	m_stats["finalise_time"] = 0.0;
 	m_stats["total_time"] = 0.0;
 
 	createDists();
@@ -64,7 +68,7 @@ bool MAMOSearch::Solve(double budget)
 	// m_root_node->ComputePriorityFactors();
 	// computeMAMOPriority(m_root_search);
 	m_root_search->m_OPEN_h = m_OPEN.push(m_root_search);
-	++m_stats["generated"];
+	++m_stats["true_generated"];
 
 	while (!m_OPEN.empty())
 	{
@@ -132,13 +136,18 @@ void MAMOSearch::SaveStats(int exec_success)
 	{
 		STATS << "UID,"
 				<< "Solved?,ExecSuccess?,NumTrajs,SolveTime,MAPFTime,PushPlannerTime,SimTime,"
-				<< "StatesGenerated,Expansions,OnlyDuplicate,NoDuplicate,NoSuccs\n";
+				<< "FinaliseTime,SearchOpsTime,"
+				<< "Expansions,LazyStatesGenerated,Evaluations,TrueStatesGenerated,"
+				<< "OnlyDuplicate,NoDuplicate,NoSuccs\n";
 	}
 
 	STATS << m_planner->GetSceneID() << ','
 			<< (int)m_solved << ',' << exec_success << ',' << (int)m_rearrangements.size() << ','
 			<< m_stats["total_time"] << ',' << m_stats["mapf_time"] << ',' << m_stats["push_planner_time"] << ',' << m_stats["sim_time"] << ','
-			<< m_stats["generated"] << ',' << m_stats["expansions"] << ',' << m_stats["only_duplicate"] << ',' << m_stats["no_duplicate"] << ','
+			<< m_stats["finalise_time"] << ',' << m_stats["search_ops_time"] << ','
+			<< m_stats["expansions"] << ',' << m_stats["lazy_generated"] << ','
+			<< m_stats["evaluations"] << ',' << m_stats["true_generated"] << ','
+			<< m_stats["only_duplicate"] << ',' << m_stats["no_duplicate"] << ','
 			<< m_stats["no_succs"] << '\n';
 	STATS.close();
 }
@@ -208,20 +217,14 @@ bool MAMOSearch::expand(MAMOSearchState *state)
 	SMPL_WARN("Expand %d, priority = %.2e", state->state_id, state->priority);
 	auto node = m_hashtable.GetState(state->state_id);
 
-	std::vector<MAMOAction> succ_object_centric_actions;
-	std::vector<comms::ObjectsPoses> succ_objects;
-	std::vector<trajectory_msgs::JointTrajectory> succ_trajs;
-	std::vector<std::tuple<State, State, int> > debug_actions;
+	std::vector<MAMOAction> lazy_succ_object_centric_actions;
+	std::vector<int> lazy_succ_costs;
+	double mapf_time = 0.0;
 	bool close;
-	double mapf_time = 0.0, get_succs_time = 0.0, sim_time = 0.0;
-	node->GetSuccs(&succ_object_centric_actions, &succ_objects, &succ_trajs, &debug_actions, &close, &mapf_time, &get_succs_time, &sim_time);
-	m_stats["push_planner_time"] += get_succs_time - sim_time;
-	m_stats["sim_time"] += sim_time;
+	node->GetSuccsLazy(&lazy_succ_object_centric_actions, &lazy_succ_costs, &close, &mapf_time);
 	m_stats["mapf_time"] += mapf_time;
 
-	assert(succ_object_centric_actions.size() == succ_objects.size());
-	assert(succ_objects.size() == succ_trajs.size());
-	assert(succ_trajs.size() == succ_object_centric_actions.size());
+	assert(lazy_succ_object_centric_actions.size() == lazy_succ_costs.size());
 
 	if (close)
 	{
@@ -230,13 +233,160 @@ bool MAMOSearch::expand(MAMOSearchState *state)
 		return true;
 	}
 
-	createSuccs(node, state, &succ_object_centric_actions, &succ_objects, &succ_trajs, &debug_actions);
-
+	size_t num_succs = lazy_succ_object_centric_actions.size();
 	double t_temp = GetTime();
+	if (num_succs == 0)
+	{
+		m_stats["no_succs"] += 1;
+		// state->closed = true;
+		// m_OPEN.erase(state->m_OPEN_h);
+
+		// bump to top of open list
+		state->actions = std::numeric_limits<unsigned int>::max();
+		state->force_done = true;
+
+		auto node = m_hashtable.GetState(state->state_id);
+		auto start_state = node->GetCurrentStartState();
+		m_planner->PlanToHomeState(node->kall_object_states(), start_state, m_home_traj);
+		m_exec_traj = m_planner->GetFirstTraj();
+
+		m_OPEN.update(state->m_OPEN_h);
+		m_stats["search_ops_time"] += GetTime() - t_temp;
+		return true;
+	}
+
+	for (size_t i = 0; i < num_succs; ++i)
+	{
+		MAMOSearchState *lazy_succ = getSearchStateForceful();
+		lazy_succ->priority = (double)lazy_succ_costs.at(i);
+		lazy_succ->actions = state->actions + 1;
+		lazy_succ->noops = 0;
+		lazy_succ->bp = state;
+		lazy_succ->action_to_me = lazy_succ_object_centric_actions.at(i);
+		lazy_succ->m_OPEN_h = m_OPEN.push(lazy_succ);
+
+		SMPL_WARN("Generate %d (lazy) | action_to_me = (%d, %d)", lazy_succ->state_id, static_cast<int>(lazy_succ->action_to_me._type), lazy_succ->action_to_me._oid);
+		++m_stats["lazy_generated"];
+	}
+	m_stats["search_ops_time"] += GetTime() - t_temp;
+
+	t_temp = GetTime();
 	node->SaveNode(state->state_id, state->bp == nullptr ? 0 : state->bp->state_id, "EXPANDED");
 	m_timer -= GetTime() - t_temp;
 
 	return true;
+}
+
+bool MAMOSearch::evaluate(MAMOSearchState *state)
+{
+	auto parent_node = m_hashtable.GetState(state->bp->state_id);
+
+	MAMOAction succ_action;
+	comms::ObjectsPoses succ_objects;
+	trajectory_msgs::JointTrajectory succ_traj;
+	std::vector<std::tuple<State, State, int> > debug_actions;
+	double get_succs_time = 0.0, sim_time = 0.0;
+	bool valid_edge = parent_node->GetSuccsTrue(
+						state->action_to_me,
+						&succ_action, &succ_objects, &succ_traj, &debug_actions,
+						&get_succs_time, &sim_time);
+	m_stats["push_planner_time"] += get_succs_time - sim_time;
+	m_stats["sim_time"] += sim_time;
+
+	double timer = GetTime();
+	if (!valid_edge)
+	{
+		for (auto it = debug_actions.begin(); it != debug_actions.end(); ++it) {
+			parent_node->AddDebugAction(*it);
+		}
+
+		state->bp->noops += 1;
+		m_OPEN.update(state->bp->m_OPEN_h);
+
+		state->bp = nullptr;
+		state->closed = true; // for good measure
+	}
+	else
+	{
+		auto true_succ = new MAMONode;
+		true_succ->SetPlanner(m_planner);
+		true_succ->SetCBS(m_planner->GetCBS());
+		true_succ->SetCC(m_planner->GetCC());
+		true_succ->SetRobot(m_planner->GetRobot());
+		true_succ->SetEdgeTo(succ_action);
+
+		std::vector<int> reachable_ids;
+		true_succ->InitAgents(m_planner->GetAllAgents(), succ_objects, reachable_ids); // inits required fields for hashing
+
+		// check if we have visited this mamo state before
+		unsigned int old_id;
+		MAMOSearchState *prev_search_state = nullptr;
+		if (m_hashtable.Exists(true_succ))
+		{
+			old_id = m_hashtable.GetStateID(true_succ);
+			prev_search_state = getSearchState(old_id);
+		}
+
+		unsigned int succ_actions = state->bp->actions + 1;
+		if (prev_search_state != nullptr && (prev_search_state->closed || prev_search_state->actions <= succ_actions)) {
+			delete true_succ;
+		}
+		else
+		{
+			true_succ->SetRobotTrajectory(succ_traj);
+			true_succ->SetParent(parent_node);
+			for (auto it = debug_actions.begin(); it != debug_actions.end(); ++it) {
+				true_succ->AddDebugAction(*it);
+			}
+
+			if (prev_search_state != nullptr)
+			{
+				// update search state in open list
+				auto old_succ = m_hashtable.GetState(old_id);
+				old_succ->parent()->RemoveChild(old_succ);
+
+				m_hashtable.UpdateState(true_succ);
+				prev_search_state->bp = state->bp;
+				// prev_search_state->actions = succ_actions;
+
+				SMPL_WARN("Evaluating %d led to previously seen state %d (now updated)", state->state_id, old_id);
+			}
+			else
+			{
+				MAMOSearchState *search_succ = getSearchStateForceful();
+				m_hashtable.InsertState(true_succ, search_succ->state_id);
+
+				// add search state to open list
+				search_succ->bp = state->bp;
+				search_succ->actions = succ_actions;
+				search_succ->noops = 0;
+				search_succ->true_cost = true;
+				search_succ->priority = 0;
+				// search_succ->priority = true_succ->ComputeMAMOPriorityOrig();
+				// true_succ->ComputePriorityFactors();
+				// computeMAMOPriority(search_succ);
+				search_succ->m_OPEN_h = m_OPEN.push(search_succ);
+
+				SMPL_WARN("Generate %d (true and evaluated) | parent id = %d | action_to_me (type, oid) = (%d, %d)", search_succ->state_id, state->bp->state_id, succ_action._type, succ_action._oid);
+				++m_stats["true_generated"];
+
+				double t_temp = GetTime();
+				true_succ->RunMAPF();
+				true_succ->SaveNode(search_succ->state_id, state->bp->state_id, "GENERATED");
+				true_succ->ResetConstraints();
+				m_timer -= GetTime() - t_temp;
+
+				// std::stringstream reachable_str;
+				// std::copy(reachable_ids.begin(), reachable_ids.end(), std::ostream_iterator<int>(reachable_str, ","));
+				// SMPL_INFO("Movables reachable in NEW state %d : (%s)", succ_id, reachable_str.str().c_str());
+			}
+			parent_node->AddChild(true_succ);
+			m_search_nodes.push_back(true_succ);
+		}
+	}
+	m_stats["search_ops_time"] += GetTime() - timer;
+	// remove lazy state from open list
+	m_OPEN.erase(state->m_OPEN_h);
 }
 
 bool MAMOSearch::done(MAMOSearchState *state)
@@ -276,7 +426,11 @@ bool MAMOSearch::done(MAMOSearchState *state)
 
 	auto start_state = node->GetCurrentStartState();
 	state->try_finalise = true;
-	return m_planner->FinalisePlan(node->kall_object_states(), start_state, m_exec_traj);
+
+	double timer = GetTime();
+	bool done = m_planner->FinalisePlan(node->kall_object_states(), start_state, m_exec_traj);
+	m_stats["finalise_time"] += GetTime() - timer;
+	return done;
 }
 
 void MAMOSearch::extractRearrangements()

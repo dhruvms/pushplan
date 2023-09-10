@@ -81,6 +81,7 @@ private:
 	trajectory_msgs::JointTrajectory m_exec_traj, m_home_traj;
 
 	bool expand(MAMOSearchState *state);
+	bool evaluate(MAMOSearchState *state);
 	bool done(MAMOSearchState *state);
 	void extractRearrangements();
 	void createSuccs(
