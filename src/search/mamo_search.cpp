@@ -450,6 +450,17 @@ void MAMOSearch::createSuccs(
 	}
 }
 
+MAMOSearchState* MAMOSearch::getSearchStateForceful()
+{
+	unsigned int state_id = m_search_states.size();
+	m_search_states.resize(state_id + 1, nullptr);
+
+	auto& state = m_search_states[state_id];
+	state = createSearchState(state_id);
+
+	return state;
+}
+
 MAMOSearchState* MAMOSearch::getSearchState(unsigned int state_id)
 {
 	if (m_search_states.size() <= state_id)	{
