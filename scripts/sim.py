@@ -916,6 +916,7 @@ class BulletSim:
 				closest_pts = sim.getClosestPoints(obj_id, robot_id, PUSH_END_THRESH)
 				if len(closest_pts) > 0:
 					violation_flag = True
+					print(bcolors.PINK + "Robot is too close to object {}!".format(obj_id) + bcolors.ENDC)
 					break
 
 			if (violation_flag):
@@ -966,6 +967,7 @@ class BulletSim:
 								break
 
 					if (np.linalg.norm(np.asarray(oid_start_xyz) - np.asarray(oid_xyz)) <= 0.01):
+						print(bcolors.PINK + "Intended object {} did not move more than 1cm!".format(req.oid) + bcolors.ENDC)
 						continue
 
 				successes += len(sim_data['valid_groups'])
