@@ -37,7 +37,7 @@ bool MAMOSearch::CreateRoot()
 	m_root_node->SetEdgeTo(action);
 
 	std::vector<int> reachable_ids;
-	m_planner->GetRobot()->IdentifyReachableMovables(m_planner->GetAllAgents(), m_planner->GetStartObjects(), reachable_ids);
+	// m_planner->GetRobot()->IdentifyReachableMovables(m_planner->GetAllAgents(), m_planner->GetStartObjects(), reachable_ids);
 	m_root_node->InitAgents(m_planner->GetAllAgents(), m_planner->GetStartObjects(), reachable_ids); // inits required fields for hashing
 
 	m_root_id = m_hashtable.GetStateIDForceful(m_root_node);
@@ -356,8 +356,8 @@ void MAMOSearch::createSuccs(
 		succ->SetEdgeTo(succ_object_centric_actions->at(i));
 
 		std::vector<int> reachable_ids;
-		SMPL_INFO("Successor number %d - IdentifyReachableMovables", i);
-		m_planner->GetRobot()->IdentifyReachableMovables(m_planner->GetAllAgents(), succ_objects->at(i), reachable_ids);
+		// SMPL_INFO("Successor number %d - IdentifyReachableMovables", i);
+		// m_planner->GetRobot()->IdentifyReachableMovables(m_planner->GetAllAgents(), succ_objects->at(i), reachable_ids);
 		succ->InitAgents(m_planner->GetAllAgents(), succ_objects->at(i), reachable_ids); // inits required fields for hashing
 
 		// check if we have visited this mamo state before
@@ -374,7 +374,7 @@ void MAMOSearch::createSuccs(
 		if (prev_search_state != nullptr && (prev_search_state->closed || prev_search_state->actions < succ_actions))
 		{
 			// previously visited this mamo state with fewer actions, move on
-			SMPL_INFO("Successor number %d - previously visited this mamo state with fewer actions, move on", i);
+			// SMPL_INFO("Successor number %d - previously visited this mamo state with fewer actions, move on", i);
 			delete succ;
 			continue;
 		}
@@ -391,9 +391,9 @@ void MAMOSearch::createSuccs(
 				m_OPEN.update(parent_search_state->m_OPEN_h);
 				SMPL_WARN("Update duplicate %d, priority = %.2e", old_id, parent_search_state->priority);
 
-				std::stringstream reachable_str;
-				std::copy(reachable_ids.begin(), reachable_ids.end(), std::ostream_iterator<int>(reachable_str, ","));
-				SMPL_INFO("Movables reachable in DUPLICATE state %d : (%s)", old_id, reachable_str.str().c_str());
+				// std::stringstream reachable_str;
+				// std::copy(reachable_ids.begin(), reachable_ids.end(), std::ostream_iterator<int>(reachable_str, ","));
+				// SMPL_INFO("Movables reachable in DUPLICATE state %d : (%s)", old_id, reachable_str.str().c_str());
 			}
 			else
 			{

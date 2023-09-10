@@ -21,17 +21,17 @@ void MAMONode::InitAgents(
 	m_all_objects = all_objects;
 	for (size_t i = 0; i < agents.size(); ++i)
 	{
-		if (std::find(reachable_ids.begin(), reachable_ids.end(), agents.at(i)->GetID()) != reachable_ids.end()) {
+		// if (std::find(reachable_ids.begin(), reachable_ids.end(), agents.at(i)->GetID()) != reachable_ids.end()) {
 			this->addAgent(agents.at(i), i);
-		}
-		else
-		{
-			// agents.at(i)->SetObjectPose(m_all_objects.poses.at(i).xyz, m_all_objects.poses.at(i).rpy);
+		// }
+		// else
+		// {
+		// 	// agents.at(i)->SetObjectPose(m_all_objects.poses.at(i).xyz, m_all_objects.poses.at(i).rpy);
 
-			auto o = agents.at(i)->GetObject();
-			ContPose pose(o->desc.o_x, o->desc.o_y, o->desc.o_z, o->desc.o_roll, o->desc.o_pitch, o->desc.o_yaw);
-			m_all_object_states.emplace_back(o->desc.id, o->Symmetric(), pose);
-		}
+		// 	auto o = agents.at(i)->GetObject();
+		// 	ContPose pose(o->desc.o_x, o->desc.o_y, o->desc.o_z, o->desc.o_roll, o->desc.o_pitch, o->desc.o_yaw);
+		// 	m_all_object_states.emplace_back(o->desc.id, o->Symmetric(), pose);
+		// }
 	}
 }
 
@@ -834,7 +834,7 @@ void MAMONode::addAgent(
 	// SMPL_INFO("Agent ID %d added to MAMONode!", agent->GetID());
 
 	assert(m_agents.back()->GetID() == m_all_objects.poses.at(pidx).id);
-	// m_agents.back()->SetObjectPose(m_all_objects.poses.at(pidx).xyz, m_all_objects.poses.at(pidx).rpy);
+	m_agents.back()->SetObjectPose(m_all_objects.poses.at(pidx).xyz, m_all_objects.poses.at(pidx).rpy);
 
 	auto o = m_agents.back()->GetObject();
 	ContPose pose(o->desc.o_x, o->desc.o_y, o->desc.o_z, o->desc.o_roll, o->desc.o_pitch, o->desc.o_yaw);
