@@ -643,14 +643,14 @@ void Agent::computeCellCosts()
 	auto rows = torch::arange(0, output.size(0), torch::kLong);
 	auto cols = torch::ones(output.size(0));
 	cols = cols.toType(at::kLong);
-	at::Tensor cell_cost = (1 - (output.index({rows, cols}) * output.index({rows, cols * 0}))) * CELL_COST_FACTOR;
+	m_cell_costs = (1 - (output.index({rows, cols}) * output.index({rows, cols * 0}))) * CELL_COST_FACTOR;
 
 	// typedef Eigen::Matrix<float, Eigen::Dynamic, Eigen::Dynamic, Eigen::RowMajor> MatrixXf_rm; // row-major eigen matrix
 	// float* data_p = output.data_ptr<float>();
 	// Eigen::Map<MatrixXf_rm> output_eig(data_p, output.size(0), output.size(1));
 
 	// m_start_poses = output_eig.block(0, 2, output_eig.rows(), 9);
-	m_lattice->SetCellCosts(cell_cost, m_table_ox, m_table_oy, m_table_sx, m_table_sy);
+	m_lattice->SetCellCosts(m_cell_costs, m_table_ox, m_table_oy, m_table_sx, m_table_sy);
 }
 
 void Agent::GetPushStartPose(Eigen::Affine3d &pose, const State &goal)
@@ -677,6 +677,14 @@ void Agent::GetPushStartPose(Eigen::Affine3d &pose, const State &goal)
 	pose.translation().x() += m_table_ox;
 	pose.translation().y() += m_table_oy;
 	pose.translation().z() += m_table_oz;
+}
+
+int Agent::GetTorchCost(const LatticeState &c)
+{
+	double x = c.state.at(0) - m_table_ox + m_table_sx;
+	double y = c.state.at(1) - m_table_oy + m_table_sy;
+	int idx = m_x_offset * int(x/RES) + int(y/RES);
+	return 1 + (int)m_cell_costs[idx].item<double>();
 }
 
 } // namespace clutter
