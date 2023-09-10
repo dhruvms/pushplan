@@ -344,7 +344,7 @@ def main():
 
 			filepath = os.path.join(dirpath, filename)
 			imgfile = filepath.replace('txt', 'png')
-			if os.path.isfile(imgfile):
+			if os.path.isfile(imgfile) or dirpath[-4:] != 'txt/':
 				continue
 			objs, trajs, invalids, ngr, goals, pushes = ParseFile(filepath, False)
 			DrawScene(filepath, objs, trajs, invalids, ngr, goals, pushes)

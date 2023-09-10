@@ -149,9 +149,9 @@ for (int i = 0; i < runs; ++i)
 				}
 			}
 
-			// else {
-			// 	p.RunSolution();
-			// }
+			else {
+				p.RunSolution();
+			}
 }
 		}
 	}
