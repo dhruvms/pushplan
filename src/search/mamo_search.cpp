@@ -435,8 +435,8 @@ void MAMOSearch::createSuccs(
 					double t_temp = GetTime();
 					auto node = m_hashtable.GetState(succ_id);
 					node->RunMAPF();
-					node->ResetConstraints();
 					node->SaveNode(succ_id, parent_search_state->state_id, "GENERATED");
+					node->ResetConstraints();
 					m_timer -= GetTime() - t_temp;
 
 					// std::stringstream reachable_str;
