@@ -47,6 +47,8 @@ enum class MAMOActionType
 	PICKPLACE,
 	RETRIEVEOOI,
 	DUMMY,
+	LAZY_PUSH,
+	LAZY_PICKPLACE,
 	ACTION_TYPES
 };
 enum class PushResult
