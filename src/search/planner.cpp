@@ -217,7 +217,22 @@ bool Planner::SetupNGR()
 		// if (ALGO == MAPFAlgo::OURS) {
 		// 	a->ComputeNGRComplement(ox, oy, oz, sx, sy, sz);
 		// }
+		// a->Init();
+		// a->VisualiseState(a->InitState().coord, "movable_"+std::to_string(a->GetID()), 215);
 	}
+	// for (auto& a: m_immovables)
+	// {
+	// 	a->SetObstacleGrid(m_robot->ObsGrid());
+	// 	a->SetNGRGrid(m_robot->NGRGrid());
+	// 	a->ResetSolution();
+	// 	a->Init();
+	// 	a->VisualiseState(a->InitState().coord, "immovable_"+std::to_string(a->GetID()), 340);
+	// }
+	// m_ooi->SetObstacleGrid(m_robot->ObsGrid());
+	// m_ooi->SetNGRGrid(m_robot->NGRGrid());
+	// m_ooi->ResetSolution();
+	// m_ooi->Init();
+	// m_ooi->VisualiseState(m_ooi->InitState().coord, "ooi", 50);
 
 	// m_ooi->SetObstacleGrid(m_robot->Grid());
 	// if (ALGO == MAPFAlgo::OURS) {
@@ -789,6 +804,12 @@ void Planner::parse_scene(std::vector<Object>& obstacles)
 						// o.desc.x_size += RES;
 						// o.desc.y_size += RES;
 						obstacles.push_back(o);
+
+						// if (o.desc.id > 5)
+						// {
+						// 	std::shared_ptr<Agent> movable(new Agent(o));
+						// 	m_immovables.push_back(std::move(movable));
+						// }
 					}
 				}
 			}

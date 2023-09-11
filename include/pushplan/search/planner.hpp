@@ -128,6 +128,7 @@ private:
 	std::shared_ptr<sampling::SamplingPlanner> m_sampling_planner;
 
 	std::vector<std::shared_ptr<Agent> > m_agents;
+	// std::vector<std::shared_ptr<Agent> > m_immovables;
 	std::shared_ptr<Agent> m_ooi;
 	std::unordered_map<int, size_t> m_agent_map;
 	std::vector<Eigen::Affine3d> m_ooi_pregrasps;
