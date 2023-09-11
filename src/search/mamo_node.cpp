@@ -294,13 +294,13 @@ void MAMONode::GetSuccsLazy(
 		lazy_succ_object_centric_actions->push_back(action);
 		lazy_succ_costs->push_back(cost);
 
-		// bool graspable = m_agents.at(m_agent_map[moved.first])->GetObject()->Graspable();
-		// if (graspable)
-		// {
-		// 	action._type = MAMOActionType::LAZY_PICKPLACE;
-		// 	lazy_succ_object_centric_actions->push_back(action);
-		// 	lazy_succ_costs->push_back(cost * 2);
-		// }
+		bool graspable = m_agents.at(m_agent_map[moved.first])->GetObject()->Graspable();
+		if (graspable)
+		{
+			action._type = MAMOActionType::LAZY_PICKPLACE;
+			lazy_succ_object_centric_actions->push_back(action);
+			lazy_succ_costs->push_back(cost * 2);
+		}
 	}
 }
 
@@ -429,43 +429,43 @@ bool MAMONode::GetSuccsTrue(
 			}
 		}
 	}
-	// else if (action._type == MAMOActionType::LAZY_PICKPLACE)
-	// {
-	// 	comms::ObjectsPoses result;
-	// 	int pick_at, place_at;
-	// 	double plan_time = 0.0, sim_time_pickplace = 0.0;
-	// 	std::tuple<State, State, int> debug_action;
+	else if (action._type == MAMOActionType::LAZY_PICKPLACE)
+	{
+		comms::ObjectsPoses result;
+		int pick_at, place_at;
+		double plan_time = 0.0, sim_time_pickplace = 0.0;
+		std::tuple<State, State, int> debug_action;
 
-	// 	bool success = m_robot->PlanPickPlace(
-	// 					this->GetCurrentStartState(),
-	// 					m_agents.at(m_agent_map[action._oid]).get(),
-	// 					movable_obstacles, m_all_objects,
-	// 					result, pick_at, place_at,
-	// 					plan_time, sim_time_pickplace, debug_action);
-	// 	*sim_time += sim_time_pickplace;
+		bool success = m_robot->PlanPickPlace(
+						this->GetCurrentStartState(),
+						m_agents.at(m_agent_map[action._oid]).get(),
+						movable_obstacles, m_all_objects,
+						result, pick_at, place_at,
+						plan_time, sim_time_pickplace, debug_action);
+		*sim_time += sim_time_pickplace;
 
-	// 	if (success)
-	// 	{
-	// 		// pick-and-place succeeded!
-	// 		succ_action->_type = MAMOActionType::PICKPLACE;
-	// 		succ_action->_oid = action._oid;
-	// 		succ_action->_params.clear();
-	// 		succ_action->_params.push_back(pick_at);
-	// 		succ_action->_params.push_back(place_at);
-	// 		succ_action->_traj.clear();
+		if (success)
+		{
+			// pick-and-place succeeded!
+			succ_action->_type = MAMOActionType::PICKPLACE;
+			succ_action->_oid = action._oid;
+			succ_action->_params.clear();
+			succ_action->_params.push_back(pick_at);
+			succ_action->_params.push_back(place_at);
+			succ_action->_traj.clear();
 
-	// 		*succ_objects = result;
-	// 		*succ_traj = m_robot->GetLastPlan();
-	// 		debug_actions->push_back(std::move(debug_action));
+			*succ_objects = result;
+			*succ_traj = m_robot->GetLastPlan();
+			debug_actions->push_back(std::move(debug_action));
 
-	// 		m_successful_rearranges.push_back(std::make_pair(action._oid, action._traj.back().coord));
-	// 	}
-	// 	else
-	// 	{
-	// 		valid_edge = false;
-	// 		debug_actions->push_back(std::move(debug_action));
-	// 	}
-	// }
+			m_successful_rearranges.push_back(std::make_pair(action._oid, action._traj.back().coord));
+		}
+		else
+		{
+			valid_edge = false;
+			debug_actions->push_back(std::move(debug_action));
+		}
+	}
 
 	*get_succs_time = GetTime() - *get_succs_time;
 	return valid_edge;
