@@ -335,6 +335,9 @@ def DrawScene(filepath, objs, trajs, invalids, ngr, goals, pushes, alpha=1.0):
 def main():
 	datafolder = os.path.dirname(os.path.abspath(__file__)) + '/../dat/txt/'
 	for (dirpath, dirnames, filenames) in os.walk(datafolder):
+		if dirpath[-4:] != 'txt/':
+			continue
+
 		for filename in filenames:
 			if '.txt' not in filename or 'SOLUTION' in filename:
 				continue
