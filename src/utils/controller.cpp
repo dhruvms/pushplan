@@ -189,10 +189,10 @@ bool RobotController::OpenGripper()
 	return true;
 }
 
-bool RobotController::CloseGripper()
+bool RobotController::CloseGripper(double position)
 {
 	pr2_controllers_msgs::Pr2GripperCommandGoal goal;
-	goal.command.position = 0.0;
+	goal.command.position = position;
 	goal.command.max_effort = 50.0; // gently
 	auto state = m_gripper_controller->sendGoalAndWait(goal);
 	// if (state != actionlib::SimpleClientGoalState::SUCCEEDED) {

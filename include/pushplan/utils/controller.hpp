@@ -31,7 +31,7 @@ public:
 
 	// Gripper action functions
 	bool OpenGripper();
-	bool CloseGripper();
+	bool CloseGripper(double position=0.0);
 
 	//! Returns the current state of the action
 	actionlib::SimpleClientGoalState GetArmState(bool left=false) {
