@@ -163,6 +163,10 @@ bool Planner::Init(const std::string& scene_file, int scene_id, bool ycb)
 	m_distD = std::uniform_real_distribution<double>(0.0, 1.0);
 	m_ph.getParam("robot/pushing/input", m_push_input);
 
+	// // For PR2 experiments
+	// m_controller = std::make_unique<RobotController>();
+	// m_controller->InitControllers();
+
 	return createMAMOSearch();
 }
 

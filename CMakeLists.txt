@@ -72,6 +72,7 @@ add_library(
 	src/utils/bullet_sim.cpp
 	src/utils/collision_checker.cpp
 	src/utils/constants.cpp
+	src/utils/controller.cpp
 	src/utils/data_gen.cpp
 	src/utils/discretisation.cpp
 	src/utils/hash_manager.cpp
@@ -97,3 +98,9 @@ target_link_libraries(run_ompl ${catkin_LIBRARIES} ${OMPL_LIBRARIES} smpl::smpl 
 
 add_executable(torchtest test/torchtest.cpp)
 target_link_libraries(torchtest ${TORCH_LIBRARIES})
+
+add_executable(pr2 test/pr2.cpp)
+target_link_libraries(pr2 ${catkin_LIBRARIES} smpl::smpl PUSHPLAN)
+
+add_executable(raise_torso test/raise_torso.cpp)
+target_link_libraries(raise_torso ${catkin_LIBRARIES} smpl::smpl PUSHPLAN)

@@ -6,6 +6,7 @@
 #include <pushplan/search/mamo_search.hpp>
 #include <pushplan/utils/bullet_sim.hpp>
 #include <pushplan/utils/collision_checker.hpp>
+#include <pushplan/utils/controller.hpp>
 #include <pushplan/utils/types.hpp>
 #include <comms/ObjectsPoses.h>
 
@@ -126,6 +127,7 @@ private:
 	std::shared_ptr<CBS> m_cbs;
 	std::unique_ptr<MAMOSearch> m_mamo_search;
 	std::shared_ptr<sampling::SamplingPlanner> m_sampling_planner;
+	std::unique_ptr<RobotController> m_controller;
 
 	std::vector<std::shared_ptr<Agent> > m_agents;
 	// std::vector<std::shared_ptr<Agent> > m_immovables;
