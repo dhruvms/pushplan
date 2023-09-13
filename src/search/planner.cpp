@@ -1540,31 +1540,45 @@ bool Planner::Execute()
 	ROS_WARN("moveToStartState");
 	moveToStartState();
 
-	for (const auto& traj: m_rearrangements) {
-		ROS_WARN("executeTraj PUSH");
-		executeTraj(traj, false);
-	}
+	for (size_t i = 0; i < m_rearrangements.size(); ++i)
+	{
+		if (m_rearrangements.at(i).points.empty()) {
+			continue;
+		}
 
-	ROS_WARN("executeTraj GRASP + EXTRACT");
-	executeTraj(m_exec);
+		auto &action_params = m_actions.at(i);
+		int pick_at = -1, place_at = -1, oid = -1;
+		pick_at = action_params._params[0];
+		if (action_params._type == MAMOActionType::PICKPLACE)
+		{
+			place_at = action_params._params[1];
+			oid = action_params._oid;
+		}
+		else if (action_params._type == MAMOActionType::RETRIEVEOOI) {
+			oid = action_params._oid;
+		}
+		executeTraj(m_rearrangements.at(i), pick_at, place_at, oid);
+	}
 }
 
-bool Planner::executeTraj(const trajectory_msgs::JointTrajectory& traj, bool grasping)
+bool Planner::executeTraj(
+	const trajectory_msgs::JointTrajectory& traj,
+	int pick_at, int place_at, int oid)
 {
 	ROS_WARN("CloseGripper");
-	m_controller->CloseGripper();
-	int FIX_GRASP_AT = 0;
+	double close_posn = pick_at == -1 ? 0.01 : 0.0;
+	m_controller->CloseGripper(close_posn);
 
 	trajectory_msgs::JointTrajectory traj_piece;
 	traj_piece.header = traj.header;
 	traj_piece.joint_names = traj.joint_names;
 
 	traj_piece.points.clear();
-	if (!grasping) {
+	if (pick_at == -1) {
 		traj_piece.points.insert(traj_piece.points.begin(), traj.points.begin(), traj.points.end());
 	}
 	else {
-		traj_piece.points.insert(traj_piece.points.begin(), traj.points.begin(), traj.points.begin() + FIX_GRASP_AT);
+		traj_piece.points.insert(traj_piece.points.begin(), traj.points.begin(), traj.points.begin() + pick_at);
 	}
 
 	ROS_WARN("ExecArmTrajectory");
@@ -1574,7 +1588,7 @@ bool Planner::executeTraj(const trajectory_msgs::JointTrajectory& traj, bool gra
 		usleep(50000);
 	}
 
-	if (!grasping) {
+	if (pick_at == -1) { // done pushing
 		return true;
 	}
 
@@ -1584,7 +1598,7 @@ bool Planner::executeTraj(const trajectory_msgs::JointTrajectory& traj, bool gra
 	}
 
 	traj_piece.points.clear();
-	traj_piece.points.insert(traj_piece.points.begin(), traj.points.begin() + FIX_GRASP_AT, traj.points.begin() + FIX_GRASP_AT + 1);
+	traj_piece.points.insert(traj_piece.points.begin(), traj.points.begin() + pick_at, traj.points.begin() + pick_at + 1);
 	// auto skip = traj_piece.points.begin()->time_from_start;
 	// traj_piece.points.begin()->time_from_start -= skip;
 	// for (auto itr = traj_piece.points.begin(); itr != traj_piece.points.end(); ++itr) {
@@ -1601,8 +1615,36 @@ bool Planner::executeTraj(const trajectory_msgs::JointTrajectory& traj, bool gra
 	m_controller->CloseGripper();
 
 	traj_piece.points.clear();
-	traj_piece.points.insert(traj_piece.points.begin(), traj.points.begin() + FIX_GRASP_AT + 1, traj.points.end());
+	if (place_at == -1) {
+		traj_piece.points.insert(traj_piece.points.begin(), traj.points.begin() + pick_at + 1, traj.points.end());
+	}
+	else {
+		traj_piece.points.insert(traj_piece.points.begin(), traj.points.begin() + pick_at + 1, traj.points.begin() + place_at);
+	}
 	// skip = traj_piece.points.begin()->time_from_start;
+	// traj_piece.points.begin()->time_from_start -= skip;
+	// for (auto itr = traj_piece.points.begin(); itr != traj_piece.points.end(); ++itr) {
+	// 	itr->time_from_start += ros::Duration(2);
+	// }
+	ROS_WARN("ExecArmTrajectory");
+	m_controller->ExecArmTrajectory(m_controller->PR2TrajFromMsg(traj_piece));
+	while (!m_controller->GetArmState().isDone() && ros::ok())
+	{
+		usleep(50000);
+	}
+
+	if (place_at == -1) { // done retrieving OOI
+		return true;
+	}
+
+	ROS_WARN("OpenGripper");
+	if (!m_controller->OpenGripper()) {
+		return false;
+	}
+
+	traj_piece.points.clear();
+	traj_piece.points.insert(traj_piece.points.begin(), traj.points.begin() + place_at, traj.points.end());
+	// auto skip = traj_piece.points.begin()->time_from_start;
 	// traj_piece.points.begin()->time_from_start -= skip;
 	// for (auto itr = traj_piece.points.begin(); itr != traj_piece.points.end(); ++itr) {
 	// 	itr->time_from_start += ros::Duration(2);

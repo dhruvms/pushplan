@@ -186,7 +186,9 @@ private:
 	void setupTorch();
 
 	// For PR2
-	bool executeTraj(const trajectory_msgs::JointTrajectory& traj, bool grasping=true);
+	bool executeTraj(
+		const trajectory_msgs::JointTrajectory& traj,
+		int pick_at, int place_at, int oid);
 	void moveToStartState();
 };
 
