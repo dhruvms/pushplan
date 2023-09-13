@@ -90,7 +90,7 @@ public:
 	auto GoalPose() -> Eigen::Affine3d {
 		return m_robot->PregraspPose();
 	}
-	bool ExecTraj(const trajectory_msgs::JointTrajectory& traj, int grasp_at=-1) {
+	bool ExecTrajInSim(const trajectory_msgs::JointTrajectory& traj, int grasp_at=-1) {
 		return m_sim->ExecTraj(traj, GetStartObjects(), grasp_at, m_ooi->GetID());
 	}
 	auto GetStartObjects() -> comms::ObjectsPoses

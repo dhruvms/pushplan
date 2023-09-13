@@ -322,7 +322,7 @@ int main(int argc, char** argv)
 				pushplan.GetRobot()->ProfileTraj(traj);
 				start_time = GetTime();
 				ROS_ERROR("Planning succeeded! Executing!!!");
-				exec_success = pushplan.ExecTraj(traj, grasp_at);
+				exec_success = pushplan.ExecTrajInSim(traj, grasp_at);
 				exec_time = GetTime() - start_time;
 			}
 
