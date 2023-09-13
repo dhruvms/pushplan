@@ -1161,6 +1161,8 @@ std::string BulletSim::getPartialFilename(int id)
 		level = "nb";
 	}
 	filename += level + "/plan_";
+	// // For PR2 experiments
+	// filename += "dummy/plan_";
 
 	std::stringstream ss;
 	ss << std::setw(6) << std::setfill('0') << id;

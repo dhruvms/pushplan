@@ -9,7 +9,14 @@ initial_configuration:
     - { name: r_forearm_roll_joint,   position: 0.285096 }
     - { name: r_wrist_flex_joint,     position: -0.658798 } # limit: -0.2 }
     - { name: r_wrist_roll_joint,     position: 1.41563 }
-
+    # - { name: torso_lift_joint,       position: 0.3 }
+    # - { name: r_shoulder_pan_joint,   position: -0.18667 }
+    # - { name: r_shoulder_lift_joint,  position: 0.162202 }
+    # - { name: r_upper_arm_roll_joint, position: 0.513357 }
+    # - { name: r_elbow_flex_joint,     position: -2.05254 } # limit: -0.2 }
+    # - { name: r_forearm_roll_joint,   position: -2.60046 }
+    # - { name: r_wrist_flex_joint,     position: -2 } # limit: -0.2 }
+    # - { name: r_wrist_roll_joint,     position: 2.80144 }
 goal:
   x: 0.7
   y: 0.0
@@ -23,6 +30,7 @@ goal:
   save: true
   cc_2d: true
   cc_3d: false
+  uid: 900000
 
 robot:
   start:

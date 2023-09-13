@@ -108,6 +108,7 @@ class BulletSim:
 				sim_data['table_id'] = [1]
 			else:
 				sim_data['table_id'] = [1, 2, 3, 4, 5]
+				# sim_data['table_id'] = [1, 2, 3, 4, 5, 6] # FOR LAB EXPERIMENTS
 			sim_data['robot_id'] = -1
 			sim_data['objs'] = {}
 			sim_data['num_objs'] = 0

@@ -117,6 +117,9 @@ public:
 		return m_agents.at(m_priorities.at(priority))->GetFCLObject();
 	}
 
+	// For PR2
+	bool Execute();
+
 private:
 	ros::NodeHandle m_ph, m_nh;
 
@@ -181,6 +184,10 @@ private:
 	std::shared_ptr<at::Tensor> m_push_locs;
 	std::shared_ptr<torch::jit::script::Module> m_push_model;
 	void setupTorch();
+
+	// For PR2
+	bool executeTraj(const trajectory_msgs::JointTrajectory& traj, bool grasping=true);
+	void moveToStartState();
 };
 
 } // namespace clutter
