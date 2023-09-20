@@ -1548,14 +1548,13 @@ bool Planner::Execute()
 
 		auto &action_params = m_actions.at(i);
 		int pick_at = -1, place_at = -1, oid = -1;
-		pick_at = action_params._params[0];
-		if (action_params._type == MAMOActionType::PICKPLACE)
+		if (action_params._type != MAMOActionType::PUSH)
 		{
-			place_at = action_params._params[1];
+			pick_at = action_params._params[0];
 			oid = action_params._oid;
-		}
-		else if (action_params._type == MAMOActionType::RETRIEVEOOI) {
-			oid = action_params._oid;
+			if (action_params._type == MAMOActionType::PICKPLACE) {
+				place_at = action_params._params[1];
+			}
 		}
 		executeTraj(m_rearrangements.at(i), pick_at, place_at, oid);
 	}
