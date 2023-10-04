@@ -470,6 +470,8 @@ private:
 	void visTrajectory(
 		const Trajectory &traj,
 		const std::string &name);
+
+	int m_pr2;
 };
 
 } // namespace clutter

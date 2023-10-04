@@ -111,8 +111,11 @@ bool Planner::Init(const std::string& scene_file, int scene_id, bool ycb)
 	}
 	m_robot->ProcessFCLObstacles(m_cc->GetObstacles());
 
-	// Not for PR2 experiments
-	m_robot->CreateVirtualTable();
+	m_ph.getParam("robot/pr2", m_pr2);
+	if (!m_pr2) {
+		// Not for PR2 experiments
+		m_robot->CreateVirtualTable();
+	}
 
 	all_obstacles.clear();
 
@@ -159,16 +162,19 @@ bool Planner::Init(const std::string& scene_file, int scene_id, bool ycb)
 	}
 	m_robot->VizCC();
 
-	setupTorch();
+	// setupTorch();
 
 	setupSim(m_sim.get(), m_robot->GetStartState()->joint_state, m_ooi->GetID());
 	m_violation = 0x00000008;
 	m_distD = std::uniform_real_distribution<double>(0.0, 1.0);
 	m_ph.getParam("robot/pushing/input", m_push_input);
 
-	// // For PR2 experiments
-	// m_controller = std::make_unique<RobotController>();
-	// m_controller->InitControllers();
+	if (m_pr2)
+	{
+		// For PR2 experiments
+		m_controller = std::make_unique<RobotController>();
+		m_controller->InitControllers();
+	}
 
 	return createMAMOSearch();
 }
@@ -834,13 +840,16 @@ void Planner::parse_scene(std::vector<Object>& obstacles)
 				{
 					if (itr->desc.id == ooi_idx)
 					{
-						// Eigen::Affine3d ooi_T = Eigen::Translation3d(itr->desc.o_x, itr->desc.o_y, itr->desc.o_z) *
-						// 							Eigen::AngleAxisd(itr->desc.o_yaw, Eigen::Vector3d::UnitZ()) *
-						// 							Eigen::AngleAxisd(itr->desc.o_pitch, Eigen::Vector3d::UnitY()) *
-						// 							Eigen::AngleAxisd(itr->desc.o_roll, Eigen::Vector3d::UnitX());
-						// itr->SetTransform(ooi_T);
-						// m_ooi_pregrasps.clear();
-						// itr->GetPregrasps(m_ooi_pregrasps);
+						if (m_pr2)
+						{
+							Eigen::Affine3d ooi_T = Eigen::Translation3d(itr->desc.o_x, itr->desc.o_y, itr->desc.o_z) *
+														Eigen::AngleAxisd(itr->desc.o_yaw, Eigen::Vector3d::UnitZ()) *
+														Eigen::AngleAxisd(itr->desc.o_pitch, Eigen::Vector3d::UnitY()) *
+														Eigen::AngleAxisd(itr->desc.o_roll, Eigen::Vector3d::UnitX());
+							itr->SetTransform(ooi_T);
+							m_ooi_pregrasps.clear();
+							itr->GetPregrasps(m_ooi_pregrasps);
+						}
 
 						m_ooi->SetObject(*itr);
 						obstacles.erase(itr);
@@ -871,11 +880,14 @@ void Planner::parse_scene(std::vector<Object>& obstacles)
 				}
 				SMPL_INFO("Goal (x, y, z, yaw): (%f, %f, %f, %f)", pregrasp_goal[0], pregrasp_goal[1], pregrasp_goal[2], pregrasp_goal[5]);
 
-				Eigen::Affine3d ooi_T = Eigen::Translation3d(pregrasp_goal[0], pregrasp_goal[1], pregrasp_goal[2]) *
-											Eigen::AngleAxisd(pregrasp_goal[5], Eigen::Vector3d::UnitZ()) *
-											Eigen::AngleAxisd(0.0, Eigen::Vector3d::UnitY()) *
-											Eigen::AngleAxisd(0.0, Eigen::Vector3d::UnitX());
-				m_ooi_pregrasps.push_back(std::move(ooi_T));
+				if (!m_pr2)
+				{
+					Eigen::Affine3d ooi_T = Eigen::Translation3d(pregrasp_goal[0], pregrasp_goal[1], pregrasp_goal[2]) *
+												Eigen::AngleAxisd(pregrasp_goal[5], Eigen::Vector3d::UnitZ()) *
+												Eigen::AngleAxisd(0.0, Eigen::Vector3d::UnitY()) *
+												Eigen::AngleAxisd(0.0, Eigen::Vector3d::UnitX());
+					m_ooi_pregrasps.push_back(std::move(ooi_T));
+				}
 			}
 		}
 	}
@@ -982,13 +994,16 @@ void Planner::read_solution(const std::string &suffix)
 								p.positions.push_back(std::stod(split_wp));
 							}
 
-							// // For PR2 experiments
-							// else if (count < 14) {
-							// 	p.velocities.push_back(std::stod(split));
-							// }
-							// else if (count < 21) {
-							// 	p.accelerations.push_back(std::stod(split));
-							// }
+							if (m_pr2 && (count >= 7 && count < 21))
+							{
+								// For PR2 experiments
+								if (count < 14) {
+									p.velocities.push_back(std::stod(split_wp));
+								}
+								else if (count < 21) {
+									p.accelerations.push_back(std::stod(split_wp));
+								}
+							}
 
 							else {
 								p.time_from_start = ros::Duration(std::stod(split_wp));
@@ -1500,25 +1515,28 @@ void Planner::writeState(const std::string& prefix, const std::string& suffix)
 					<< p.positions[3] << ','
 					<< p.positions[4] << ','
 					<< p.positions[5] << ','
-					<< p.positions[6] << ','
+					<< p.positions[6] << ',';
 
-					// // For PR2 experiments
-					// << p.velocities[0] << ','
-					// << p.velocities[1] << ','
-					// << p.velocities[2] << ','
-					// << p.velocities[3] << ','
-					// << p.velocities[4] << ','
-					// << p.velocities[5] << ','
-					// << p.velocities[6] << ','
-					// << p.accelerations[0] << ','
-					// << p.accelerations[1] << ','
-					// << p.accelerations[2] << ','
-					// << p.accelerations[3] << ','
-					// << p.accelerations[4] << ','
-					// << p.accelerations[5] << ','
-					// << p.accelerations[6] << ','
+					if (m_pr2)
+					{
+						// For PR2 experiments
+						DATA 	<< p.velocities[0] << ','
+								<< p.velocities[1] << ','
+								<< p.velocities[2] << ','
+								<< p.velocities[3] << ','
+								<< p.velocities[4] << ','
+								<< p.velocities[5] << ','
+								<< p.velocities[6] << ','
+								<< p.accelerations[0] << ','
+								<< p.accelerations[1] << ','
+								<< p.accelerations[2] << ','
+								<< p.accelerations[3] << ','
+								<< p.accelerations[4] << ','
+								<< p.accelerations[5] << ','
+								<< p.accelerations[6] << ',';
+					}
 
-					<< p.time_from_start.toSec() << '\n';
+			DATA	<< p.time_from_start.toSec() << '\n';
 		}
 	}
 
@@ -1597,12 +1615,13 @@ bool Planner::executeTraj(
 	}
 
 	traj_piece.points.clear();
-	traj_piece.points.insert(traj_piece.points.begin(), traj.points.begin() + pick_at, traj.points.begin() + pick_at + 1);
-	// auto skip = traj_piece.points.begin()->time_from_start;
-	// traj_piece.points.begin()->time_from_start -= skip;
-	// for (auto itr = traj_piece.points.begin(); itr != traj_piece.points.end(); ++itr) {
-	// 	itr->time_from_start += ros::Duration(2);
-	// }
+	traj_piece.points.insert(traj_piece.points.begin(), traj.points.begin() + pick_at - 1, traj.points.begin() + pick_at + 1);
+
+	auto skip = traj_piece.points.begin()->time_from_start; // - ros::Duration(1.0);
+	for (auto itr = traj_piece.points.begin(); itr != traj_piece.points.end(); ++itr) {
+		itr->time_from_start -= skip;
+	}
+
 	ROS_WARN("ExecArmTrajectory");
 	m_controller->ExecArmTrajectory(m_controller->PR2TrajFromMsg(traj_piece));
 	while (!m_controller->GetArmState().isDone() && ros::ok())
@@ -1615,16 +1634,17 @@ bool Planner::executeTraj(
 
 	traj_piece.points.clear();
 	if (place_at == -1) {
-		traj_piece.points.insert(traj_piece.points.begin(), traj.points.begin() + pick_at + 1, traj.points.end());
+		traj_piece.points.insert(traj_piece.points.begin(), traj.points.begin() + pick_at, traj.points.end());
 	}
 	else {
-		traj_piece.points.insert(traj_piece.points.begin(), traj.points.begin() + pick_at + 1, traj.points.begin() + place_at);
+		traj_piece.points.insert(traj_piece.points.begin(), traj.points.begin() + pick_at, traj.points.begin() + place_at);
 	}
-	// skip = traj_piece.points.begin()->time_from_start;
-	// traj_piece.points.begin()->time_from_start -= skip;
-	// for (auto itr = traj_piece.points.begin(); itr != traj_piece.points.end(); ++itr) {
-	// 	itr->time_from_start += ros::Duration(2);
-	// }
+
+	skip = traj_piece.points.begin()->time_from_start; // - ros::Duration(1.0);
+	for (auto itr = traj_piece.points.begin(); itr != traj_piece.points.end(); ++itr) {
+		itr->time_from_start -= skip;
+	}
+
 	ROS_WARN("ExecArmTrajectory");
 	m_controller->ExecArmTrajectory(m_controller->PR2TrajFromMsg(traj_piece));
 	while (!m_controller->GetArmState().isDone() && ros::ok())
@@ -1642,12 +1662,13 @@ bool Planner::executeTraj(
 	}
 
 	traj_piece.points.clear();
-	traj_piece.points.insert(traj_piece.points.begin(), traj.points.begin() + place_at, traj.points.end());
-	// auto skip = traj_piece.points.begin()->time_from_start;
-	// traj_piece.points.begin()->time_from_start -= skip;
-	// for (auto itr = traj_piece.points.begin(); itr != traj_piece.points.end(); ++itr) {
-	// 	itr->time_from_start += ros::Duration(2);
-	// }
+	traj_piece.points.insert(traj_piece.points.begin(), traj.points.begin() + place_at - 1, traj.points.end());
+
+	skip = traj_piece.points.begin()->time_from_start; // - ros::Duration(1.0);
+	for (auto itr = traj_piece.points.begin(); itr != traj_piece.points.end(); ++itr) {
+		itr->time_from_start -= skip;
+	}
+
 	ROS_WARN("ExecArmTrajectory");
 	m_controller->ExecArmTrajectory(m_controller->PR2TrajFromMsg(traj_piece));
 	while (!m_controller->GetArmState().isDone() && ros::ok())

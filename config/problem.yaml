@@ -59,11 +59,12 @@ robot:
   yoshikawa_tries: 20
   push_ik_ends: 20
   replay: false
-  vel_scale: 0.025
+  vel_scale: 0.5
   acc_scale: 1.0
   soln:
     suffix: "parallel_"
     num: 1
+  pr2: 1
 
 mapf:
   res: 0.01

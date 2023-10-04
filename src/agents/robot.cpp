@@ -227,6 +227,11 @@ bool Robot::Setup()
 	m_distD = std::uniform_real_distribution<double>(0.0, 1.0);
 	m_distG = std::normal_distribution<>(0.0, 0.025);
 
+	m_ph.getParam("robot/pr2", m_pr2);
+	if (m_pr2) {
+		m_table_z = m_cc->GetTableHeight();
+	}
+
 	smpl::RobotState dummy;
 	dummy.insert(dummy.begin(),
 		m_start_state.joint_state.position.begin() + 1, m_start_state.joint_state.position.end());
@@ -2044,7 +2049,11 @@ bool Robot::PlanPickPlace(
 	// 3. create multi pose goal
 	// 4. call planner to plan approach trajectory
 	trajectory_msgs::JointTrajectory pick_traj;
-	if (!planToPoseGoal(pick_start_state, pregrasps, pick_traj, 0.5))
+	double timeout = 0.5;
+	if (m_pr2) {
+		timeout = 5.0;
+	}
+	if (!planToPoseGoal(pick_start_state, pregrasps, pick_traj, timeout))
 	{
 		action_result = PickPlaceResult::PREGRASPS_UNREACHABLE;
 		// ++m_debug_push_info["start_unreachable"];
@@ -2089,7 +2098,7 @@ bool Robot::PlanPickPlace(
 
 	// compute EE pose at postgrasp
 	ee_pose = grasp_pose;
-	ee_pose.translation().z() += m_grasp_lift;
+	ee_pose.translation().z() += 0.02;
 	if (!getStateNearPose(ee_pose, grasp_state, postgrasp_state, 1))
 	{
 		action_result = PickPlaceResult::POSTGRASP_IK_FAIL;
@@ -2162,7 +2171,7 @@ bool Robot::PlanPickPlace(
 
 	debug_action_end.clear();
 	debug_action_end = { ee_pose.translation().x(), ee_pose.translation().y() };
-	if (!planToPoseGoal(place_start_state, { ee_pose }, place_traj, 0.5, true))
+	if (!planToPoseGoal(place_start_state, { ee_pose }, place_traj, timeout, true))
 	{
 		action_result = PickPlaceResult::PLAN_TO_POSTGRASP_FAIL;
 		// push_result = 5;
@@ -2181,7 +2190,7 @@ bool Robot::PlanPickPlace(
 
 	// 8. append hardcoded retract action
 	ee_pose = m_rm->computeFK(place_traj.points.back().positions);
-	ee_pose.translation().z() -= m_grasp_lift/2.0;
+	ee_pose.translation().z() -= 0.01;
 	if (!getStateNearPose(ee_pose, place_traj.points.back().positions, place_state, 1))
 	{
 		action_result = PickPlaceResult::RETRACT_IK_FAIL;
@@ -3825,10 +3834,10 @@ void Robot::createMultiPoseGoalConstraint(
 	for (size_t g = 0; g < poses.size(); ++g)
 	{
 		createPoseGoalConstraint(poses[g]);
-		m_goal.position_constraints[0].constraint_region.primitives[0].dimensions[0] = 0.01;
-		m_goal.position_constraints[0].constraint_region.primitives[0].dimensions[1] = 0.01;
-		m_goal.position_constraints[0].constraint_region.primitives[0].dimensions[2] = 0.01;
-		m_goal.orientation_constraints[0].absolute_x_axis_tolerance = DEG5;
+		m_goal.position_constraints[0].constraint_region.primitives[0].dimensions[0] = 0.02;
+		m_goal.position_constraints[0].constraint_region.primitives[0].dimensions[1] = 0.02;
+		m_goal.position_constraints[0].constraint_region.primitives[0].dimensions[2] = 0.02;
+		m_goal.orientation_constraints[0].absolute_x_axis_tolerance = DEG5 * 2;
 		req.goal_constraints[g] = m_goal;
 	}
 }
