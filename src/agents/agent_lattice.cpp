@@ -327,7 +327,7 @@ bool AgentLattice::IsGoal(int state_id)
 
 unsigned int AgentLattice::GetGoalHeuristic(int state_id)
 {
-	// return 0;
+	return 0;
 	if (state_id == m_goal_ids.back() || m_agent->PP()) {
 		return 0;
 	}

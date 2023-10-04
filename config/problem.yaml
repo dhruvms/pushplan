@@ -64,7 +64,7 @@ robot:
   soln:
     suffix: "parallel_"
     num: 1
-  pr2: 1
+  pr2: 0
 
 mapf:
   res: 0.01

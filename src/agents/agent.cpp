@@ -225,8 +225,8 @@ bool Agent::SatisfyPath(
 		m_lattice->AvoidAgents(*to_avoid);
 	}
 
-	// run learned model to compute cell costs
-	computeCellCosts();
+	// // run learned model to compute cell costs
+	// computeCellCosts();
 
 	std::vector<int> solution;
 	int solcost;
